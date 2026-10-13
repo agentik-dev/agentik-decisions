@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""readme-render: `make readme` (conventions sections 5 and 6, design §4.5).
+
+Renders README.md from design/readme/source.md through the installed respeak
+renderer in technical mode, under the notes in design/readme/contract.txt:
+  0. once the setup checks pass, a stale .readme-refused.md goes, so no later
+     failure leaves an older one (a setup refusal writes nothing and keeps it);
+     a path there that cannot go, such as a directory, is refused before any
+     other write;
+  1. the status line, the first line under `## Status`, is rewritten in the
+     source: the manifest's version, today's date, the suite's collected count;
+  2. respeak-render.sh writes a temp file in the repo as a marked helper (RESPEAK_DEPTH=1, CLAUDE_SESSION_DEPTH=d+1, CLAUDE_SESSION_HELPER=1, its `claude -p` with --max-turns; a set RESPEAK_DEPTH or d+1 over 2 refuses);
+  3. the line under `## Status` becomes the source's again;
+  4. respeak-verify-edit.py source temp must pass, else README.md is untouched
+     and the refused render is kept as .readme-refused.md, named on stderr;
+     no other failure keeps a temp file;
+  5. the temp file moves over README.md, and the sidecar
+     design/readme/rendered.sha256 gets its two lines (source, README).
+The plugin root is --plugin-root, else the highest version under --cache by
+version tuple (`*/respeak/<version>/`; a sort over whole paths is wrong), found
+by `decisions.speak.newest_root`.
+
+Usage: readme-render [--repo DIR] [--plugin-root DIR] [--cache DIR]
+                     [--python PATH] [--max-rounds N] [--max-turns N]
+Exit 0 written and stamped, 1 the style gate still failing after the rounds,
+2 setup (a depth past 2, or a .readme-refused.md that cannot go, among them, before any
+write), the status line, the verifier, or a move that fails.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from decisions import speak  # noqa: E402  the finder lives in the package
+
+SOURCE = "design/readme/source.md"
+CONTRACT = "design/readme/contract.txt"
+README = "README.md"
+SIDECAR = "design/readme/rendered.sha256"
+REFUSED = ".readme-refused.md"  # D20: the render the verifier refused, kept for a diff
+MANIFEST = "plugin/.claude-plugin/plugin.json"
+RENDER = "scripts/respeak-render.sh"
+VERIFY = "scripts/respeak-verify-edit.py"
+COUNT = ('import unittest; print(unittest.TestLoader()'
+         '.discover("tests", top_level_dir=".").countTestCases())')
+
+
+# ADV10-6: every child is walled, inside `make readme`'s own 900 s (scripts/bounded).
+COUNT_WALL, RENDER_WALL, VERIFY_WALL = 120, 840, 120
+# relay-r1 §10 at agent-relay b8d789b: "a helper a sitting spawns keeps `RELAY_ROW` and `CLAUDE_SESSION_MAX_TURNS`, runs in the foreground as `CLAUDE_SESSION_DEPTH=$((d+1)) CLAUDE_SESSION_HELPER=1 claude -p … --max-turns N`, and is refused past depth 2; Stop and `start.json` skip it; `DropSitting` is the relay's own helpers' alone".
+# The render is that helper: CLAUDE_SESSION_DEPTH=d+1 and CLAUDE_SESSION_HELPER=1 in its
+# environment (RELAY_ROW and CLAUDE_SESSION_MAX_TURNS pass through), its runner a wrapper
+# adding --max-turns; the count and the verifier keep the sitting's own environment.
+HELPER_MAX_DEPTH, HELPER_MAX_TURNS = 2, 20
+
+
+class Refused(Exception):
+    """A setup, status-line or verifier refusal: exit 2."""
+
+
+def newest_root(cache):
+    """The highest-versioned `<cache>/*/respeak/<version>/` holding the renderer; the
+    finder is `decisions.speak.newest_root` (design d18 section 3)."""
+    root = speak.newest_root(cache)
+    if root is None:
+        raise Refused("no installed respeak plugin under %s" % cache)
+    return root
+
+
+def status_index(lines, where):
+    """The index of the first non-blank line under `## Status`."""
+    for i, line in enumerate(lines):
+        if line.rstrip("\n") == "## Status":
+            for j in range(i + 1, len(lines)):
+                if lines[j].strip():
+                    return j
+            break
+    raise Refused("no line under `## Status` in %s" % where)
+
+
+def status_line(repo):
+    """`Status: version `X`, rendered `YYYY-MM-DD`, `N` unittest cases.`"""
+    try:
+        version = json.loads((repo / MANIFEST).read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError) as exc:
+        raise Refused("no version in %s: %s" % (MANIFEST, exc))
+    env = dict(os.environ, PYTHONPATH="src")
+    try:
+        run = subprocess.run([sys.executable, "-c", COUNT], cwd=repo, env=env,
+                             capture_output=True, text=True, timeout=COUNT_WALL)
+    except subprocess.TimeoutExpired:
+        raise Refused("the suite count took over %d s" % COUNT_WALL)
+    if run.returncode != 0 or not run.stdout.strip().isdigit():
+        raise Refused("the suite does not collect: %s" % run.stderr.strip()[-300:])
+    today = datetime.date.today().isoformat()
+    return "Status: version `%s`, rendered `%s`, `%s` unittest cases.\n" % (
+        version, today, run.stdout.strip())
+
+
+def stamp_source(repo):
+    """Rewrite the source's status line; return it."""
+    path = repo / SOURCE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    i = status_index(lines, SOURCE)
+    if not lines[i].startswith("Status: version "):
+        raise Refused("the line under `## Status` in %s is not a status line" % SOURCE)
+    lines[i] = status_line(repo)
+    path.write_text("".join(lines), encoding="utf-8")
+    return lines[i]
+
+
+def restore_status(out, line):
+    """Make the line under `## Status` in the rendered file the source's again."""
+    lines = out.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[status_index(lines, "the render")] = line
+    out.write_text("".join(lines), encoding="utf-8")
+
+
+def helper_depth():
+    """d + 1, d being CLAUDE_SESSION_DEPTH (unset or empty: 0); refused past depth 2."""
+    raw = os.environ.get("CLAUDE_SESSION_DEPTH", "")
+    if raw and not re.fullmatch(r"[0-9]+", raw):
+        raise Refused("CLAUDE_SESSION_DEPTH %r is not a non-negative integer" % raw)
+    depth = int(raw or "0") + 1
+    if depth > HELPER_MAX_DEPTH:
+        raise Refused("CLAUDE_SESSION_DEPTH %s: a helper is refused past depth %d"
+                      % (raw, HELPER_MAX_DEPTH))
+    return depth
+
+
+def runner_wrapper(where, max_turns):
+    """An executable running the renderer's runner (RESPEAK_RENDER_CMD, else claude)
+    as `<runner> -p … --max-turns N`; respeak-render.sh runs "$RESPEAK_RENDER_CMD" -p."""
+    inner = os.environ.get("RESPEAK_RENDER_CMD") or "claude"
+    path = Path(where) / "claude-helper"
+    path.write_text('#!/bin/sh\nexec %s "$@" --max-turns %d\n'
+                    % (shlex.quote(inner), max_turns), encoding="utf-8")
+    path.chmod(0o755)
+    return str(path)
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def render(args):
+    repo = Path(args.repo).resolve()
+    if os.environ.get("RESPEAK_DEPTH"):
+        raise Refused("RESPEAK_DEPTH is set (a render inside a render)")
+    depth = helper_depth()
+    python = args.python or os.environ.get("RESPEAK_PYTHON")
+    if not python or not os.access(python, os.X_OK):
+        raise Refused("no respeak python (--python or RESPEAK_PYTHON): %r" % python)
+    root = args.plugin_root or newest_root(args.cache)
+    for part in (RENDER, VERIFY):
+        if not (Path(root) / part).is_file():
+            raise Refused("no %s under %s" % (part, root))
+    for part in (SOURCE, CONTRACT):
+        if not (repo / part).is_file():
+            raise Refused("absent %s" % part)
+    print("readme-render: respeak %s" % root, flush=True)
+    original = (repo / SOURCE).read_bytes()
+    try:
+        code = stamp_and_render(repo, root, python, args.max_rounds, depth, args.max_turns)
+    except BaseException:
+        (repo / SOURCE).write_bytes(original)
+        raise
+    if code != 0:
+        (repo / SOURCE).write_bytes(original)
+    return code
+
+
+def drop_refused(repo):
+    """Step 0: a stale .readme-refused.md goes; a path that cannot go is refused."""
+    try:
+        (repo / REFUSED).unlink(missing_ok=True)
+    except OSError as exc:
+        raise Refused("a stale %s cannot be removed (%s); nothing written"
+                      % (REFUSED, exc.strerror or exc))
+
+
+def stamp_and_render(repo, root, python, max_rounds, depth, max_turns):
+    """Steps 0 to 5; the caller restores the source on any failure."""
+    drop_refused(repo)
+    line = stamp_source(repo)
+    print("readme-render: %s" % line.strip(), flush=True)
+    fd, tmp = tempfile.mkstemp(prefix=".readme-", suffix=".md", dir=repo)
+    os.close(fd)
+    out = Path(tmp)
+    wrap = tempfile.mkdtemp(prefix="readme-render-")
+    env = dict(os.environ, RESPEAK_DEPTH="1", RESPEAK_PYTHON=python,
+               CLAUDE_PLUGIN_ROOT=str(root))
+    helper = dict(env, CLAUDE_SESSION_DEPTH=str(depth), CLAUDE_SESSION_HELPER="1",
+                  RESPEAK_RENDER_CMD=runner_wrapper(wrap, max_turns))
+    try:
+        run = subprocess.run(
+            ["bash", str(Path(root) / RENDER), "--mode", "technical",
+             "--source", SOURCE, "--out", str(out), "--contract", CONTRACT,
+             "--max-rounds", str(max_rounds)], cwd=repo, timeout=RENDER_WALL,
+            env=helper)
+        if run.returncode == 1:
+            print("readme-render: the style gate still fails after %d rounds"
+                  % max_rounds, file=sys.stderr)
+            return 1
+        if run.returncode != 0:
+            raise Refused("the renderer exited %d" % run.returncode)
+        restore_status(out, line)
+        check = subprocess.run([python, str(Path(root) / VERIFY), SOURCE, str(out)],
+                               cwd=repo, env=env, timeout=VERIFY_WALL)
+        if check.returncode != 0:
+            try:
+                os.replace(out, repo / REFUSED)
+            except OSError as exc:
+                raise Refused("the verifier refused the render (exit %d), and it cannot be "
+                              "kept as %s (%s)" % (check.returncode, REFUSED,
+                                                   exc.strerror or exc))
+            print("readme-render: the refused render is %s; diff %s %s"
+                  % (REFUSED, README, REFUSED), file=sys.stderr)
+            raise Refused("the verifier refused the render (exit %d)" % check.returncode)
+        try:
+            os.replace(out, repo / README)
+        except OSError as exc:
+            raise Refused("the render cannot replace %s (%s)" % (README, exc.strerror or exc))
+    except subprocess.TimeoutExpired as exc:
+        name = Path(exc.cmd[1]).name
+        raise Refused("%s took over %d s" % (name, VERIFY_WALL if name == Path(VERIFY).name
+                                             else RENDER_WALL))
+    finally:
+        shutil.rmtree(wrap, ignore_errors=True)
+        if out.exists():
+            out.unlink()
+    (repo / SIDECAR).write_text("%s  %s\n%s  %s\n" % (
+        sha(repo / SOURCE), SOURCE, sha(repo / README), README), encoding="utf-8")
+    print("readme-render: wrote %s and %s" % (README, SIDECAR))
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="readme-render")
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--plugin-root")
+    parser.add_argument("--cache", default=os.path.join(
+        os.path.expanduser("~"), ".claude", "plugins", "cache"))
+    parser.add_argument("--python")
+    parser.add_argument("--max-rounds", type=int, default=2)
+    parser.add_argument("--max-turns", type=int, default=HELPER_MAX_TURNS)
+    args = parser.parse_args(argv)
+    try:
+        return render(args)
+    except Refused as exc:
+        print("readme-render: refused, %s" % exc, file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

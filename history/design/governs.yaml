@@ -1,0 +1,22 @@
+# Lexicon proposal — written by the respeak translator, not ratified.
+# Ratification follows config shorthand.ratification (human by default).
+
+term: "governs"
+expansion: "the closed list of tags a ruling applies to"
+definition: >
+  A front-matter field (decisions/governs) and CLI flag (`scope --governs
+  <tag>`) naming which components or subsystems a ruling binds. Each repo
+  keeps its own closed vocabulary file; adding a tag is a reviewed commit,
+  and `new` refuses a tag not already on the list.
+scope: repo
+status: proposed
+uses: 1
+legibility: 0.65
+rationale: >
+  Recurs in decisions-brief.md (2026-09-22, design/decisions-r1.md §7)
+  across decision 1 (a front-matter field name) and decision 3 (the whole
+  decision), both as the field and as the CLI flag `scope --governs
+  <tag>`. The word is self-suggesting on its own, but the closed-vocabulary
+  mechanics behind it (per-repo file, reviewed-commit gate, `new`'s
+  refusal) are not guessable from the bare term, so it still needs a
+  one-line expansion on first use even for a reader who knows the project.

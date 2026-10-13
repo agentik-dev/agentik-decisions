@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.claude/worktrees/
+.DS_Store
+build/
+*.egg-info/
+.claude/claude-code-session/config.local.yaml
+.check.lock
+.readme-*.md
+.new.lock
+.decisions-ask-*

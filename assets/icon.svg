@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="decisions">
+<title>decisions</title>
+<g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M28 22 L52 46"/>
+<g transform="rotate(-45 28 22)">
+<rect x="14" y="15" width="28" height="14" rx="3" fill="#fff"/>
+<path d="M20 15 V29 M36 15 V29"/>
+</g>
+<rect x="10" y="50" width="34" height="7" rx="2" fill="#fff"/>
+</g>
+</svg>

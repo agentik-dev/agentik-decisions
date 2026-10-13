@@ -1,0 +1,19 @@
+Render notes for this repository's README.md (read by scripts/readme-render,
+passed to respeak-render.sh as --contract; never rendered).
+
+The source is the finished public document, a reference page and not a status
+report. Make an editorial pass over the whole document, in technical mode:
+prose only.
+
+Keep byte-identical and in order:
+- the title, and the img line on line 3;
+- every heading, with its wording and level, in its order;
+- every fenced code block, each line unchanged;
+- every code span, link and link target, and number;
+- every list item and every table row;
+- the status line, the first line under the Status heading.
+
+The first paragraph under the title is the lead; keep it first.
+Add no fact and no open question; drop none.
+Use no em dash and no en dash anywhere: a colon, a semicolon or a new sentence.
+End with the License section: no lexicon line, no gate line, no marker.

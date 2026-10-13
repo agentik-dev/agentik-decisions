@@ -1,0 +1,8 @@
+version: 3
+narrative: { profile: peer-engineer, auto_narrative: false }   # technical, tech_level 3: written for a plugin user
+gate:
+  enabled: false   # the cross-repo ledger's entry 2: no write-time gate; the globs declare the human paths
+  include: [README.md, DECISIONS.md, DESIGN.md, NICE_TO_HAVE.md, OPEN-QUESTIONS.md, HANDOFF.md,
+            design/readme/]   # design/*.md is the current packet
+  exclude: [tests/]   # tests/fixtures/sectioned/DECISIONS.md is a fixture
+  fail_on: error

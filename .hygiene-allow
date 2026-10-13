@@ -1,0 +1,28 @@
+# The hygiene allowlist (scripts/hygiene): <path-glob>: <group>[,<group>]  # why
+# One row per file, each with its reason; no row allows a private name.
+
+LICENSE: person  # the copyright line keeps the owner's name
+plugin/.claude-plugin/plugin.json: person  # the author field keeps the owner's name
+tests/test_render.py: home  # the render tests name a ledger under their temp home
+design/d17-four-verbs.md: home  # the stand-in home path names no one
+history/packets/rows-2026-09-22-r4b.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-22-readme.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-22.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-23-r2.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-23-r5.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-23-r6.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-23-r7.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-23.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-24-r11.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-24-r12.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-24-r13.json: home  # a relay row's prompt path under the stand-in home
+history/packets/rows-2026-09-24-r16.json: home  # a relay row's prompt path under the stand-in home
+history/packets/core.md: email  # the commit trailer's no-reply address
+history/packets/p1-writing-verbs.md: email  # the commit trailer's no-reply address
+history/packets/p2-index-render.md: email  # the commit trailer's no-reply address
+history/packets/p3-check-stats.md: email  # the commit trailer's no-reply address
+history/packets/p4-plugin.md: email  # the commit trailer's no-reply address
+history/sessions/PROMPT-2026-09-22-first-sitting.md: email  # the commit trailer's no-reply address
+history/sessions/PROMPT-2026-09-22-second-sitting-continued.md: email  # the commit trailer's no-reply address
+history/sessions/PROMPT-2026-09-22-second-sitting.md: email  # the commit trailer's no-reply address
+history/sessions/PROMPT-example-app-init.md: email  # the commit trailer's no-reply address

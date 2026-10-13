@@ -1,0 +1,3 @@
+[
+  {"id": "d5-resync", "repo": "claude-code-decisions", "prompt": "/Users/you/code/claude-code-decisions/design/packets/d5-resync.md", "depends_on": ["packets-17"], "worktree": true, "model": "claude-opus-5-5", "max_turns": 40, "why": "the post-S8 re-sync, one commit: scripts/hygiene (5c7408dd) and scripts/doclint (ca28e426) byte-identical to the session's main 27b22f9, the two Makefile pins moved with them so make hygiene never reads red at a commit, the person group off the history/sittings/* allow row (a no-op after S8 item 30), one change-log row; no second act: the new plugin rule was measured clean on this repo's three commands; off main 101dfa0, no base; 40 turns"}
+]

@@ -1,0 +1,38 @@
+# Packet d-split: `src/decisions.py` becomes a package of modules under a thousand lines
+
+| item | value |
+|---|---|
+| from | the owner's ruling C (2026-09-22 12:33): "split src/decisions.py by the language's best practice (modules under a thousand lines)"; `design/decisions-r1.md` §3.1 (`sed -n 87,90p`); `history/sittings/2026-09-22-3.md` handover item C. The builder reads THIS packet, `src/decisions.py`, `tests/gates.py`, `pyproject.toml`, `Makefile`, not the brief |
+| pin | claude-code-decisions `main` at `fb314ca` (later commits on main touch only `design/packets/` and `history/`); branch `d-split`, worktree `.claude/worktrees/d-split` off `main` |
+| wall | this repo only. No other repo is read or written; no push; no `--amend`; no `make install` or `uv tool install` (the Mac's install is the owner's freeze); `uv build` to `/tmp` only |
+| may touch | `src/decisions/` (new: `__init__.py`, `__main__.py`, the modules of §3), `src/decisions.py` (becomes the runner), `pyproject.toml` (the `[tool.setuptools]` and `[project.scripts]` lines), `design/decisions-r1-changelog.md` (ONE appended row). Nothing else: `tests/`, `Makefile`, `plugin/`, `CLAUDE.md`, `README.md` stay byte-identical; anything else is a report line |
+| acceptance | every line under `export PYENV_VERSION=3.12.7; PY=$(pyenv which python3)` (never `/usr/bin/python3`): `$PY --version` reads `Python 3.12.7`; `$PY src/decisions.py --help \| md5` reads `a4e67d40af067964728de23dbe5e9066`; `PYTHONPATH=src $PY -m decisions --help \| md5` reads the same; `make check PY=$PY; echo $?` reads 0 and its `Ran` line reads `Ran 133 tests`; `git diff main --stat -- tests Makefile plugin CLAUDE.md README.md \| wc -l` reads 0; `wc -l src/decisions.py src/decisions/*.py` reads under 1000 on every line and under 15 for `src/decisions.py`; `rm -rf /tmp/d-split && uv build --wheel -o /tmp/d-split . >/dev/null 2>&1 && unzip -l /tmp/d-split/*.whl \| grep -c ' decisions/__init__.py$'` reads 1 and `unzip -l /tmp/d-split/*.whl \| grep -c ' decisions.py$'` reads 0; `rm -rf /tmp/d-split/w && unzip -q -d /tmp/d-split/w /tmp/d-split/*.whl && PYTHONPATH=/tmp/d-split/w $PY -m decisions --help \| md5` reads `a4e67d40af067964728de23dbe5e9066`; `git status --short \| wc -l` reads 0 after the last commit |
+| budget | 80 turns, 100k context; commit per item; checkpoint at 80%; never push, amend or rebase |
+
+## 1. What the source says (quoted)
+
+The ruling: "split src/decisions.py by the language's best practice (modules under a thousand lines)". decisions-r1 §3.1: "One file, `src/decisions.py`, `#!/usr/bin/python3`, 3.9-compatible, stdlib only, under a thousand lines." Sitting 3's handover: "`src/decisions.py` is 1,321 lines against decisions-r1 §3.1's "under a thousand": split the module or lift the line. Consumer: `check`'s v2 lints and `convert`, both still to land in it." packets-1's handover, the seed: "a package src/decisions/ plus a three-line src/decisions.py runner (shebang kept) so tests/gates.py, the Makefile and the checkout invocations stay unchanged".
+
+## 2. Rulings
+
+C, as quoted. `scope --governs tool` reads `# 0 rows` on the pin: no record governs the tool's shape; 0001 governs format, index, scope, placement, legacy and none of them changes here. The python ruling (2026-09-22 12:55): acceptance runs under pyenv 3.12.7, never Apple's `/usr/bin/python3`; this packet changes NO shebang and no `Makefile` line (d1-conventions does): no behaviour change is this packet's rule, and the `--help` md5 above is the one measured under 3.12.7 (under Apple's 3.9.6 argparse prints differently: `3db4d171b55a031569280867ca34a79b`; not used). R25-87: the budget row.
+
+## 3. Interfaces (signatures, not prose)
+
+- `src/decisions/` is the package; each module carries `__all__`; `__init__.py` is `from .<module> import *` for every module in dependency order, so `import decisions` then `decisions.<name>` resolves for EVERY top-level name of the old module (the tests use 21 of them: `read_text parse_front_matter main map_standing load_records find_entry write_text render_index WORDS_PLACEHOLDER render_front_matter Refusal parse_decisions lint_front_matter index_rows slug parse_value marker_spans lint_records id_key FIELDS`, plus `main`); `__main__.py`: `from .cli import main; sys.exit(main())`.
+- The modules, by the old file's banner seams (line numbers on the pin): `records.py` 1-322 (constants, `Refusal`, `read_text`, front matter, `Record`, `load_record`, `parse_decisions`, `find_root`, `read_config`, `load_records`, `id_key`, `first_sentence`); `legacy.py` 644-808; `readers.py` 324-378 (`cmd_show`, `show_record`, `cmd_scope`); `index.py` 378-395 and 810-916 (`render_index`, the markers, `read_exact`, `write_exact`, `write_diff`, `cmd_index`, `table_cell`, `render_block`, `cmd_render`); `writing.py` 395-643 (`write_text`, `cmd_init`, `today`, `read_governs`, `slug`, `legacy_ids`, `next_id`, `record_by_id`, `set_field`, `as_list`, `rewritten`, `link`, `cmd_supersede`, `cmd_rule`, `cmd_new`); `check.py` 918-1234 (`governs_tags` to `cmd_stats`); `cli.py` 1235-1321 (`build_parser`, `main`, `VERBS`). Relative imports only, acyclic; if a cycle forces two modules to merge, merge them and say so in the report. Functions move, never change: no signature, default, message or exit code differs.
+- `src/decisions.py`, the runner, under 15 lines: line 1 stays `#!/usr/bin/python3` (`tests/gates.py` reads that exact line), a docstring, `import sys`, `from decisions.cli import main`, `if __name__ == "__main__": sys.exit(main())`. Run as a script, `sys.path[0]` is `src/`, where the package directory wins over the same-named module: the runner is never imported.
+- `pyproject.toml`: `[tool.setuptools] package-dir = {"" = "src"}` and `packages = ["decisions"]` (the `py-modules` line goes, so the wheel carries the package and not the runner); `[project.scripts] decisions = "decisions.cli:main"`. Version stays 0.1.0.
+- The change-log row, appended to `design/decisions-r1-changelog.md`: `| d-split | 2026-09-22 | §3.1 "One file" is the package src/decisions/ (N modules, the largest M lines) behind the runner src/decisions.py; ruling C. |` with N and M measured.
+
+## 4. Findings that name this row
+
+`wc -l src/decisions.py` reads 1,321 on the pin; the banner comments at lines 94, 161, 262, 324, 378, 395, 644, 810, 918 and 1235 are the seams §3 follows. The wheel built on the pin lists `decisions.py` at top level and no `decisions/` directory. `tests/` imports `decisions` under `PYTHONPATH=src` (the Makefile's `test` target) and calls the 21 names above; `tests/gates.py` opens `src/decisions.py` and parses every `.py` under `src/` and `tests/` with `feature_version=(3, 9)`, so the package must stay 3.9-syntax (no `match`, no `X | Y` annotations). `make check` on the pin: 133 tests, `# 0 findings over 1 records`, `index --check` 0, under both interpreters.
+
+## 5. Forbidden reads
+
+`reference/`, `research/`, `decisions/` whole (`show` and `scope` only), `history/` beyond the sitting-3 handover, the design records beyond `sed -n 87,90p design/decisions-r1.md`, `~/.claude/projects/`, every other repo. The brief. No file over 8 KB whole except `src/decisions.py` itself, which is the work.
+
+## 6. Report (capped: one table, at most five bullets, under 1,500 words)
+
+The table: each acceptance line, its exit and its last output line on the branch. Bullets: the module names with their line counts; the import graph (`grep -n '^from \.' src/decisions/*.py`, summarised); any merge a cycle forced; the change-log row as written; what was left undone. The last line: the branch name and its head sha.

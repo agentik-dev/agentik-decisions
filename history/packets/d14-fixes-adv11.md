@@ -1,0 +1,46 @@
+# Packet d14-fixes-adv11: the base's checker over the branch tree, a pinned base, a flock for `new`, no expected failures; three acts, one builder
+
+| item | value |
+|---|---|
+| from | `design/review-adv11.md` whole (ADV11-1 to 7); the design of record `record design/decisions-r1.md --section '§4'` and `'§5'`, one `sed -n` each; ruling D2 (the gate in the driver); the owner's deferral of owner-signed commits (2026-09-24, decision 2); the STANDING WORD |
+| pin | `main` df9c2da or later; branch `d14-fixes-adv11`, worktree `.claude/worktrees/d14-fixes-adv11` |
+| wall | this repo. No push, `--amend`, rebase, device, `relay`; never `make readme`, `make e2e`, `make tla`, or `claude plugin validate` by hand; every temp path from `mktemp -d`, every log to a `mktemp` file |
+| may touch | `Makefile` (the `decisions`, `test` and `gates` targets and their variables only), `src/decisions/writing.py`, `src/decisions/check.py` (the stale-lock lines only), `tests/run.py`, `tests/test_makefile.py`, `tests/test_writing.py`, `tests/test_gates.py`, `design/decisions-r1-changelog.md` (ONE row), `history/sittings/*.md`, `history/sessions/NEXT`. Never: `scripts/`, `tests/skips.allow`, `tests/gates.py`, the other tests, `plugin/`, `decisions/`, `design/decisions-r1.md`, `README.md`, `design/readme/`, `.hygiene-allow`, `.gitignore` |
+| verify | `make check`, exit 0 at every commit and at close, in the foreground, its log to a `mktemp` file, committed in the same turn; never an acceptance line |
+| acceptance | repo root, the pyenv virtualenv `.python-version` names (`python3` resolves to it); the baseline on `main` df9c2da in parentheses. Act 1: `grep -cE 'def test_(a_forged_checker_on_the_branch_reads_red\|a_moved_main_under_the_pin_reads_red\|a_pin_off_the_history_is_two\|the_base_skip_pin_wins)' tests/test_makefile.py` reads 4 (0); `grep -q DECISIONS_BASE Makefile; echo $?` reads 0 (1); `env PYTHONPATH=src python3 tests/run.py test_makefile 2>&1 \| grep -E '^(OK\|FAILED)'` reads `OK` (`OK`, 7 tests, 1.8 s). Act 2: `grep -cE 'def test_(two_takeovers_one_holder\|an_exit_never_removes_another_holders_lock)' tests/test_writing.py` reads 2 (0); `grep -q fcntl src/decisions/writing.py; echo $?` reads 0 (1); `grep -q reparented src/decisions/writing.py; echo $?` reads 0 (1); `env PYTHONPATH=src python3 tests/run.py test_writing 2>&1 \| grep -E '^(OK\|FAILED)'` reads `OK` (`OK`, 58 tests, 2 skips). Act 3: `grep -cE 'def test_(an_expected_failure_exits_1\|an_unexpected_success_exits_1)' tests/test_gates.py` reads 2 (0); `grep -q expectedFailures tests/run.py; echo $?` reads 0 (1); `env PYTHONPATH=src python3 tests/run.py test_gates 2>&1 \| grep -E '^(OK\|FAILED)'` reads `OK` (`OK`, 15 tests); `grep -cE '^\| d14 \|' design/decisions-r1-changelog.md` reads 1 (0); `python3 scripts/doclint; echo $?` reads 0 (0); `git status --short \| wc -l` reads 0 |
+| budget | 80 turns, 150k context; THREE commits (one per act), the charter in the last; each new test is written first and seen red where the finding reproduces; the charter names doclint's five rows at open and is under 4,096 bytes with no home path before the last commit; checkpoint at 80% |
+
+## 1. What the source says (quoted)
+
+ADV11-1 (high): "the gate still runs the branch's own checker"; fix: "extract `src/decisions` and `tests/{run.py,gates.py,skips.allow}` at the base ... and run that copy over the branch's `decisions/`". ADV11-2: "the gate passes its stage-time sha of main ... The Makefile then requires that sha to be an ancestor of HEAD, and falls back to the merge base only for a run by hand." ADV11-3: "say so in `claude_ancestor`'s docstring and in the change-log's known limits." ADV11-4: "take `fcntl.flock` on it". ADV11-5: "`expectedFailure` passes the skip pin".
+
+## 2. Rulings
+
+Decided inside the design (the packet writer's; the builder records any further choice in the charter):
+
+- **Act 1, ADV11-1 and ADV11-2 (the verdict's fix first), ONE commit.** A `HARNESS_REV` beside `AGAINST`: on a branch it is the base; on `main` it is `HEAD` (the owner's merged tree; `origin/main` lags until a push and would read a merged pin move red). `decisions` extracts `src/decisions.py` and `src/decisions/` at `HARNESS_REV` (`git archive \| tar -x` into a `mktemp -d` removed by `trap ... EXIT`) and runs that copy with the cwd at the repo root, so `find_root` finds the branch's `decisions/`. `test` and `gates` run `tests/run.py` and `tests/gates.py` extracted the same way, with `--skips-allow "$$tmp/tests/skips.allow"`; discovery still reads the branch's `tests/` from `.` and `PYTHONPATH=src` is the branch's code under test. A base without those paths is exit 2 naming the rev and the path.
+- `DECISIONS_BASE`, when set and non-empty, is the base: it must resolve with `git rev-parse --verify --quiet "$$DECISIONS_BASE^{commit}"` and satisfy `git merge-base --is-ancestor "$$DECISIONS_BASE" HEAD`, else exit 2 naming it; `AGAINST` and, on a branch, `HARNESS_REV` become it; `RULING` stays by branch name. Unset, the ADV10 bases stand (a run by hand). ADV10-2's `override` of `AGAINST` and `RULING` stays; the pin is one named, validated input that the driver sets at gate time, which a sitting does not control. Rejected: a pin in a file in the tree (the branch writes it).
+- Tests (temp repo, as `Gate` does, now also copying `tests/run.py`, `tests/gates.py`, `tests/skips.allow` and one tiny passing test module): the branch commits a forged body in a ruled record and `return []` at the top of `lint_against`, `make decisions` exits 1; `main` moved to `HEAD` with `DECISIONS_BASE` set to the true base exits 1; a pin that is not an ancestor exits 2; the branch raises its `skips.allow` pin and adds a skipping test, `make test` exits 1 because the base's pin wins.
+- **Act 2, ADV11-4 and ADV11-3, ONE commit.** `held()` opens the lock `O_CREAT\|O_RDWR` and takes `fcntl.flock(LOCK_EX\|LOCK_NB)` in its wait loop; once locked it compares `os.fstat(fd).st_ino` with `os.stat(path).st_ino` and retries on a mismatch or a vanished path (the unlink race); the flock is the truth, the pid it then truncates and writes is diagnostic; the ADV10-7 line `new: took over ... from dead pid N` is printed when the prior content named a pid that is not running; on exit it removes the path only while it still holds the flock and the inode is its own, then closes. A live holder past the wait: the same refusal. `stale_lock` in `check` also tries a non-blocking flock and reports only a file whose flock is free and whose pid is dead. Tests that faked a live holder by writing a pid now hold a flock on a second descriptor. Rejected: the `os.rename` takeover (`scripts/bounded` already uses flock).
+- ADV11-3: `claude_ancestor`'s docstring says the walk is a courtesy: a reparented (double-forked, `nohup`) process walks to launchd and returns `None`, and an npm install's comm is `node`; the durable proof is the owner-signed commit, deferred by the owner. No test, no new fork.
+- **Act 3, ADV11-5, ONE commit.** `tests/run.py` prints one `expected: <test id> is an expected failure` or `... an unexpected success` line per case in `result.expectedFailures` and `result.unexpectedSuccesses` and exits 1; no allow form (the repo has no such test, so an allow line has no consumer). On this branch `make test` runs main's `run.py` (act 1), so the new runner is proven by `test_gates`, not by `make check`. One change-log row `d14`: the three fixes, `DECISIONS_BASE` as the gate's interface, `HARNESS_REV` on main, ADV11-3's known limit, ADV11-6 and ADV11-7 deferred.
+
+Deferred, decided: ADV11-6 (the readme walls 60/720/60 from one budget: `scripts/` and a render, the next re-sync); ADV11-7 (home paths in the rows files: the repo-relative rows re-sync). An unexplained red `make check`: commit nothing for that act, record it, stop.
+
+## 3. Interfaces (signatures, not prose)
+
+- `make decisions\|test\|gates [DECISIONS_BASE=<sha>]`; exit 2 on no base, a pin off the history, or a harness path missing at the rev.
+- `held(root, wait=2.0, err=None)`, a context manager; `stale_lock(root)` returns `(relpath, pid)` or `None`.
+- `tests/run.py [--skips-allow FILE] [module ...]`: 0, or 1 on a failure, a skip miss, an expected failure or an unexpected success.
+
+## 4. Findings that name this row
+
+Measured on `main` df9c2da: the three targeted modules run OK, 2.1 s at most (7, 58 and 15 cases); `NewLock` fakes a live holder by writing a pid, which a flock ignores. Carried for agent-relay (consumer: packets-38-relay, inside ruling D2): the gate exports `DECISIONS_BASE` as its stage-time sha of `main`; until then the fallback stands and ADV11-2 stays open outside this repo.
+
+## 5. Forbidden reads
+
+`decisions/` whole; `design/decisions-r1.md` beyond one `sed -n` section; `history/packets/`; `../example-mac/history/relay/`; the sibling repos; the moved ledger and reference trees; any file over 8 KB whole except this packet, `src/decisions/writing.py` and `tests/test_writing.py` (read by `sed -n` ranges).
+
+## 6. Report (one table, four bullets, under 1,000 words)
+
+The table: each acceptance line, its exit and last line. Bullets: carried; choices §2 does not name; left undone (ADV11-6, 7); the open fork (none expected).

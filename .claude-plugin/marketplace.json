@@ -1,0 +1,15 @@
+{
+  "name": "claude-code-decisions",
+  "owner": {
+    "name": "agentik-dev"
+  },
+  "description": "The claude-code-decisions marketplace: one plugin, decisions.",
+  "plugins": [
+    {
+      "name": "decisions",
+      "source": "./plugin",
+      "description": "Six verbs over one sectioned DECISIONS.md per repo, plus doctor and backlog.",
+      "version": "0.8.0"
+    }
+  ]
+}

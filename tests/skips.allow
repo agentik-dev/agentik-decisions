@@ -1,0 +1,4 @@
+# The skip reasons the suite and the gates may report (ADV6-5): one per line,
+# `<count> <reason>`, the reason verbatim. tests/gates.py and tests/run.py refuse
+# any skip not listed here, and run.py any count that differs (ADV10-4).
+

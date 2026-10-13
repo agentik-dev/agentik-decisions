@@ -1,0 +1,24 @@
+# Lexicon proposal — written by the respeak translator, not ratified.
+# Ratification follows config shorthand.ratification (human by default).
+
+term: "archtest"
+expansion: "the Go test that keeps a ruling and its mirror in sync"
+definition: >
+  The enforcement test behind the example-app L3 mirror: it reads the ledger
+  from a sibling repository on disk and currently skips when that
+  repository is absent. Decision 2 changes what it checks (a hand row ->
+  a generated block being current); decision 4 changes where records live
+  so it stops needing to reach into a sibling repo at all. Both decisions
+  name "the archtest successor" as a consumer without redefining the term.
+scope: repo
+status: proposed
+uses: 1
+legibility: 0.55
+rationale: >
+  Named as "the archtest successor" in decisions-brief.md (2026-09-22,
+  design/decisions-r1.md §7) as the consumer of both decision 2 and
+  decision 4, but the brief never spells out what it currently does; a
+  reader has to infer it from a separate paragraph in the background
+  section. Guessable as "architecture test" in form but not in the
+  specific behavior (sibling-repo read, skip-on-absent) that both rulings
+  change.

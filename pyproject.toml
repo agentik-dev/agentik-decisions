@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-code-decisions"
+version = "0.8.0"
+description = "Six verbs over one sectioned DECISIONS.md per repo: show, find, new, ask, answer and render, plus doctor and backlog."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+decisions = "decisions.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["decisions"]
