@@ -38,12 +38,14 @@ lint:
 doclint:
 	$(PY) scripts/doclint
 
-# conventions section 6: every copy of the two scripts is byte-identical to the
-# session's canonical ones; a drifted copy stops the gate.
-HYGIENE_SHA = acc3498d4ad3555b095f7f12b22c1c1257fc7d8f2f2f6055c34bd0a21ec34421
+# The guide section 6: scripts/{agentik,hygiene,bounded} are agentik-commons'
+# canonical copies, vendored by its scripts/sync with their sums in
+# scripts/vendored.sha256; scripts/doclint stays byte-identical across the repos
+# until r2 vendors it. A drifted copy stops the gate.
 DOCLINT_SHA = 26eaf2c84aadb822f8d63a0257b063afcc0ba6d9bbcf1d2d856abe4c6388341f
 hygiene:
-	@printf '%s  %s\n' $(HYGIENE_SHA) scripts/hygiene $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/hygiene or scripts/doclint differ from the canonical copies (conventions section 6)"; exit 2; }
+	@shasum -a 256 -c --status scripts/vendored.sha256 || { echo "hygiene: scripts/{agentik,hygiene,bounded} differ from scripts/vendored.sha256; rerun agentik-commons' scripts/sync"; exit 2; }
+	@printf '%s  %s\n' $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/doclint differs from the canonical copy (the guide section 6)"; exit 2; }
 	$(PY) scripts/hygiene
 
 validate:
