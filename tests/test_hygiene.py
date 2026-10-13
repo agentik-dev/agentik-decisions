@@ -152,7 +152,7 @@ class HygieneTest(unittest.TestCase):
             self.assertEqual((code, d["groups"]["person"]["files"]), (2, 1))
             self.assertEqual([f["path"] for f in d["files"]], ["a.md"])
 
-    def test_person_not_evaluated_under_sittings(self):
+    def test_person_evaluated_under_sittings(self):
         with tempfile.TemporaryDirectory() as repo:
             git(repo, "init", "-q")
             Path(repo, "history", "sittings").mkdir(parents=True)
@@ -162,10 +162,11 @@ class HygieneTest(unittest.TestCase):
             git(repo, "add", "-A")
             code, out, _ = run(repo, "--json")
             d = json.loads(out)
+            # a charter is scanned for the owner's terms too; sibling alone is skipped there
             self.assertEqual((d["groups"]["person"]["files"], d["hits_outside_allowlist"]),
-                             (1, 1))
+                             (2, 2))
             self.assertEqual({(f["path"], f["group"]) for f in d["files"]},
-                             {("x.md", "person")})
+                             {("x.md", "person"), ("history/sittings/x.md", "person")})
 
     def test_sibling_not_evaluated_under_sittings(self):
         with tempfile.TemporaryDirectory() as repo:
@@ -390,7 +391,7 @@ class PrivateListTest(unittest.TestCase):
         self.assertIn("no private list at %s" % missing, err)
         code, _, err = run(self.repo, "--require-private", env={PRIVATE_ENV: self.tmp.name})
         self.assertEqual(code, 2)
-        self.assertIn("private list unreadable at", err)
+        self.assertIn("is unreadable", err)
         bad = os.path.join(self.tmp.name, "latin1.tsv")
         Path(bad).write_bytes(b"person\t\xff\xfe\n")
         self.assertEqual(run(self.repo, "--require-private", env={PRIVATE_ENV: bad})[0], 2)

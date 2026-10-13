@@ -40,7 +40,7 @@ doclint:
 
 # conventions section 6: every copy of the two scripts is byte-identical to the
 # session's canonical ones; a drifted copy stops the gate.
-HYGIENE_SHA = 4ae3ff8f5a6c8c80f9c71301ac72b056bbc5f2dc8c6eaf50446a8ebdbfbd3ca8
+HYGIENE_SHA = acc3498d4ad3555b095f7f12b22c1c1257fc7d8f2f2f6055c34bd0a21ec34421
 DOCLINT_SHA = 26eaf2c84aadb822f8d63a0257b063afcc0ba6d9bbcf1d2d856abe4c6388341f
 hygiene:
 	@printf '%s  %s\n' $(HYGIENE_SHA) scripts/hygiene $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/hygiene or scripts/doclint differ from the canonical copies (conventions section 6)"; exit 2; }
