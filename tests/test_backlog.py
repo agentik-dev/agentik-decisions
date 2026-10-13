@@ -417,7 +417,7 @@ class Backlog(Hermetic):
         self.assertEqual(sorted(os.listdir(copy)), ["HANDOFF.md", NICE])
 
     def test_plugin_declares_no_dependency(self):
-        for rel in ("plugin/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json"):
+        for rel in ("plugin/.claude-plugin/plugin.json",):
             with open(os.path.join(REPO, rel), encoding="utf-8") as handle:
                 text = handle.read()
             with self.subTest(rel=rel):

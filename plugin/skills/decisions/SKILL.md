@@ -4,13 +4,13 @@ description: >
   Consult, cite and draft the entries of a repo's DECISIONS.md. Use before
   touching a decided area, when a question needs the owner, or when cutting a
   packet or brief.
-allowed-tools: Bash(decisions *)
+allowed-tools: Bash(agentik-decisions *)
 ---
 
 # Decisions
 
 A repo keeps its decisions in one `DECISIONS.md` at its root. This skill
-carries the manners for reading and drafting them with the `decisions` tool,
+carries the manners for reading and drafting them with the `agentik-decisions` tool,
 and it carries no data.
 
 ## 1. The ledger
@@ -32,44 +32,44 @@ and it carries no data.
 ## 2. Reading
 
 - The `Every session` entries arrive in the CLAUDE.md block that
-  `decisions render` writes, with one line for each other entry in force.
-- Before touching an area, read it: `decisions show --area <name>` prints the
-  whole area, and `decisions show <n>...` prints the entries named.
-- `decisions find <word>` lists the entries that mention a word.
+  `agentik-decisions render` writes, with one line for each other entry in force.
+- Before touching an area, read it: `agentik-decisions show --area <name>` prints the
+  whole area, and `agentik-decisions show <n>...` prints the entries named.
+- `agentik-decisions find <word>` lists the entries that mention a word.
 - Read by entry or by area, and never read the ledger whole.
 
 ## 3. Handing decisions to another agent
 
 A packet or a sub-agent brief carries a `Decisions:` line naming the areas and
 the entry numbers the task touches, for example `relay; 12`. Paste the output
-of `decisions show` under it verbatim, so the builder reads no ledger. Never
+of `agentik-decisions show` under it verbatim, so the builder reads no ledger. Never
 paraphrase or trim an entry: a paraphrase is new, undecided text.
 
 ## 4. Drafting
 
 - Only the owner's answer moves an entry into `## In force` or out of it. An
-  answer enters the ledger through `decisions answer`, and an agent edits an
-  entry in force only by `decisions answer --amends`, on the owner's answer.
+  answer enters the ledger through `agentik-decisions answer`, and an agent edits an
+  entry in force only by `agentik-decisions answer --amends`, on the owner's answer.
   Its `--text` is the whole paragraph in force after the answer: every
   sentence that stays, with the change made. In every answer `--text` is the
   body only: `answer` writes the bold title and the `(date; source)` tail, and
   refuses a `--text` that opens with a bold title or ends in a dated tail.
-- Put a question with `decisions new`, in four parts: where things stand, the
+- Put a question with `agentik-decisions new`, in four parts: where things stand, the
   choice, what each answer sets in motion, and the recommendation. Two to four
   `--option "Label: effect"` flags name the answers, the first the recommended
   one. It writes the question into OPEN-QUESTIONS.md and a Proposed line into
   the ledger, both under the same new number.
 - Ask the owner once per session, in one batch: the ask skill runs
-  `decisions ask` and puts the open questions through AskUserQuestion.
+  `agentik-decisions ask` and puts the open questions through AskUserQuestion.
 - Settle a reversible choice inside the design, and log it in one sentence
   under `## Decided without asking` in OPEN-QUESTIONS.md.
-- Before taking S4 work, run `decisions backlog`, which places each item of
+- Before taking S4 work, run `agentik-decisions backlog`, which places each item of
   NICE_TO_HAVE.md against the build order in HANDOFF.md.
 - Write an entry in plain present-tense English. Its first sentence states the
   decision whole, and its closing parenthetical names the date and the source.
 
 ## 5. Keeping the block fresh
 
-After the ledger changes, `decisions render` rewrites the block in the
-CLAUDE.md beside it. `decisions render --check` prints the diff and exits 1
+After the ledger changes, `agentik-decisions render` rewrites the block in the
+CLAUDE.md beside it. `agentik-decisions render --check` prints the diff and exits 1
 when the block is stale, and a lint problem exits 1 in every mode.
