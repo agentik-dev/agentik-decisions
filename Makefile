@@ -82,7 +82,7 @@ override HARNESS = tmp=$$(mktemp -d) || exit 2; trap 'rm -rf "$$tmp"' EXIT; \
 	for path in $(1); do git cat-file -e "$$harness:$$path" 2>/dev/null \
 	|| { echo "harness: $$path absent at $$harness" >&2; exit 2; }; done; \
 	git archive "$$harness" $(1) | tar -x -C "$$tmp" || exit 2;
-# The decision-records design section 6: each repo's check runs `decisions render
+# The decision-records design section 6: each repo's check runs `agentik decisions render
 # --check` over its ledger; this repo keeps no DECISIONS.md, so the step says so.
 decisions:
 	@if [ -f DECISIONS.md ]; then echo "decisions: render --check"; \

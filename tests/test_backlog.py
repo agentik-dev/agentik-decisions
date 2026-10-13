@@ -1,4 +1,4 @@
-"""d23 section 7: `decisions backlog`, each repo's NICE_TO_HAVE.md placed against
+"""d23 section 7: `agentik decisions backlog`, each repo's NICE_TO_HAVE.md placed against
 its HANDOFF.md build order. It writes nothing and never renders through respeak.
 
 The fixtures under tests/fixtures/backlog/ are trimmed from the real files: relay
@@ -104,7 +104,7 @@ class Backlog(Hermetic):
         lines = [i["line"] for i in self.repo("relay")["items"]]
         want = [line_of("relay", n) for n in (
             "- Ruling 9's first edge", "- A paused row", "- If the night is draining",
-            "- Under a bug", "- The `fresh` gate", "- A plain `relay plan`",
+            "- Under a bug", "- The `fresh` gate", "- A plain `agentik relay plan`",
             "- `plugin/agents/attendant.md`")]
         self.assertEqual(sorted(lines), want)
         for prose in ("A continuation line", "A nested bullet", "a fenced line",
@@ -158,7 +158,7 @@ class Backlog(Hermetic):
 
     def test_heading_level_covers_items(self):
         for needle in ("- If the night is draining", "- Under a bug", "- The `fresh` gate",
-                       "- A plain `relay plan`"):
+                       "- A plain `agentik relay plan`"):
             with self.subTest(needle=needle):
                 got = self.item("relay", needle)
                 self.assertEqual((got["level"], got["level_from"]), ("S4", "heading"))

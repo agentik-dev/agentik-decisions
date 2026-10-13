@@ -1,10 +1,10 @@
 ---
 status: current
-updated: 2026-10-12
+updated: 2026-10-13
 owner: the owner
 audience: the owner, agent
 ---
-# claude-code-decisions: what a review left open, none of it blocking
+# agentik-decisions: what a review left open, none of it blocking
 
 Nothing here blocks a review or a merge. An item leaves when it lands, or when a DECISIONS.md entry retires it. The numbers are the d17 refuter's (2026-09-28); its F1, F2, F3 and F8 landed in the d17 fix round.
 
@@ -61,3 +61,5 @@ The d18 items below come from its two review rounds (2026-09-28). Each names the
 - d-n3's review (round two, 2026-10-12), S4: an entry under an unknown `## ` heading placed before `## In force` is not counted by `new`'s next number (main behaves the same); repro: `## Notes` / `9. **X.** ...` above `## In force`, then `new` writes a number at or below 9.
 - d-n3's review (round two, 2026-10-12), S4: `answer --area every` makes a new `### every` beside `### Every session`, since that area matches only whole; the design allows it, but a caller may mean the session area.
 - The observer, check-in 110 (2026-10-13), S4: `decisions answer` leaves a hand-written count stale. example-ops's OPEN-QUESTIONS.md preamble (line 9) still read "One decision is open: 56" after 56 was answered (d18f5439), and the file the owner reads then says a question is open when none is. The plugin writes no count line; `render --lint` (or `answer`) could flag a preamble whose stated open count differs from the open blocks.
+- agentik-r1-decisions (the builder, 2026-10-13), S4: `design/readme/source.md` holds 24,570 of the 24,576 bytes `test_source_size` allows; the next fact it gains needs a cut first, the version notes for 0.3.0 to 0.5.2 the likeliest.
+- agentik-r1-decisions (the builder, 2026-10-13), S4: r2's list here: drop the `decisions` entry point and the alias note, render's old wording (`render.py`, `test_render.py`), doctor's old IDs and state folder, `.python-version`'s second line and `RESPEAK_PYTHON`'s second name, then their `renamed` rows in `.hygiene-allow`.

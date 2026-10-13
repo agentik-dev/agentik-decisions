@@ -1,6 +1,6 @@
-# First sitting of claude-code-decisions: the design record r1, one refuter pass, then the settled core
+# First sitting of agentik-decisions: the design record r1, one refuter pass, then the settled core
 
-You are the coordinator of the first sitting in `claude-code-decisions` (private, the owner's account). The repo was seeded on 2026-09-22 from a research sitting on Architecture Decision Records; nothing is built and nothing is ruled. This prompt is self-contained: the repo's memory directory is empty, and the research sitting's conclusions are in the files named below, not in any memory.
+You are the coordinator of the first sitting in `agentik-decisions` (private, the owner's account). The repo was seeded on 2026-09-22 from a research sitting on Architecture Decision Records; nothing is built and nothing is ruled. This prompt is self-contained: the repo's memory directory is empty, and the research sitting's conclusions are in the files named below, not in any memory.
 
 ## Read, in this order, and nothing else to start
 

@@ -1,6 +1,6 @@
-# Second sitting of claude-code-decisions: the conversion question, the writing verbs, the generated index
+# Second sitting of agentik-decisions: the conversion question, the writing verbs, the generated index
 
-You are the coordinator of the second sitting in `claude-code-decisions` (private, the owner's account, remote `origin`). The first sitting (2026-09-22) wrote the design record, had it refuted and folded, built and merged the settled core (`show`, `scope`, the legacy fallback; 43 tests), and put four decisions to the owner, who ruled them in his own words as `decisions/0001-decisions-as-files.md`. This prompt is self-contained.
+You are the coordinator of the second sitting in `agentik-decisions` (private, the owner's account, remote `origin`). The first sitting (2026-09-22) wrote the design record, had it refuted and folded, built and merged the settled core (`show`, `scope`, the legacy fallback; 43 tests), and put four decisions to the owner, who ruled them in his own words as `decisions/0001-decisions-as-files.md`. This prompt is self-contained.
 
 ## Read, in this order, and nothing else to start
 
@@ -22,10 +22,10 @@ Three acts, each its own commit or merge, in order. Stop after any act if the bu
 - P1 `init`, `new`, `supersede`, `rule` (§3.3 rows; `rule` refuses under `CLAUDECODE`; `supersede` writes both links, `rule` writes status only; `new` refuses an unknown tag and an id collision including legacy ids). Tests over `tests/fixtures/sample/` plus a temp dir.
 - P2 `index [--check]` and `render <target> [--check]` (§3.3, §3.5; the marker pair `<!-- BEGIN GENERATED: decisions -->` / `<!-- END GENERATED: decisions -->`; byte-identical reruns; the packet names adr-tools' `generate toc` as the model of the one-line index and quotes 0001 (2)).
 - P3 `check` v1 (§3.3's lint list, including all eight front-matter fields present; the sample fixture gains its `governs` file and `superseded-by:` lines) and `stats` (counts only).
-- P4 the plugin under `plugin/` (§4: `skills/decisions/SKILL.md` under 500 lines with the four parts; `commands/show.md`, `scope.md`, `new.md`; `hooks/hooks.json` with the PreToolUse deny on `decisions rule`; `scripts/deny-rule.sh`; a shell test feeding the hook two JSON lines).
+- P4 the plugin under `plugin/` (§4: `skills/decisions/SKILL.md` under 500 lines with the four parts; `commands/show.md`, `scope.md`, `new.md`; `hooks/hooks.json` with the PreToolUse deny on `agentik decisions rule`; `scripts/deny-rule.sh`; a shell test feeding the hook two JSON lines).
 Each builder works in its own worktree under `.claude/worktrees/<packet>` on branch `<packet>`, commits per item, never pushes. P1 and P2 both touch `src/decisions.py`: run P1 first, then P2 and P3 from P1's merge; P4 is independent. The coordinator merges each on a green `make check` over the merged tree, and never pushes red.
 
-**Act 3: dogfood and the two unverified claims.** After the merges: `decisions check` and `decisions index --check` join this repo's `make check`; `decisions index` writes `decisions/INDEX.md` for record 0001 and it is committed; `make install` wraps `uv tool install .` and is tried once (report the exit line, do not fix `uv` itself); `claude plugin install` from this repo is tried once to prove the marketplace `source: "./plugin"` subtree (decisions-r1 §4.1 marks it unverified); each result goes into the record's change-log as one row, measured, and a failure is a handover item, not a redesign.
+**Act 3: dogfood and the two unverified claims.** After the merges: `agentik decisions check` and `agentik decisions index --check` join this repo's `make check`; `agentik decisions index` writes `decisions/INDEX.md` for record 0001 and it is committed; `make install` wraps `uv tool install .` and is tried once (report the exit line, do not fix `uv` itself); `claude plugin install` from this repo is tried once to prove the marketplace `source: "./plugin"` subtree (decisions-r1 §4.1 marks it unverified); each result goes into the record's change-log as one row, measured, and a failure is a handover item, not a redesign.
 
 ## Rules that bind every act
 

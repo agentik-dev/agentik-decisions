@@ -1,8 +1,8 @@
-# claude-code-decisions
+# agentik-decisions
 
 <img src="assets/icon.svg" alt="" width="56" align="left">
 
-claude-code-decisions is a Claude Code plugin plus a stdlib Python tool, `decisions`, for the decisions a repository has settled.
+agentik-decisions is a Claude Code plugin, `decisions@agentik`, plus a stdlib Python tool, `agentik-decisions`, for the decisions a repository has settled.
 A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor` and `backlog`.
 
 ## Why it exists
@@ -48,31 +48,29 @@ Front matter, a title and prose may come first; then come three sections, in thi
 
 ## Install
 
-The tool, from a checkout:
+The tool and the `agentik` front door, from a checkout:
 
 ```
-uv tool install .
+make install
 ```
 
-The plugin, from GitHub:
+The plugin, from the `agentik` marketplace:
 
 ```
-claude plugin marketplace add agentik-dev/agentik-decisions
-claude plugin install decisions@claude-code-decisions
+claude plugin marketplace add agentik-dev/agentik-commons
+claude plugin install decisions@agentik
 ```
 
-From a checkout, `make marketplace` adds this repository's own marketplace when it is absent and installs the plugin when it is missing; it prints one line for each.
-Development runs under the pyenv virtualenv `claude-code-decisions` on Python 3.12, which `.python-version` names; `make venv` creates it, and `make doctor` checks the machine and the repository.
+Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, the first line of `.python-version`; `make venv` creates it, and `make doctor` checks the machine and the repository.
 
 ```
-make marketplace
 make venv
 make doctor
 ```
 
 ## The tool
 
-`decisions [--ledger PATH] <verb>`; the ledger is `--ledger PATH`, before or after the verb, else `DECISIONS.md` at the git top level of the working directory.
+`agentik decisions [--ledger PATH] <verb>` (`decisions` is an alias until 2026-12-31); the ledger is `--ledger PATH`, before or after the verb, else `DECISIONS.md` at the git top level of the working directory.
 
 | verb | what it does |
 |---|---|
@@ -86,24 +84,24 @@ make doctor
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the uv tool's that `make install` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--json]` | each repository's `NICE_TO_HAVE.md` placed against the build order in its `HANDOFF.md`: S1 and S2 items first, then each open step with the items that share a path with it, then S3, then S4; an item with no level prints `S4?`; it reads no ledger and writes nothing |
-| `--version` | the tool's version, which `doctor` compares with the `decisions` on PATH |
+| `--version` | `agentik-decisions 0.8.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
 ```
-decisions show 4                        # entry 4 under its heading
-decisions show 4 12                     # two entries, each heading once
-decisions show --area relay             # the whole Relay area
-decisions find interpreter              # the title line of each entry that names it
-decisions new --title "Pin the interpreter" --stands "It runs under 3.12." --choice "Pin 3.12, or follow the newest?" --option "Pin: Keeps one interpreter." --option "Follow: Tracks releases." --recommend "Pin 3.12."
-decisions ask                           # the open questions as AskUserQuestion calls
-decisions answer 9 --pick pin --source "the sitting" --text "Pin 3.12." --area build
-decisions render                        # write the block into the CLAUDE.md beside the ledger
-decisions render --check                # exit 1 and the diff when the block is stale
-decisions render --lint                 # exit 1 and one line per problem
-decisions render --into ~/.claude/CLAUDE.md
-decisions doctor --json
-decisions backlog                       # this repository's backlog against its build order
+agentik decisions show 4                # entry 4 under its heading
+agentik decisions show 4 12             # two entries, each heading once
+agentik decisions show --area relay     # the whole Relay area
+agentik decisions find interpreter      # the title line of each entry that names it
+agentik decisions new --title "Pin the interpreter" --stands "It runs under 3.12." --choice "Pin 3.12, or follow the newest?" --option "Pin: Keeps one interpreter." --option "Follow: Tracks releases." --recommend "Pin 3.12."
+agentik decisions ask                   # the open questions as AskUserQuestion calls
+agentik decisions answer 9 --pick pin --source "the sitting" --text "Pin 3.12." --area build
+agentik decisions render                # write the block into the CLAUDE.md beside the ledger
+agentik decisions render --check        # exit 1 and the diff when the block is stale
+agentik decisions render --lint         # exit 1 and one line per problem
+agentik decisions render --into ~/.claude/CLAUDE.md
+agentik decisions doctor --json
+agentik decisions backlog               # this repository's backlog against its build order
 ```
 
 `new` appends `## N. T` to the `OPEN-QUESTIONS.md` beside the ledger, before `## Decided without asking` when that heading exists, with or without text after it:
@@ -134,7 +132,7 @@ An empty part, or a title the ledger's lint cannot take, exits 2 and writes noth
 So does an option count outside 2 to 4, a label over five words or holding `(Recommended)`, a choice that does not end in `?`, or a sixth open question.
 The first label holds at most four words, since ` (Recommended)` follows it, and no label is `Other` in any case, since AskUserQuestion adds that option itself.
 
-`ask` skips, with one warning each, a block whose **Your answer:** line is filled in, which `decisions answer N` enters first, and a block the lint refuses.
+`ask` skips, with one warning each, a block whose **Your answer:** line is filled in, which `agentik decisions answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
 The render runs in a temp dir as `OPEN-QUESTIONS.md`, beside a copy of the repo's `.claude/respeak/`, and its `claude -p` child runs as a marked session helper.
 It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
@@ -151,7 +149,7 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a paragraph under half the old one's length is refused unless `--shorter`.
 Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
 A `--into` target that is the ledger itself exits 2 before anything is written.
-Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
+Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
 
 `render` lints first in every mode: the section shape, the entry shape, unique numbers and both caps.
 An entry's tail opens with its date and names a source after it, where `amended DATE` names none; its body is more than its tail; its bold title and its tail each appear once; a Proposed line's tail names `OPEN-QUESTIONS.md`; and a Superseded line holds a date and names its fate.
@@ -161,7 +159,7 @@ Lines under `## Decided without asking` are `- ` bullets after an optional parag
 Each problem prints `file:line: message`, and the exit is 1.
 Otherwise it writes the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->`, replacing a stale block in place, or appends it after one blank line when the markers are absent.
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
-The block holds one line naming its source and the command that regenerates it, the `Every session` entries verbatim, and one line per other entry in force, `- N Title (area)`, under a sentence saying `decisions show N` reads one.
+The block holds one line naming its source and the command that regenerates it, the `Every session` entries verbatim, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
 Proposed and Superseded entries stay out.
 Rendered into a file that sits beside no ledger, such as `~/.claude/CLAUDE.md`, the block names the ledger whole, and its commands carry `--ledger`.
 A target that is the ledger itself, by its path, a link, a hard link or its name in another case on a case-insensitive disk, exits 2 and writes nothing.
@@ -254,7 +252,7 @@ make check
 ## Conventions shared with the sibling plugins
 
 This plugin is one of several built to the same conventions.
-`scripts/hygiene` (the name and path lint) and `scripts/doclint` (charters, packets, links) are byte-identical across them, pinned by hash in the Makefile.
+`scripts/{hygiene,bounded,agentik}` are agentik-commons' copies, pinned by `scripts/vendored.sha256`; `scripts/doclint` (charters, packets, links) is byte-identical across them, pinned in the Makefile.
 `scripts/hygiene` keeps only generic patterns; the private ones (a person, a private repo, a host, a domain) live outside it, in `$AGENTIK_HYGIENE_PRIVATE` or `~/.config/agentik/hygiene-private.tsv`, `group<TAB>regex` rows.
 Without it the scan warns once and runs the generic groups; `--require-private` exits 2.
 `scripts/bounded` holds `make check` to one run per tree, a 840 s wall, and no start above a load of 4 per core.
@@ -263,11 +261,11 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 | id | range | role |
 |---|---|---|
 | `respeak` | `^0.6` | renders this README, and the questions `ask` puts when it is installed |
-| `claude-code-session` | `>=2.0.0-alpha.1,<3.0.0` | the optional provider that `doctor` reports |
+| `agentik-session` | `>=2.0.0-alpha.1,<3.0.0` | the optional provider that `doctor` reports |
 
 ## Status
 
-Status: version `0.8.0`, rendered `2026-10-13`, `356` unittest cases.
+Status: version `0.8.0`, rendered `2026-10-13`, `361` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -279,7 +277,7 @@ Status: version `0.8.0`, rendered `2026-10-13`, `356` unittest cases.
 Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
 
 Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
-Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `decisions render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `make install` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0, and wrote the block into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
+Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `make install` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0, and wrote the block into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
 Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
 Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
 Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
@@ -289,11 +287,10 @@ Version `0.3.0` broke `0.2.0` on purpose: the per-file format and its verbs are 
 ## Layout
 
 ```
-.claude-plugin/            the marketplace: its one plugin is ./plugin
 .hygiene-allow             the names scripts/hygiene permits, per path
 .python-version            the pyenv virtualenv the checks run under (3.12)
 CLAUDE.md                  how a session in this repo works and checks
-Makefile                   make check, make readme, make doctor, make venv, make marketplace
+Makefile                   make check, make readme, make doctor, make venv, make install
 assets/icon.svg            the project icon
 plugin/                    the plugin, self-contained: what an install copies
 plugin/skills/decisions/   the skill that consults and drafts
@@ -307,6 +304,7 @@ scripts/readme-render      make readme: the status line, the render, the verifie
 scripts/hygiene            the name and path lint
 scripts/doclint            charters, packets and relative links
 scripts/bounded            the wall, lock and load breaker make check runs under
+scripts/agentik            the agentik front door
 tests/                     unittest suites and the sample ledger
 history/                   the old designs and packets, and one charter per working session
 ```

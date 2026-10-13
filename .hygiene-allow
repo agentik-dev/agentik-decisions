@@ -34,7 +34,6 @@ Makefile: sibling                       # the plugin's name and its package path
 NICE_TO_HAVE.md: sibling                # the plugin's name
 README.md: sibling                      # the plugin's name and its install lines
 pyproject.toml: sibling                 # the package is named for the plugin
-.claude-plugin/*: sibling               # the marketplace names the plugin
 .claude/respeak/*: sibling              # this repo's own respeak config
 assets/*: sibling                       # the icon's file name
 design/d17-four-verbs.md: sibling       # the design names the plugin
@@ -56,3 +55,13 @@ tests/*: sibling                        # the tests import the package and name 
 tests/fixtures/sectioned/*: sibling     # a fixture ledger is a DECISIONS file
 tests/fixtures/backlog/marker/*: sibling  # a fixture names the ledger
 .hygiene-allow: sibling                 # this file names the plugin and respeak
+# renamed (agentik-r1 6.1): the declared exceptions, each until r2 clears it
+.python-version: renamed        # c10's fallback, the virtualenv's name before the rename
+Makefile: renamed               # c10's fallback, respeak's virtualenv before the rename
+scripts/doclint: renamed        # not vendored in r1, byte-identical across the repos
+scripts/readme-render: renamed  # cites a record at the relay repo's name of the time
+src/decisions/doctor.py: renamed  # c1 c7 c9's fallbacks: the old state folder and IDs
+src/decisions/render.py: renamed  # the block's wording stays until r2 (agentik-r1 4.3)
+tests/test_render.py: renamed   # pins render's wording, which stays until r2
+tests/test_readme.py: renamed   # the reject list, and respeak's cache folder before the rename
+tests/test_doclint.py: renamed  # doclint's cases cite the relay repo by its name of the time
