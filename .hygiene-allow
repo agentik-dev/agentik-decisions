@@ -26,3 +26,33 @@ history/sessions/PROMPT-2026-09-22-first-sitting.md: email  # the commit trailer
 history/sessions/PROMPT-2026-09-22-second-sitting-continued.md: email  # the commit trailer's no-reply address
 history/sessions/PROMPT-2026-09-22-second-sitting.md: email  # the commit trailer's no-reply address
 history/sessions/PROMPT-example-app-init.md: email  # the commit trailer's no-reply address
+# sibling: the plugin's own name is a sibling term, and respeak renders its questions
+.gitignore: sibling                     # ignores the plugin's local files
+.python-version: sibling                # the virtualenv is named for the plugin
+CLAUDE.md: sibling                      # the plugin's name and its verbs
+Makefile: sibling                       # the plugin's name and its package path
+NICE_TO_HAVE.md: sibling                # the plugin's name
+README.md: sibling                      # the plugin's name and its install lines
+pyproject.toml: sibling                 # the package is named for the plugin
+.claude-plugin/*: sibling               # the marketplace names the plugin
+.claude/respeak/*: sibling              # this repo's own respeak config
+assets/*: sibling                       # the icon's file name
+design/d17-four-verbs.md: sibling       # the design names the plugin
+design/d18-one-flow.md: sibling         # the design names the plugin
+design/d23-backlog-view.md: sibling     # the design names the plugin
+design/packets/*: sibling               # the packets name the plugin and its repo
+design/readme/*: sibling                # the README's source, the same names
+history/design/*: sibling               # the design records name the plugin
+history/packets/*: sibling              # the packets and rows name the plugin and its repo
+history/sessions/*: sibling             # the session prompts name the plugin
+plugin/*: sibling                       # the respeak include names both plugins
+plugin/.claude-plugin/*: sibling        # the manifest names the plugin
+plugin/commands/*: sibling              # the commands name the plugin
+plugin/skills/*/*: sibling              # the skills name the plugin
+scripts/*: sibling                      # the plugin's name and the public siblings
+src/*: sibling                          # the entry point is named for the plugin
+src/decisions/*: sibling                # the package is named for the plugin
+tests/*: sibling                        # the tests import the package and name respeak
+tests/fixtures/sectioned/*: sibling     # a fixture ledger is a DECISIONS file
+tests/fixtures/backlog/marker/*: sibling  # a fixture names the ledger
+.hygiene-allow: sibling                 # this file names the plugin and respeak
