@@ -3,7 +3,7 @@
     ask [N...]
 
 Skips, with one warning each, a block whose **Your answer:** line is filled in
-(`decisions answer N` enters it first) and a block the lint refuses. Renders
+(`agentik decisions answer N` enters it first) and a block the lint refuses. Renders
 the asked blocks once through respeak, outside the lock, then takes
 `.new.lock`, reads both files again, and writes back each block whose text is
 unchanged since the render and whose rendering kept its headings, numbers,
@@ -157,7 +157,7 @@ def skipped(block, problems):
     """Why `block` is not asked, or None: its answer line is filled in, or the lint
     refuses it (d-n2 items 3 and 4)."""
     if block.answer:
-        return ("is answered on its %s line; run `decisions answer %d` for it first"
+        return ("is answered on its %s line; run `agentik decisions answer %d` for it first"
                 % (questions.ANSWER, block.number))
     head = "question %d: " % block.number
     refused = [m[len(head):] for n, m in problems if n == block.start + 1 and m.startswith(head)]

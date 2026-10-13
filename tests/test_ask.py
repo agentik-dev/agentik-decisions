@@ -244,7 +244,7 @@ class Ask(Base):
 
     def test_an_answered_block_is_not_asked(self):
         """d-n2 item 3 (1b F8): a block whose **Your answer:** line is filled in is skipped
-        with a warning naming `decisions answer N`, named or not."""
+        with a warning naming `agentik decisions answer N`, named or not."""
         self.new("Q one", "Q two")
         self.write(self.questions, self.read(self.questions).replace(
             "**Your answer:**\n", "**Your answer:** Pin.\n", 1))
@@ -255,10 +255,10 @@ class Ask(Base):
                          ["Decision 10"])
         self.assertEqual(len(err.splitlines()), 1, err)
         self.assertIn("question 9", err)
-        self.assertIn("`decisions answer 9`", err)
+        self.assertIn("`agentik decisions answer 9`", err)
         code, out, err = self.ask("9")
         self.assertEqual((code, json.loads(out)), (0, []))
-        self.assertIn("`decisions answer 9`", err)
+        self.assertIn("`agentik decisions answer 9`", err)
 
     def test_a_block_the_lint_refuses_is_not_asked(self):
         """d-n2 item 4 (1b F9): a block with five options, which AskUserQuestion rejects,

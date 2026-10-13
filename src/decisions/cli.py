@@ -1,4 +1,4 @@
-"""decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor and backlog.
+"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor and backlog.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -29,10 +29,14 @@ The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog` reads no ledger and ignores it. `--version` prints
 the version, which `doctor` compares with the tool on PATH.
 
+The tool is `agentik-decisions`, run as `agentik decisions`; the old name
+`decisions` is a second entry point until 2026-12-31 and, with stderr a
+terminal, says so in one stderr line before anything else (agentik-r1 4.3).
+
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
        read; `answer` whose block write failed after both files were written (a
-       warning on stderr names `decisions render`)
+       warning on stderr names `agentik decisions render`)
     1  `render`: a lint problem, or with --check a stale block
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
@@ -56,16 +60,21 @@ from .ledger import locate
 from .lookup import cmd_find, cmd_show
 from .render import cmd_render
 
-__all__ = ["build_parser", "main", "VERBS"]
+__all__ = ["build_parser", "main", "alias_note", "VERBS", "ALIAS", "NOTE"]
+
+# agentik-r1 4.3: the old name runs the same code until 2026-12-31; a person at a
+# terminal is told once, and pipes, hooks and gates see nothing.
+ALIAS = "decisions"
+NOTE = "decisions: renamed; use 'agentik decisions \u2026' (ends 2026-12-31)\n"
 
 
 def build_parser():
     ledger = argparse.ArgumentParser(add_help=False)
     ledger.add_argument("--ledger", default=argparse.SUPPRESS,
                         help="the ledger; the default is DECISIONS.md at the git top level")
-    parser = argparse.ArgumentParser(prog="decisions", description=__doc__, parents=[ledger],
+    parser = argparse.ArgumentParser(prog="agentik decisions", description=__doc__, parents=[ledger],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--version", action="version", version="decisions %s" % VERSION)
+    parser.add_argument("--version", action="version", version="agentik-decisions %s" % VERSION)
     subs = parser.add_subparsers(dest="verb", metavar="{%s}" % ",".join(VERBS))
 
     show = subs.add_parser("show", parents=[ledger],
@@ -142,10 +151,20 @@ def build_parser():
     return parser
 
 
+def alias_note(argv0, err):
+    """The one renamed line, when the tool runs under its old name and `err` is a terminal."""
+    isatty = getattr(err, "isatty", None)
+    if os.path.basename(argv0 or "") == ALIAS and isatty is not None and isatty():
+        err.write(NOTE)
+
+
 def main(argv=None, out=None, err=None):
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
-    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv is None:
+        alias_note(sys.argv[0], err)
+        argv = sys.argv[1:]
+    argv = list(argv)
     try:
         # argparse prints --help and its usage errors itself: into `out` and `err`.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
