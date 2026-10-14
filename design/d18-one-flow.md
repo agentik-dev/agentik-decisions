@@ -38,7 +38,7 @@ A call holds at most four questions, so five open questions make two calls.
 - `--amends M` replaces the paragraph of entry M, which is in force, with P. The tail of M is kept whole, with every earlier `; amended` clause, and gains `; amended DATE, the owner's answer to decision N, S` after it.
 - `--no-entry` records an answer that changes no entry.
 - Every run removes question N and its Proposed line. It adds `- N. Title: LABEL (DATE; S)` under `## Answered` in `OPEN-QUESTIONS.md`, and makes that section at the end when it is absent. LABEL is the picked label, or `Other: ` and the restated text. `next_number` counts the Answered lines, so N stays retired.
-- It holds `.new.lock` and writes both files or neither (`src/decisions/ask.py:127-134`). It lints both texts before it writes: a problem exits 2 and writes nothing. It then rewrites the CLAUDE.md block, beside the ledger or at `--into`, only when the target holds the markers.
+- It holds `.new.lock` and writes both files or neither (`src/decisions/ask.py:127-134`). It lints both texts before it writes: a problem exits 2 and writes nothing. An open count over the cap is no problem there, since the answer lowers it (2026-10-14, after a merge left seven open; `render --lint` still reports the count). It then rewrites the CLAUDE.md block, beside the ledger or at `--into`, only when the target holds the markers.
 - An observation of Claude Code 2.1.284, which the SDK page does not name: a result with `afkTimeoutMs` is no answer: the question stays open, and the skill does not ask it again that session.
 
 ## 2. One entry shape in every repo
