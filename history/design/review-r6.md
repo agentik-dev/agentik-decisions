@@ -24,6 +24,8 @@ By the Fable reviewer of relay row review-6-decisions at `main` 0cde5c1, from th
 - R6-16 The README source says 222 tests, the suite is 229; the line waits for a render (charters 23-3, 23-4). Charter only: a defect, §2 below.
 - R6-17 Design records are never edited after r1; every change is a change-log row (d1 §2, applied since). Nowhere written: decisions-r1's head or the conventions.
 
+The tally, reconciled 2026-10-14 (a research fix): five entries are change-log only (R6-4 to R6-8), two are charter only (R6-10, R6-16), one is written nowhere (R6-17), and nine are in the record. The handover of `history/sittings/2026-09-23-5.md` says seven and three; the tags above are the count that stands.
+
 ## 2. Reversals and tensions
 
 - Interpreter: §3.1 and §5 (Apple 3.9) and the global CLAUDE.md ("never env python3") against the ruling of 12:55. The ruling wins; the record body and the global line yield (the example-mac reconcile is deferred).
@@ -38,7 +40,7 @@ No closed cycle exists here: nothing under this tree runs the relay, `make`, or 
 
 1. `make check` → `validate` → `claude plugin validate`, twice. Cycle: none. Bound: NONE (no timeout; a node start is seconds idle, minutes under load). Fix: `timeout 60` on both, one message when `claude` is absent.
 2. `make readme` → `respeak-render.sh` → `claude -p`: a session inside a session, two rounds, three runs a row. Cycle: closes only if the respeak agent had Bash and ran `make readme`; it has Read, Grep, Glob, Write. Bound: that tool set and `--max-rounds 2`; not in `check`. Fix: the target sets `RESPEAK_DEPTH` and refuses when it is set; never an acceptance line.
-3. The PreToolUse hook → `python3` through the pyenv shim, `timeout: 10`. Cycle: none. Bound: 10 s, after which the hook FAILS OPEN (a timed-out hook does not block); the `CLAUDECODE` tripwire in `rule` is the layer that holds under load (tests/test_writing.py:399). Fix: a pure `/bin/sh` hook with `grep -E`, no interpreter start.
+3. The PreToolUse hook → `python3` through the pyenv shim, `timeout: 10`. Cycle: none. Bound: 10 s, after which the hook FAILS OPEN (a timed-out hook does not block; Anthropic's Hooks reference, <https://code.claude.com/docs/en/hooks>, read 2026-10-14, confirms it: a timed-out `command`, `http` or `mcp_tool` hook doesn't block the tool call, `"onFailure": "block"` on a `command` or `http` hook reverses it from Claude Code 2.1.295, and command hooks default to 600 s); the `CLAUDECODE` tripwire in `rule` is the layer that holds under load (tests/test_writing.py:399). Fix: a pure `/bin/sh` hook with `grep -E`, no interpreter start.
 4. `make check` as acceptance on every packet: a relay baseline runs 229 tests and two `claude` starts per row per plan. Cycle: none here (D5's closes in agent-relay). Bound: the relay's 900 s a line; NONE in this repo. Fix: targeted lines; `check` measured at close (the charter).
 
 Also: `tests/test_index_render.py` `test_this_repo` runs `index --check` on the live checkout (D7's class): a record added without a render turns the unit suite red, not only the gate; fix, a fixture. `make` never calls `make`; no git hook is installed (§5's pre-push was never built; the 05:53 ruling (4) settled no hooks shim); `doctor` runs `pyenv install --list` without a timeout, outside `check`.

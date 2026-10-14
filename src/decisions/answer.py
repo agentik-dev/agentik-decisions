@@ -22,7 +22,8 @@ writes no entry. One of the three is required: argparse refuses with exit 2.
 and the `(DATE; source)` tail, and `--amends` keeps M's own, so a `--text` that
 opens with a bold title or ends in a dated tail is refused. Every run removes
 question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`. The
-run holds `.new.lock`, lints both texts, and writes both files or neither;
+run holds `.new.lock`, lints both texts (an open count over the cap, which the
+answer lowers, is no refusal), and writes both files or neither;
 then it rewrites the CLAUDE.md block, beside the ledger or at `--into`, when
 that file holds the GENERATED markers; a target that is the ledger itself is
 refused with exit 2 before anything is written. Once both files are written the answer
@@ -194,7 +195,11 @@ def cmd_answer(args, path, out, err):
                                        "- %d. %s: %s (%s; %s)" % (number, title, label, date,
                                                                    source))
         problems = [(display(path), n, m) for n, m in parse(new_ledger).problems]
-        problems += [(display(path_q), n, m) for n, m in questions.parse(new_q).problems]
+        # An answer removes one block, so it lowers the open count: a count over the cap
+        # (left by a merge) is the old file's problem, not this answer's, and never refuses it.
+        over = "questions open; the cap is %d" % questions.OPEN_CAP
+        problems += [(display(path_q), n, m) for n, m in questions.parse(new_q).problems
+                     if over not in m]
         if problems:
             raise Refusal("answer: the result fails the lint; nothing written:\n" + "\n".join(
                 "%s:%d: %s" % p for p in problems))

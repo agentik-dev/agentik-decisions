@@ -519,3 +519,20 @@ class Answer(Base):
         self.assertEqual((ledger.count("### Release\n"), ledger.count("### Build\n")), (1, 1))
         self.assertNotIn("### ###", ledger)
         self.lint()
+
+    def test_an_answer_over_the_cap_lowers_the_count(self):
+        # rf1 item 8 (history/sessions INTAKE answer-over-the-cap): a merge can leave more
+        # questions open than the cap; an answer lowers the count and is not refused for it.
+        with mock.patch("decisions.ask.OPEN_CAP", 10):
+            for title in ("Q two", "Q three", "Q four", "Q five", "Q six"):
+                self.new(title)
+        self.assertEqual(self.read(self.questions).count("\n**Your answer:**"), 7)
+        code, out, err = self.answer("9", "--pick", "Pin", "--source", "s", "--text",
+                                     "Pin 3.12.", "--area", "Build")
+        self.assertEqual(code, 0, err)
+        self.assertIn("answer: 9, Pin; entry 9 under `### Build`", out)
+        self.assertEqual(self.read(self.questions).count("\n**Your answer:**"), 6)
+        code, _, err = self.answer("10", "--pick", "Pin", "--source", "s", "--no-entry")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.questions).count("\n**Your answer:**"), 5)
+        self.lint()

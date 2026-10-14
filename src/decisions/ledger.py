@@ -37,6 +37,8 @@ NAME = "DECISIONS.md"
 IN_FORCE, PROPOSED, SUPERSEDED = "In force", "Proposed", "Superseded"
 SECTIONS = (IN_FORCE, PROPOSED, SUPERSEDED)
 EVERY_SESSION = "Every session"
+# Rulings, not measurements: example-mac entry 4 (2026-09-25), built by d17. They count
+# entries, not bytes; design/d17-four-verbs.md records the block's bytes at the caps.
 IN_FORCE_CAP, EVERY_SESSION_CAP = 25, 7
 # The line that ends the parsed part of an older ledger (design d18 section 2, L4).
 LEGACY = "<!-- decisions: legacy below -->"
