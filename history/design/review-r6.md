@@ -24,6 +24,8 @@ By the Fable reviewer of relay row review-6-decisions at `main` 0cde5c1, from th
 - R6-16 The README source says 222 tests, the suite is 229; the line waits for a render (charters 23-3, 23-4). Charter only: a defect, §2 below.
 - R6-17 Design records are never edited after r1; every change is a change-log row (d1 §2, applied since). Nowhere written: decisions-r1's head or the conventions.
 
+The tally, reconciled 2026-10-14 (a research fix): five entries are change-log only (R6-4 to R6-8), two are charter only (R6-10, R6-16), one is written nowhere (R6-17), and nine are in the record. The handover of `history/sittings/2026-09-23-5.md` says seven and three; the tags above are the count that stands.
+
 ## 2. Reversals and tensions
 
 - Interpreter: §3.1 and §5 (Apple 3.9) and the global CLAUDE.md ("never env python3") against the ruling of 12:55. The ruling wins; the record body and the global line yield (the example-mac reconcile is deferred).
