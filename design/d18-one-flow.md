@@ -19,7 +19,7 @@ Today `new` takes one prose `--answers` string (`src/decisions/cli.py:64`). Noth
 
 ### 1.1 The field mapping
 
-AskUserQuestion in Claude Code 2.1.284 takes one to four questions per call and two to four options per question. Its header is advised to stay within 12 characters, a label within five words, and the UI adds "Other" itself.
+AskUserQuestion takes one to four questions per call and two to four options per question, with a header of at most 12 characters: Anthropic's Agent SDK page "Handle approvals and user input" (<https://code.claude.com/docs/en/agent-sdk/user-input>, read 2026-10-14) states these limits with no version; this design first observed them in Claude Code 2.1.284. A label within five words, and the UI adding "Other" itself, are observations of 2.1.284. The same page says the tool is not available in subagents spawned through the Agent tool, so `ask` run from a helper has no selector: the helper runs `decisions ask` for the render alone, as a headless sitting does (section 1, item 4), and the attended sitting puts the calls.
 
 | Field | Filled from |
 | --- | --- |
@@ -39,7 +39,7 @@ A call holds at most four questions, so five open questions make two calls.
 - `--no-entry` records an answer that changes no entry.
 - Every run removes question N and its Proposed line. It adds `- N. Title: LABEL (DATE; S)` under `## Answered` in `OPEN-QUESTIONS.md`, and makes that section at the end when it is absent. LABEL is the picked label, or `Other: ` and the restated text. `next_number` counts the Answered lines, so N stays retired.
 - It holds `.new.lock` and writes both files or neither (`src/decisions/ask.py:127-134`). It lints both texts before it writes: a problem exits 2 and writes nothing. It then rewrites the CLAUDE.md block, beside the ledger or at `--into`, only when the target holds the markers.
-- A result with `afkTimeoutMs` is no answer: the question stays open, and the skill does not ask it again that session.
+- An observation of Claude Code 2.1.284, which the SDK page does not name: a result with `afkTimeoutMs` is no answer: the question stays open, and the skill does not ask it again that session.
 
 ## 2. One entry shape in every repo
 
