@@ -17,6 +17,7 @@ Repos in scope: `claude-code-decisions` (the plugin), `example-mac` (one Superse
 - A Proposed line is `N. **Title.** one sentence (proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`.
 - A Superseded line is `- text naming the replacement, date.` or `N. text …`. Unnumbered lines are legal, since older ledgers dropped their numbers.
 - Numbers are unique across all three sections and never reused. Caps: at most 25 in force, at most 7 under `Every session`.
+- The caps are rulings, not measurements (noted 2026-10-14, a research fix): the owner set both in example-mac entry 4 (2026-09-25), and d17 builds them. No outside source gives either number. The nearest evidence: adherence falls as instructions multiply (Jaroslawicz et al., "How Many Instructions Can LLMs Follow at Once?", 2025, per the research site's reading, 2026-10-14: Claude Sonnet 4 at 94.4% with 100 instructions and 42.9% with 500), and Anthropic's memory page (<https://code.claude.com/docs/en/memory>, read 2026-10-14) advises under 200 lines a CLAUDE.md. The caps count entries, not bytes. Measured 2026-10-14, one consumer's generated block held four `Every session` entries of 333 to 2,462 bytes and 21 index lines of about 80 bytes, 7,693 bytes in all; at the caps (seven verbatim, 18 index lines) that is about 12 KB at its mean entry and about 19 KB at its longest, and the research site's typical 2,000 to 3,500 bytes an entry gives 14 to 25 KB, loaded in every session.
 
 ## The verbs
 
