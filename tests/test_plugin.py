@@ -12,7 +12,7 @@ SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
 COMMANDS = ("answer.md", "backlog.md", "find.md", "new.md", "render.md", "show.md")
 VERSION = "0.8.0"
-DESCRIBED = ("plugin/.claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
+DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "src/decisions/__init__.py", "src/decisions/cli.py")
 
@@ -60,9 +60,9 @@ class StructureTest(unittest.TestCase):
             text = read(os.path.join(PLUGIN, "commands", name))
             self.assertLess(len(text.splitlines()), 30, name)
             front, _ = split_frontmatter(text)
-            self.assertIn("allowed-tools: Bash(decisions *)", front, name)
+            self.assertIn("allowed-tools: Bash(agentik-decisions *)", front, name)
             self.assertTrue(description_of(front), name)
-            self.assertIn("`decisions %s $ARGUMENTS`" % name[:-3], text, name)
+            self.assertIn("`agentik-decisions %s $ARGUMENTS`" % name[:-3], text, name)
 
     def test_no_hook_and_no_scripts(self):
         # d23 section 6: respeak's include file is the one file beside the two directories.
@@ -72,7 +72,7 @@ class StructureTest(unittest.TestCase):
     def test_skill_sizes(self):
         front, body = split_frontmatter(read(SKILL))
         self.assertIn("name: decisions", front)
-        self.assertIn("allowed-tools: Bash(decisions *)", front)
+        self.assertIn("allowed-tools: Bash(agentik-decisions *)", front)
         description = description_of(front)
         self.assertTrue(description)
         self.assertLess(len(description), 200)
@@ -81,11 +81,11 @@ class StructureTest(unittest.TestCase):
     def test_skill_serves_the_verbs_and_nothing_dropped(self):
         text = read(SKILL)
         for verb in ("show", "find", "new", "ask", "answer", "render", "backlog"):
-            self.assertIn("`decisions %s" % verb, text, verb)
+            self.assertIn("`agentik-decisions %s" % verb, text, verb)
         for dropped in ("scope", "supersede", "INDEX.md", "governs", "hook", "front matter",
                         "decisions/", "record"):
             self.assertNotIn(dropped, text, dropped)
-        self.assertIn("`decisions answer --amends`, on the owner's answer", text)
+        self.assertIn("`agentik-decisions answer --amends`, on the owner's answer", text)
         self.assertNotIn("never edits", text)
 
     def test_ask_skill_drives_the_selector(self):
@@ -93,11 +93,11 @@ class StructureTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "skills"))), ["ask", "decisions"])
         front, body = split_frontmatter(read(ASK))
         self.assertIn("name: ask", front)
-        self.assertIn("allowed-tools: Bash(decisions *), AskUserQuestion", front)
+        self.assertIn("allowed-tools: Bash(agentik-decisions *), AskUserQuestion", front)
         self.assertLess(len(description_of(front)), 200)
         self.assertLess(len(body), 60)
         text = "\n".join(body)
-        for needed in ("`decisions ask`", "`decisions answer N (--pick LABEL | --other TEXT)",
+        for needed in ("`agentik-decisions ask`", "`agentik-decisions answer N (--pick LABEL | --other TEXT)",
                        "back to back in one turn", "`afkTimeoutMs` is no answer",
                        "**Your answer:**"):
             self.assertIn(needed, text, needed)
@@ -107,9 +107,9 @@ class StructureTest(unittest.TestCase):
         `--area`, and enters a filled **Your answer:** line before it asks."""
         text = " ".join(read(ASK).split())
         for needed in ("`--source` carries", "the owner's word",
-                       "which `decisions show --area NAME` lists, exiting 2, when NAME "
+                       "which `agentik-decisions show --area NAME` lists, exiting 2, when NAME "
                        "matches none",
-                       "run `decisions answer N` for it first"):
+                       "run `agentik-decisions answer N` for it first"):
             self.assertIn(needed, text, needed)
 
     def test_answer_pages_carry_into(self):
@@ -119,17 +119,17 @@ class StructureTest(unittest.TestCase):
         self.assertIn("| --no-entry) [--into PATH]", "\n".join(front))
         text = read(ASK)
         self.assertIn("| --no-entry) [--into PATH]`", text)
-        for needed in ("user-level CLAUDE.md", "the same `--into` that `decisions render` uses"):
+        for needed in ("user-level CLAUDE.md", "the same `--into` that `agentik-decisions render` uses"):
             self.assertIn(needed, " ".join(text.split()), needed)
 
     def test_one_version_in_the_three_manifests(self):
+        # agentik-r1 5.2: the repo has no marketplace of its own; agentik-commons' lists it
+        self.assertFalse(os.path.exists(os.path.join(ROOT, ".claude-plugin", "marketplace.json")))
         plugin = json.loads(read(os.path.join(PLUGIN, ".claude-plugin", "plugin.json")))
-        market = json.loads(read(os.path.join(ROOT, ".claude-plugin", "marketplace.json")))
         project = re.search(r'(?m)^version = "([^"]+)"$', read(os.path.join(ROOT, "pyproject.toml")))
         self.assertEqual(plugin["version"], VERSION)
-        self.assertEqual([p["version"] for p in market["plugins"]], [VERSION])
         self.assertEqual(project.group(1), VERSION)
-        # d-n1: `decisions --version` and doctor's tool row read the package's own copy
+        # d-n1: `agentik-decisions --version` and doctor's tool row read the package's own copy
         self.assertEqual(re.search(r'(?m)^VERSION = "([^"]+)"$', read(os.path.join(
             ROOT, "src", "decisions", "common.py"))).group(1), VERSION)
 

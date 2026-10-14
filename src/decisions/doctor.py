@@ -4,9 +4,11 @@
 
 Checks: python (a pyenv 3.12+ interpreter, a newer 3.x pyenv can install a
 warn; or the uv tool's interpreter at 3.12+, as `make install` runs it), tool
-(`decisions` on PATH at this package's version; another version, or none its
-`--version` names, is a warn), marketplace and plugin (the two json files
-under ~/.claude/plugins/), provider (the session's resolved file: in range,
+(`agentik-decisions` on PATH at this package's version; another version, none
+its `--version` names, or only the old name `decisions`, is a warn), marketplace
+and plugin (the two json files under ~/.claude/plugins/: `agentik` and
+`decisions@agentik`, the old IDs a warn until r2), provider (the session's
+resolved file, under the session's new state folder else its old one: in range,
 none, out of range or unparsable), ledger (the DECISIONS.md `--ledger` names
 or the git top holds: lint clean, absent at the git top as a warn, a named
 file absent or its problems as a fail)
@@ -31,19 +33,30 @@ from .common import VERSION, Refusal, bounded
 from .ledger import lint, locate
 from .speak import respeak_root
 
-__all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "MARKETPLACE", "PLUGIN",
+__all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "first_path", "MARKETPLACE",
+           "PLUGIN", "TOOL", "OLD_MARKETPLACE", "OLD_PLUGIN", "ALIAS", "SESSION_STATE",
            "PROVIDER_RANGE"]
 
-MARKETPLACE = "claude-code-decisions"
-PLUGIN = "decisions@claude-code-decisions"
+MARKETPLACE = "agentik"
+PLUGIN = "decisions@agentik"
+TOOL = "agentik-decisions"
+# agentik-r1 6.3, the fallbacks until r2: the old marketplace and plugin ID (c7) are
+# accepted with a warn, the old entry point (c9) too, and the session's old state
+# folder (c1) is read when the new one is absent.
+OLD_MARKETPLACE = "claude-code-decisions"
+OLD_PLUGIN = "decisions@claude-code-decisions"
+ALIAS = "decisions"
+SESSION_STATE = ("agentik-session", "claude-code-session")
+MARKETPLACE_HINT = "claude plugin marketplace add agentik-dev/agentik-commons"
+PLUGIN_HINT = "claude plugin install decisions@agentik"
 MIN_PYTHON = (3, 12)
 # `pyenv install --list` waits on pyenv's rehash lock under load (ADV6-6).
 PYENV_TIMEOUT = 10
-# `decisions --version` on PATH is a child too, so it is bounded (ADV6-6), and only
+# `agentik-decisions --version` on PATH is a child too, so it is bounded (ADV6-6), and only
 # its first TOOL_BYTES of output are read (B3).
 TOOL_TIMEOUT = 10
 TOOL_BYTES = 4096
-# claude-code-session conventions section 3: the resolved file is read only in range.
+# The session's conventions section 3: the resolved file is read only in range.
 PROVIDER_RANGE = ">=2.0.0-alpha.1,<3.0.0"
 _SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
@@ -126,11 +139,24 @@ def first_output(argv, env):
     return code, got[0].decode("utf-8", errors="replace")
 
 
+def first_path(*paths):
+    """agentik-r1 6.3: the first of `paths` that exists, else the first; a writer
+    writes where this resolved."""
+    for path in paths:
+        if os.path.lexists(path):
+            return path
+    return paths[0]
+
+
 def check_tool(env):
-    """ok: `decisions` on PATH names this package's version; warn: absent, or another version."""
-    found = shutil.which("decisions", path=env.get("PATH"))
+    """ok: `agentik-decisions` on PATH names this package's version; warn: absent,
+    another version, or only the old name `decisions` (the alias until r2)."""
+    found = shutil.which(TOOL, path=env.get("PATH"))
     if not found:
-        return "warn", "`decisions` not on PATH (make install)"
+        alias = shutil.which(ALIAS, path=env.get("PATH"))
+        if alias:
+            return "warn", "%s: alias only; make install" % alias
+        return "warn", "`%s` not on PATH (make install)" % TOOL
     # B2: a PYTHONPATH naming a checkout would make the installed tool import it.
     clean = {k: v for k, v in env.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
     try:
@@ -160,7 +186,9 @@ def check_marketplace(env):
     data, path = _plugins_json(env, "known_marketplaces.json")
     if isinstance(data, dict) and MARKETPLACE in data:
         return "ok", "%s known" % MARKETPLACE
-    return "warn", "%s not in %s (make marketplace)" % (MARKETPLACE, path)
+    if isinstance(data, dict) and OLD_MARKETPLACE in data:
+        return "warn", "only the old %s in %s (%s)" % (OLD_MARKETPLACE, path, MARKETPLACE_HINT)
+    return "warn", "%s not in %s (%s)" % (MARKETPLACE, path, MARKETPLACE_HINT)
 
 
 def check_plugin(env):
@@ -168,7 +196,9 @@ def check_plugin(env):
     plugins = data.get("plugins") if isinstance(data, dict) else None
     if isinstance(plugins, dict) and PLUGIN in plugins:
         return "ok", "%s installed" % PLUGIN
-    return "warn", "%s not in %s (make marketplace)" % (PLUGIN, path)
+    if isinstance(plugins, dict) and OLD_PLUGIN in plugins:
+        return "warn", "only the old %s in %s (%s)" % (OLD_PLUGIN, path, PLUGIN_HINT)
+    return "warn", "%s not in %s (%s)" % (PLUGIN, path, PLUGIN_HINT)
 
 
 def _version_key(text):
@@ -210,7 +240,8 @@ def read_provider(env):
               "detail": "none (standalone)"}
     if not session:
         return absent
-    path = os.path.join(state, "claude-code-session", "sessions", session, "resolved.json")
+    folder = first_path(*(os.path.join(state, name) for name in SESSION_STATE))
+    path = os.path.join(folder, "sessions", session, "resolved.json")
     if not os.path.isfile(path):
         return dict(absent, path=path)
     try:
@@ -250,7 +281,7 @@ def check_ledger(ledger, cwd):
     except Refusal as exc:
         return "fail", str(exc)
     if problems:
-        return "fail", "%s: %d lint problems (decisions render --lint)" % (
+        return "fail", "%s: %d lint problems (agentik decisions render --lint)" % (
             found.path, len(problems))
     return "ok", "%s: %d entries, lint clean" % (found.path, len(found.entries))
 

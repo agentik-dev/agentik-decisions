@@ -3,7 +3,7 @@ status: current
 updated: 2026-10-11
 audience: agent
 ---
-# agent-relay: what a review or a packet left open, none of it blocking
+# agentik-relay: what a review or a packet left open, none of it blocking
 
 Nothing here blocks a review or a merge. An S1 in prose is text.
 
@@ -24,8 +24,8 @@ Nothing here blocks a review or a merge. An S1 in prose is text.
 ### A subheading under the levelled heading
 - The `fresh` gate on the probe (night.go:1123) is named by no ruling. (regressions N1)
 
-## `relay plan` stamps its lines with a night it does not own (2026-10-11, the observer; S4)
-- A plain `relay plan` names itself the next night (`NightName`, cmd/relay/main.go:528).
+## `agentik relay plan` stamps its lines with a night it does not own (2026-10-11, the observer; S4)
+- A plain `agentik relay plan` names itself the next night (`NightName`, cmd/relay/main.go:528).
 
 ## The attendant runs out of turns on a check-in
 - `plugin/agents/attendant.md` keeps `maxTurns: 20` with no report bound.

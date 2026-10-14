@@ -194,7 +194,9 @@ class BoundedTest(unittest.TestCase):
         # the README render spawns `claude -p`: walled like the gate (ADV10-6); this repo's
         # line, not the session's 600 s and --load 4 (d15: its 900 s waits for §5's next fold)
         assert "scripts/bounded --wall 900 -- $(PY) scripts/readme-render" in text
-        assert text.count("scripts/bounded --wall 60 -- claude plugin validate") == 2
+        # agentik-r1 5.2: the plugin only; the repo keeps no marketplace of its own
+        assert text.count("scripts/bounded --wall 60 -- claude plugin validate") == 1
+        assert "scripts/bounded --wall 60 -- claude plugin validate plugin/\n" in text
         assert ".check.lock" in (ROOT / ".gitignore").read_text().split()
 
     def test_sigterm_without_wall_exits_143(self):

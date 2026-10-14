@@ -323,7 +323,7 @@ class Answer(Base):
 
     def test_a_failed_block_write_keeps_the_answer(self):
         # d18 1a obs: both files are written before the block; a failed block write is a
-        # warning that names `decisions render`, never exit 2
+        # warning that names `agentik decisions render`, never exit 2
         claude = os.path.join(self.tmp, "CLAUDE.md")
         self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
                                         err=io.StringIO()), 0)
@@ -342,7 +342,7 @@ class Answer(Base):
         self.assertIn("answer: 9, Pin; entry 9 under `### Every session`", out)
         self.assertIn("9. **Pin the interpreter.** Pin it.", self.read(self.ledger))
         self.assertNotIn("## 9.", self.read(self.questions))
-        self.assertIn("`decisions render --ledger %s`" % self.ledger, err)
+        self.assertIn("`agentik decisions render --ledger %s`" % self.ledger, err)
         self.assertIn("Operation not permitted", err)
         self.assertEqual(self.read(claude), before)
         self.lint()

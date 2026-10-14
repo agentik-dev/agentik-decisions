@@ -27,7 +27,7 @@ then it rewrites the CLAUDE.md block, beside the ledger or at `--into`, when
 that file holds the GENERATED markers; a target that is the ledger itself is
 refused with exit 2 before anything is written. Once both files are written the answer
 stands: a block that cannot be rewritten is a warning on stderr naming the
-`decisions render` command, with the `--ledger` and `--into` the answer used,
+`agentik decisions render` command, with the `--ledger` and `--into` the answer used,
 and the exit stays 0.
 """
 
@@ -206,7 +206,7 @@ def cmd_answer(args, path, out, err):
         rewrite_block(path, target, out, err)
     except Refusal as exc:
         # d18 1a obs: both files are written, so the answer stands; the block is a warning.
-        command = "decisions render"
+        command = "agentik decisions render"
         for flag, value in (("--ledger", getattr(args, "ledger", None)), ("--into", args.into)):
             if value:
                 command += " %s %s" % (flag, shlex.quote(value))

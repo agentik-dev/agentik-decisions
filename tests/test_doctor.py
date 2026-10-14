@@ -51,14 +51,14 @@ class Doctor(Hermetic):
         self.pyenv_list("  3.12.7\n  3.13.1\n  3.14.7\n  3.15.0a1\n  3.14-dev\n  pypy3.10-7.3.17\n")
         self.env = {"HOME": self.home, "PATH": self.bin + os.pathsep + "/usr/bin:/bin",
                     "XDG_STATE_HOME": self.state, "CLAUDE_CODE_SESSION_ID": "s1"}
-        self.prefix = os.path.join(self.home, ".pyenv", "versions", "claude-code-decisions")
+        self.prefix = os.path.join(self.home, ".pyenv", "versions", "agentik-decisions")
 
     def pyenv_list(self, listing):
         write(os.path.join(self.bin, "pyenv"),
               "#!/bin/sh\ncat <<'END'\n%sEND\n" % listing, 0o755)
 
-    def resolved(self, version):
-        write(os.path.join(self.state, "claude-code-session", "sessions", "s1", "resolved.json"),
+    def resolved(self, version, folder=doctor.SESSION_STATE[0]):
+        write(os.path.join(self.state, folder, "sessions", "s1", "resolved.json"),
               json.dumps({"provider": {"plugin": "session", "version": version, "profile": "p"},
                           "decisions": {}}))
 
@@ -100,36 +100,49 @@ class Doctor(Hermetic):
         got, _ = self.checks()
         for name in ("tool", "marketplace", "plugin"):
             self.assertEqual(got[name][0], "warn", name)
-        self.tool("echo 'decisions %s'" % current())
-        write(os.path.join(self.home, ".claude", "plugins", "known_marketplaces.json"),
-              json.dumps({"claude-code-decisions": {}}))
-        write(os.path.join(self.home, ".claude", "plugins", "installed_plugins.json"),
-              json.dumps({"version": 2, "plugins": {"decisions@claude-code-decisions": []}}))
+        # agentik-r1 c7 c9: the old entry point and the old IDs alone are a warn until r2
+        self.tool("echo 'agentik-decisions %s'" % current(), name=doctor.ALIAS)
+        self.plugins(doctor.OLD_MARKETPLACE, doctor.OLD_PLUGIN)
+        got, _ = self.checks()
+        for name, said in (("tool", "alias only; make install"), ("marketplace", "only the old"),
+                           ("plugin", "only the old")):
+            self.assertEqual(got[name][0], "warn", name)
+            self.assertIn(said, got[name][1])
+        self.tool("echo 'agentik-decisions %s'" % current())
+        self.plugins(doctor.MARKETPLACE, doctor.PLUGIN)
         got, _ = self.checks()
         for name in ("tool", "marketplace", "plugin"):
             self.assertEqual(got[name][0], "ok", name)
+        self.assertEqual((doctor.MARKETPLACE, doctor.PLUGIN, doctor.TOOL),
+                         ("agentik", "decisions@agentik", "agentik-decisions"))
 
-    def tool(self, body):
-        write(os.path.join(self.bin, "decisions"), "#!/bin/sh\n%s\n" % body, 0o755)
+    def plugins(self, marketplace, plugin):
+        write(os.path.join(self.home, ".claude", "plugins", "known_marketplaces.json"),
+              json.dumps({marketplace: {}}))
+        write(os.path.join(self.home, ".claude", "plugins", "installed_plugins.json"),
+              json.dumps({"version": 2, "plugins": {plugin: []}}))
+
+    def tool(self, body, name=doctor.TOOL):
+        write(os.path.join(self.bin, name), "#!/bin/sh\n%s\n" % body, 0o755)
 
     def test_a_stale_tool_warns(self):
         # F15: the tool on PATH names its version; another version than this package's warns
-        self.tool("echo 'decisions 0.0.1'")
+        self.tool("echo 'agentik-decisions 0.0.1'")
         got = self.checks()[0]["tool"]
         self.assertEqual(got[0], "warn")
         for part in ("0.0.1", current(), "make install"):
             self.assertIn(part, got[1])
-        self.tool("echo 'usage: decisions' >&2\nexit 2")
+        self.tool("echo 'usage: agentik decisions' >&2\nexit 2")
         got = self.checks()[0]["tool"]
         self.assertEqual(got[0], "warn")
         self.assertIn("make install", got[1])
-        self.tool("echo 'decisions %s'" % current())
+        self.tool("echo 'agentik-decisions %s'" % current())
         self.assertEqual(self.checks()[0]["tool"][0], "ok")
 
     def test_the_tool_runs_without_pythonpath(self):
         # B2 (d-n1 review): a PYTHONPATH naming a checkout would make the installed tool
         # import it and name the checkout's version, so the tool runs without it
-        self.tool('echo "decisions %s${PYTHONPATH:+ PYTHONPATH=$PYTHONPATH}'
+        self.tool('echo "agentik-decisions %s${PYTHONPATH:+ PYTHONPATH=$PYTHONPATH}'
                   '${PYTHONHOME:+ PYTHONHOME=$PYTHONHOME}"' % current())
         self.env.update(PYTHONPATH="src", PYTHONHOME="/nowhere")
         got = self.checks()[0]["tool"]
@@ -180,14 +193,14 @@ class Doctor(Hermetic):
 
     def test_a_uv_tool_python_is_ok(self):
         # the python row: `make install` runs the tool under uv, so a uv tool at 3.12+ is ok
-        prefix = os.path.join(self.home, ".local", "share", "uv", "tools", "claude-code-decisions")
+        prefix = os.path.join(self.home, ".local", "share", "uv", "tools", "agentik-decisions")
         os.makedirs(prefix)
         status, detail = doctor.check_python(self.env, prefix=prefix, version=(3, 13, 15))
         self.assertEqual(status, "ok", detail)
         self.assertIn("uv tool", detail)
         self.assertEqual(doctor.check_python(self.env, prefix=prefix, version=(3, 11, 9))[0],
                          "fail")
-        moved = os.path.join(self.tmp, "uv-tools", "claude-code-decisions")
+        moved = os.path.join(self.tmp, "uv-tools", "agentik-decisions")
         os.makedirs(moved)
         env = dict(self.env, UV_TOOL_DIR=os.path.dirname(moved))
         self.assertEqual(doctor.check_python(env, prefix=moved, version=(3, 12, 0))[0], "ok")
@@ -212,8 +225,19 @@ class Doctor(Hermetic):
         self.assertIn("running standalone", got["provider"][1])
         self.assertEqual(provider, "none")
 
+    def test_provider_new_folder_else_the_old(self):
+        # agentik-r1 c1, ruling 1: the old state folder is read while the new one is absent
+        self.resolved("2.1.0", folder=doctor.SESSION_STATE[1])
+        got, provider = self.checks()
+        self.assertEqual((got["provider"][0], provider), ("ok", "session 2.1.0, profile p"))
+        os.makedirs(os.path.join(self.state, doctor.SESSION_STATE[0]))
+        self.assertEqual(self.checks()[1], "none")
+        self.resolved("2.2.0")
+        self.assertEqual(self.checks()[1], "session 2.2.0, profile p")
+        self.assertEqual(doctor.SESSION_STATE[0], "agentik-session")
+
     def test_provider_unparsable_warns(self):
-        write(os.path.join(self.state, "claude-code-session", "sessions", "s1", "resolved.json"),
+        write(os.path.join(self.state, doctor.SESSION_STATE[0], "sessions", "s1", "resolved.json"),
               "{not json")
         got, provider = self.checks()
         self.assertEqual(got["provider"][0], "warn")
@@ -235,10 +259,10 @@ class Doctor(Hermetic):
             handle.write("\n## Notes\n")
         got = self.checks()[0]["ledger"]
         self.assertEqual(got[0], "fail")
-        self.assertIn("1 lint problems (decisions render --lint)", got[1])
+        self.assertIn("1 lint problems (agentik decisions render --lint)", got[1])
 
     def test_exit_and_json(self):
-        write(os.path.join(self.bin, "decisions"), "#!/bin/sh\n", 0o755)
+        write(os.path.join(self.bin, doctor.TOOL), "#!/bin/sh\n", 0o755)
         out = io.StringIO()
         with mock.patch.dict(os.environ, self.env, clear=True), \
                 mock.patch.object(sys, "prefix", self.prefix):

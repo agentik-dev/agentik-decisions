@@ -1,6 +1,7 @@
-# The interpreter .python-version names (the virtualenv claude-code-decisions,
-# pyenv 3.12.7), never Apple's python3; resolved once, so no recipe line waits
-# on the pyenv shim's rehash lock.
+# The interpreter .python-version names (pyenv 3.12.7; its first line the
+# virtualenv agentik-decisions, its second the one before the rename, which pyenv
+# takes while the first is absent: agentik-r1 c10), never Apple's python3; resolved
+# once, so no recipe line waits on the pyenv shim's rehash lock.
 ifndef PY
 PY := $(shell pyenv which python3 2>/dev/null || command -v python3)
 endif
@@ -10,7 +11,7 @@ export PY
 # lock file .check.lock (a flock), an 840 s wall, held off above load 4 x cores; r6 edge 1: every
 # `claude` start is bounded too, and a machine without claude reads unrun.
 
-.PHONY: check check-unlocked gates test lint doclint hygiene validate decisions doctor install marketplace venv readme
+.PHONY: check check-unlocked gates test lint doclint hygiene validate decisions doctor install venv readme
 
 check:
 	@$(PY) scripts/bounded --lock .check.lock --wall 840 --load 4 -- $(MAKE) check-unlocked
@@ -38,18 +39,19 @@ lint:
 doclint:
 	$(PY) scripts/doclint
 
-# conventions section 6: every copy of the two scripts is byte-identical to the
-# session's canonical ones; a drifted copy stops the gate.
-HYGIENE_SHA = acc3498d4ad3555b095f7f12b22c1c1257fc7d8f2f2f6055c34bd0a21ec34421
+# The guide section 6: scripts/{agentik,hygiene,bounded} are agentik-commons'
+# canonical copies, vendored by its scripts/sync with their sums in
+# scripts/vendored.sha256; scripts/doclint stays byte-identical across the repos
+# until r2 vendors it. A drifted copy stops the gate.
 DOCLINT_SHA = 26eaf2c84aadb822f8d63a0257b063afcc0ba6d9bbcf1d2d856abe4c6388341f
 hygiene:
-	@printf '%s  %s\n' $(HYGIENE_SHA) scripts/hygiene $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/hygiene or scripts/doclint differ from the canonical copies (conventions section 6)"; exit 2; }
+	@shasum -a 256 -c --status scripts/vendored.sha256 || { echo "hygiene: scripts/{agentik,hygiene,bounded} differ from scripts/vendored.sha256; rerun agentik-commons' scripts/sync"; exit 2; }
+	@printf '%s  %s\n' $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/doclint differs from the canonical copy (the guide section 6)"; exit 2; }
 	$(PY) scripts/hygiene
 
 validate:
 	@command -v claude >/dev/null 2>&1 || { echo "validate: unrun, no claude on PATH"; exit 2; }
 	$(PY) scripts/bounded --wall 60 -- claude plugin validate plugin/
-	$(PY) scripts/bounded --wall 60 -- claude plugin validate .
 
 # ADV11-1: `test` and `gates` run the harness (tests/{run.py,gates.py,skips.allow})
 # extracted at HARNESS_REV over the working tree: HEAD on main, the merge base with
@@ -80,7 +82,7 @@ override HARNESS = tmp=$$(mktemp -d) || exit 2; trap 'rm -rf "$$tmp"' EXIT; \
 	for path in $(1); do git cat-file -e "$$harness:$$path" 2>/dev/null \
 	|| { echo "harness: $$path absent at $$harness" >&2; exit 2; }; done; \
 	git archive "$$harness" $(1) | tar -x -C "$$tmp" || exit 2;
-# The decision-records design section 6: each repo's check runs `decisions render
+# The decision-records design section 6: each repo's check runs `agentik decisions render
 # --check` over its ledger; this repo keeps no DECISIONS.md, so the step says so.
 decisions:
 	@if [ -f DECISIONS.md ]; then echo "decisions: render --check"; \
@@ -90,27 +92,22 @@ decisions:
 doctor:
 	PYTHONPATH=src $(PY) -m decisions doctor
 
+# The tool, `agentik-decisions` and its alias `decisions` (until 2026-12-31), as a
+# uv tool; then the `agentik` front door from its vendored copy (agentik-r1 D3).
+# The plugin comes from agentik-commons' `agentik` marketplace (agentik-r1 5.2).
+BINDIR ?= $(HOME)/.local/bin
 install:
 	uv tool install .
+	install -m 755 scripts/agentik $(BINDIR)/agentik
 
-# The virtualenv .python-version names, with pyflakes for the gate. No .pth:
-# every `-m decisions` line sets PYTHONPATH=src, and the installed `decisions`
-# comes from `uv tool install` only (r6 decision 3).
+# The virtualenv .python-version names first, with pyflakes for the gate. No .pth:
+# every `-m decisions` line sets PYTHONPATH=src, and the installed tool comes from
+# `uv tool install` only (r6 decision 3).
 venv:
-	@pyenv virtualenvs --bare | grep -qx '3.12.7/envs/claude-code-decisions' \
-		|| pyenv virtualenv 3.12.7 claude-code-decisions
-	"$$(pyenv prefix claude-code-decisions)/bin/python3" -m pip install --quiet pyflakes
-	@echo "venv: claude-code-decisions, pyflakes installed"
-
-# D11: one marketplace per repo, the default a new plugin repo copies (change
-# the two names). Idempotent: prints known|added, then present|installed.
-MARKETPLACE := claude-code-decisions
-PLUGIN := decisions@$(MARKETPLACE)
-marketplace:
-	@if claude plugin marketplace list 2>/dev/null | grep -qw "$(MARKETPLACE)"; then echo "marketplace: known"; \
-	else claude plugin marketplace add "$(CURDIR)" && echo "marketplace: added"; fi
-	@if claude plugin list 2>/dev/null | grep -q "$(PLUGIN)"; then echo "plugin: present"; \
-	else claude plugin install "$(PLUGIN)" && echo "plugin: installed"; fi
+	@pyenv virtualenvs --bare | grep -qx '3.12.7/envs/agentik-decisions' \
+		|| pyenv virtualenv 3.12.7 agentik-decisions
+	"$$(pyenv prefix agentik-decisions)/bin/python3" -m pip install --quiet pyflakes
+	@echo "venv: agentik-decisions, pyflakes installed"
 
 # conventions sections 5 and 6: README.md is rendered from design/readme/source.md by the
 # installed respeak renderer in technical mode under design/readme/contract.txt; edit the
@@ -118,8 +115,9 @@ marketplace:
 # installed respeak by version tuple (RESPEAK_ROOT overrides), refuses a render inside a
 # render (RESPEAK_DEPTH), runs respeak's verifier before the move and writes the two-line
 # sidecar design/readme/rendered.sha256 (source, README) that `check` verifies.
-# RESPEAK_PYTHON is respeak's virtualenv python (PyYAML); RESPEAK_RENDER_MODEL passes through.
+# RESPEAK_PYTHON is respeak's virtualenv python (PyYAML), the new name's else the old's
+# (agentik-r1 c10); RESPEAK_RENDER_MODEL passes through.
 # ADV10-6: the whole render under a 900 s wall; each child inside it has its own timeout.
-RESPEAK_PYTHON ?= $(shell pyenv prefix claude-code-respeak 2>/dev/null)/bin/python3
+RESPEAK_PYTHON ?= $(shell { pyenv prefix agentik-respeak || pyenv prefix claude-code-respeak; } 2>/dev/null)/bin/python3
 readme:
 	PYTHONPATH=src $(PY) scripts/bounded --wall 900 -- $(PY) scripts/readme-render --python "$(RESPEAK_PYTHON)" $(if $(RESPEAK_ROOT),--plugin-root "$(RESPEAK_ROOT)")

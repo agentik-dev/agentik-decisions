@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from decisions import doctor
 from tests.hermetic import Hermetic, LIVE, REPO
 
 # The CLI test classes that read and write through `decisions.main`.
@@ -25,7 +26,8 @@ class NoLiveState(unittest.TestCase):
     def test_the_cli_classes_pass_unchanged(self):
         tmp = tempfile.mkdtemp(prefix="decisions-hostile-")
         self.addCleanup(shutil.rmtree, tmp)
-        resolved = os.path.join(tmp, "claude-code-session", "sessions", "x", "resolved.json")
+        # agentik-r1 c1: the old state folder, which doctor reads while the new one is absent
+        resolved = os.path.join(tmp, doctor.SESSION_STATE[1], "sessions", "x", "resolved.json")
         os.makedirs(os.path.dirname(resolved))
         with open(resolved, "w", encoding="utf-8") as handle:
             json.dump({"provider": {"plugin": "session", "version": "2.0.0"},

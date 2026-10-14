@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
+from unittest import mock
 
 import decisions
 from tests.hermetic import REPO, SAMPLE, Hermetic
@@ -112,3 +114,49 @@ class Locate(Hermetic):
         self.assertEqual(self.run_cli("find", "plain", "--ledger", "any-name.md")[1],
                          "1 Plain words (Every session)\n")
         self.assertEqual(self.run_cli("render", "--lint", "--ledger", ledger)[0], 0)
+
+
+class Terminal(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class Names(Hermetic):
+    """agentik-r1 4.1 and 4.3: the dist `agentik-decisions`, its old name `decisions` a
+    second entry point; under the old name, at a terminal, one renamed line first."""
+
+    def run_as(self, argv0, *argv, err=None):
+        out, err = io.StringIO(), Terminal() if err is None else err
+        with mock.patch.object(sys, "argv", [argv0] + list(argv)):
+            code = decisions.main(out=out, err=err)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_both_entry_points_name_one_main(self):
+        with open(os.path.join(REPO, "pyproject.toml"), "rb") as handle:
+            project = tomllib.load(handle)["project"]
+        self.assertEqual(project["name"], "agentik-decisions")
+        self.assertEqual(project["scripts"], {"agentik-decisions": "decisions.cli:main",
+                                              "decisions": "decisions.cli:main"})
+
+    def test_version_under_either_name(self):
+        for argv0 in ("/x/bin/agentik-decisions", "/x/bin/decisions", "decisions"):
+            with self.subTest(argv0=argv0):
+                code, out, _ = self.run_as(argv0, "--version")
+                self.assertEqual((code, out), (0, "agentik-decisions %s\n" % decisions.cli.VERSION))
+
+    def test_the_old_name_at_a_terminal_says_renamed_once(self):
+        code, _, err = self.run_as("/x/bin/decisions", "nosuch")
+        self.assertEqual(code, 2)
+        self.assertEqual(err.splitlines()[0],
+                         "decisions: renamed; use 'agentik decisions \u2026' (ends 2026-12-31)")
+        self.assertEqual(err.count("renamed"), 1)
+        self.assertIn("usage: agentik decisions", err)
+
+    def test_no_note_in_a_pipe_or_under_the_new_name(self):
+        for argv0, err in (("/x/bin/decisions", io.StringIO()),
+                           ("/x/bin/agentik-decisions", Terminal()),
+                           ("/x/decisions/__main__.py", Terminal())):
+            with self.subTest(argv0=argv0, tty=err.isatty()):
+                code, out, said = self.run_as(argv0, "show", "--help", err=err)
+                self.assertEqual((code, said), (0, ""))
+                self.assertIn("usage: agentik decisions show", out)

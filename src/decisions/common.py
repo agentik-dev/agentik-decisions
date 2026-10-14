@@ -13,7 +13,7 @@ import time
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
            "GIT_TIMEOUT", "VERSION"]
 
-# This package's version, one with the three manifests; `decisions --version`
+# This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
 VERSION = "0.8.0"
 
