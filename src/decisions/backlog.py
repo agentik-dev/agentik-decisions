@@ -27,9 +27,12 @@ TITLE = 80
 LEAD = 120
 
 LEVEL = re.compile(r"\bS([1-4])\b")
-# The four forms a lead holds a level in (section 2); anything else is text.
+# The five forms a lead holds a level in (section 2); anything else is text. The
+# fifth (d24) is the level at the lead's head, then a middle dot, U+00B7, between
+# two spaces: `S3·x` is text. It goes last, so FORMS[0] keeps its title rule.
 FORMS = (re.compile(r"^S([1-4])$"), re.compile(r"^S([1-4]),"),
-         re.compile(r"[,;] S([1-4])$"), re.compile(r"\(S([1-4])\)$"))
+         re.compile(r"[,;] S([1-4])$"), re.compile(r"\(S([1-4])\)$"),
+         re.compile(r"^S([1-4]) · "))
 SENTENCE = re.compile(r"\bEach line(?: below)? is S([1-4])\.")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE = re.compile(r"^(```|~~~)")
@@ -125,7 +128,7 @@ def trimmed(lead):
 
 
 def lead_level(lead):
-    """The level a lead holds in one of the four forms, the most urgent of two."""
+    """The level a lead holds in one of the five forms, the most urgent of two."""
     lead = trimmed(lead)
     return most_urgent([m.group(1) for form in FORMS for m in [form.search(lead)] if m])
 
