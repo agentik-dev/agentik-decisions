@@ -5,8 +5,8 @@ The fixtures under tests/fixtures/backlog/ are trimmed from the real files: rela
 (a level in a `##` heading), session (the lead's four forms), intro (`Each line is
 S<n>.`, `Each line below is S<n>.` and owner steps that are no build order),
 numbered (`N. ` steps, `done` and `DECIDED`), table (rows whose first cell is an integer), both (a table, then `N. `
-items on the same steps: the first shape wins) and marker (the marker line beats a
-heading prefix).
+items on the same steps: the first shape wins), marker (the marker line beats a
+heading prefix) and agents (the lead's fifth form, its level then a middle dot).
 """
 
 import io
@@ -144,6 +144,43 @@ class Backlog(Hermetic):
         # example-app's line 50: the lead runs to the first `. `
         self.assertEqual(self.item("table", "- Refuse a slash")["title"],
                          "Refuse a slash in a workflow kind")
+
+    def test_lead_dot_form(self):
+        # d24: the fifth form, `S<n> · ` at the lead's head, in a bold lead or a plain one
+        for needle, level in (("- **S1 · tests/test-apirun.py", "S1"),
+                              ("- **S2 · plugin/skills", "S2"),
+                              ("- **S3 · tests: the fixture drifts", "S3"),
+                              ("- **S4 · README.md", "S4"),
+                              ("- S1 · bin/run", "S1"),
+                              ("- S2 · bin/check", "S2"),
+                              ("- S3 · scripts/lint", "S3"),
+                              ("- S4 · docs/guide.md", "S4"),
+                              ("- **S3 · tests: a dot lead beats its heading", "S3")):
+            with self.subTest(needle=needle):
+                got = self.item("agents", needle)
+                self.assertEqual((got["level"], got["level_from"]), (level, "lead"))
+        # the title keeps its lead whole, as the other forms keep their token
+        self.assertEqual(self.item("agents", "- **S1 · tests/test-apirun.py")["title"],
+                         "S1 · tests/test-apirun.py: the mid-run read races the writer")
+
+    def test_lead_dot_form_exact(self):
+        # d24 ruling 2: the dot needs a space each side and the lead's head; S21 is no level
+        for needle in ("- **S21 · the round's name", "- **S3·x the dot glued",
+                       "- **Read the lead · S2 · in its middle"):
+            with self.subTest(needle=needle):
+                got = self.item("agents", needle)
+                self.assertEqual((got["level"], got["level_from"]), (None, None))
+
+    def test_lead_dot_form_ranks_first(self):
+        line = line_of("agents", "- **S1 · tests/test-apirun.py")
+        first = self.repo("agents")["items"][0]
+        self.assertEqual((first["rank"], first["line"], first["level"], first["placed_as"]),
+                         (1, line, "S1", "S1"))
+        lines = self.text("agents")
+        printed = [l for l in lines if re.match(r"^\d+ S[1-4]\??  ", l)]
+        self.assertEqual(printed[0], "1 S1  %s:%d  S1 · tests/test-apirun.py: the mid-run "
+                                     "read races the writer" % (NICE, line))
+        self.assertEqual(lines[-1], "3 of 13 items carry no level (placed as S4)")
 
     def test_intro_sentence_level(self):
         got = self.item("intro", "Entry 25 against the graded exit")
