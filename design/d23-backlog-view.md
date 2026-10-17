@@ -22,7 +22,7 @@ This records the owner's answers of 2026-10-11 to the observer's mods study (exa
 
 - An item is a column-0 `- ` bullet with its indented lines; prose, headings and nested bullets are not items. Its lead is its bold lead, else its text to the first `: ` or `. `, else its first 120 characters (example-app's line 50, `- Refuse a slash in a workflow kind. (workflow.md review S4 (4))`, leads `Refuse a slash in a workflow kind`). Its title is its lead, at most 80 characters.
 - A level is a lone token `\bS[1-4]\b` (`S21` is not one), read in three places, the first found winning: the item's lead, in a form below; a sentence `Each line is S<n>.` or `Each line below is S<n>.` under a heading before its first item, as in example-ops; a `##` or `###` heading, over every item to the next heading of its depth or higher, as in agent-relay's `## AR70 ...: notes, no block, S4 (...)`. A token elsewhere is text (example-ops's "calls S3" is AWS). Two in one place: the most urgent wins.
-- The lead, trimmed of spaces and a final `.` or `,`, holds a level in four forms only: `^S[1-4]$` (`- S4: ...`), `^S[1-4],` (`- S4, unconfirmed source: ...`), `[,;] S[1-4]$` (session's `- S21 (2026-10-10), S4: ...`) and `\(S[1-4]\)$` (`- **Rename it (S4).**`). A level named mid-lead is text: example-app's `- Row rtfix4 takes findings S1 and S2 of the rt2 review: ...` reads `S4?`.
+- The lead, trimmed of spaces and a final `.` or `,`, holds a level in five forms only: `^S[1-4]$` (`- S4: ...`), `^S[1-4],` (`- S4, unconfirmed source: ...`), `[,;] S[1-4]$` (session's `- S21 (2026-10-10), S4: ...`), `\(S[1-4]\)$` (`- **Rename it (S4).**`) and `^S[1-4] · `, the middle dot U+00B7 between two spaces (agentik-agents' `- **S3 · tests: ...**`; `S3·x` is text; d24). A level named mid-lead is text: example-app's `- Row rtfix4 takes findings S1 and S2 of the rt2 review: ...` reads `S4?`.
 - An unlevelled item keeps `level: null`, is placed as S4 (a review note's level) and printed `S4?`, never guessed higher. No item is judged landed; an item leaves its file when it lands.
 
 ## 3. Reading the build order
@@ -57,7 +57,7 @@ A CLI verb (`src/decisions/backlog.py`, registered in `src/decisions/cli.py`) an
 
 `tests/test_backlog.py`, fixtures in `tests/fixtures/backlog/` trimmed from the real files:
 
-- `test_column_zero_bullets_only`; `test_lead_level_wins`, `test_lead_forms_only` (the four; `Row rtfix4 ... S1 and S2` reads `S4?`), `test_intro_sentence_level`, `test_heading_level_covers_items` (the three real shapes); `test_token_elsewhere_is_text` (`calls S3`, `S21`).
+- `test_column_zero_bullets_only`; `test_lead_level_wins`, `test_lead_forms_only` (the four; `Row rtfix4 ... S1 and S2` reads `S4?`), `test_lead_dot_form`, `test_lead_dot_form_exact` and `test_lead_dot_form_ranks_first` (d24: the fifth, bold and plain; `S21 ·`, `S3·x` and a dot mid-lead are text; the dot S1 ranks first), `test_intro_sentence_level`, `test_heading_level_covers_items` (the three real shapes); `test_token_elsewhere_is_text` (`calls S3`, `S21`).
 - `test_unlevelled_is_s4_marked`: null, `placed_as` S4, `S4?`, the count line.
 - `test_marker_beats_prefix`, `test_owner_steps_are_not_order`, `test_numbered_steps_done`, `test_table_steps_done`, `test_first_step_shape_wins`.
 - `test_s1_s2_before_step_one`, `test_span_attaches_after_step`, `test_done_step_attaches_nothing`, `test_tail_s3_then_s4_in_file_order`.
