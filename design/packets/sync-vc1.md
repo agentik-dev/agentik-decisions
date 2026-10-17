@@ -1,0 +1,45 @@
+# Packet sync-vc1: the version check vendored and wired, and the plugin at 0.9.0
+
+| item | value |
+|---|---|
+| from | agentik-hq `HANDOFF.md` items 3 and 5 (each plugin repo wires `scripts/plugin-version-check` into its `check` in its next sync packet); agentik-commons `GUIDE.md` §5 and §7; commons' `scripts/sync`, its fourth copy since dcec631. On main the check exits 1: eight files under `plugin/` changed since `c4263997` set `0.8.0`, all in `46db62d` (agentik-r1 act 2) |
+| pin | `main` at `042b0f7`; agentik-commons `main` at `02409f0`; branch `sync-vc1`, worktree `.claude/worktrees/sync-vc1`, off main; a hand-run Opus builder |
+| wall | this repo only; agentik-commons read-only (its `scripts/sync` writes here, once). No push, merge, `--amend`, rebase, `git stash`, network or install; no `claude` beyond `make check`'s and ruling 3's `make readme`; no relay binary built or run, no `relay` or `agentik relay` `run`, `plan`, `gate`, `stop`, `kill`, `clean` or `resume`. Never write under `.venv`, `~/.local/state` or `~/.config`; ruling 5's one `make check` |
+| may touch | `scripts/plugin-version-check` (new) and `scripts/vendored.sha256`, and `scripts/agentik`, `scripts/hygiene`, `scripts/bounded` only if commons' bytes moved, all by agentik-commons' `scripts/sync` only; `Makefile` (ruling 2's lines); `plugin/.claude-plugin/plugin.json`, `pyproject.toml`, `src/decisions/common.py`, `tests/test_plugin.py` (each its one version line); `design/readme/source.md` (ruling 3's row; its status line by `make readme`); `README.md` and `design/readme/rendered.sha256` (by `make readme` only); `design/packets/sync-vc1.md`, `history/sittings/*.md`, `history/sessions/NEXT`. Nothing else |
+| acceptance | `grep -c -F -e '4cd780d9c66d996e58b217b39ee0679e426172ab9ad7bd4e17971b188e7e7600  scripts/agentik' -e '8ef611607c0fdc44703fa48c374ebc00edc1488da56292985380200d219eb2e9  scripts/hygiene' -e '188adff23545f99159a189174baf3771f7e790e5f1256958b0e3e3ac4ed11306  scripts/bounded' -e 'c97596e7b129ac53fb2c8b22adfcf3a9d7e5bd71b6c9473d719aa2cda8063c4b  scripts/plugin-version-check' scripts/vendored.sha256` reads `4` (on main: `3`); `grep -c -F 'scripts/plugin-version-check' Makefile` reads `1` (on main: `0`); `grep -c -x -F 'check-unlocked: gates test lint doclint hygiene plugin-version-check validate decisions' Makefile` reads `1` (on main: `0`); `sed -n '/^check-unlocked:/p' Makefile \| grep -c plugin-version-check` reads `1` (on main: `0`); `cat plugin/.claude-plugin/plugin.json pyproject.toml src/decisions/common.py tests/test_plugin.py \| grep -c -F '"0.9.0"'` reads `4` (on main: `0`); `grep -c -F '0.9.0' design/readme/source.md` reads `2` (on main: `0`); `grep -c -E '^Status: version .0\.9\.0., rendered ' README.md` reads `1` (on main: `0`) |
+| budget | 30 turns, 100k context, `claude-opus-5-5`; three acts, one commit each; checkpoint at 24 turns; the charter opens with doclint's five rows |
+| verify | `make check` |
+
+Amendment 1 (the hq sitting's ruling, 2026-10-17) is applied in place: the acceptance row's fifth line, rulings 2, 3 and 5.
+
+## 1. What the source says
+
+- GUIDE §5: `check` runs `shasum -a 256 -c scripts/vendored.sha256` and `scripts/plugin-version-check`. §7: the check "fails when a file under `plugin/` changed after the commit that last changed the version (a bump not yet committed passes)".
+- Commons' `scripts/sync <repo>` copies its four files into `scripts/` (`bin/agentik` as `scripts/agentik`) and rewrites `scripts/vendored.sha256`; it touches nothing else and never commits. `scripts/agentik`, `scripts/hygiene` and `scripts/bounded` equal commons' bytes today (`cmp` exits 0), so the sync adds only `scripts/plugin-version-check` (`c97596e7…`, mode 755) and the sums file's fourth line.
+- On main `plugin-version-check` (exit 0 clean, 1 changed, 2 usage) exits 1, `since` `c4263997`, eight files: six under `plugin/commands/` and both `SKILL.md` files, all from `46db62d`.
+- The bump is more than `plugin.json`. `tests/test_plugin.py` holds `plugin.json`, `pyproject.toml`, `src/decisions/common.py` and its own `VERSION` equal; three `tests/test_doctor.py` cases read `common.py`'s; `tests/test_readme.py` holds the status line of `README.md` and its source at `plugin.json`'s. With the four at `0.9.0` only that last test is red, and `make readme` writes those lines (`CLAUDE.md`: "Edit `design/readme/source.md`, never `README.md`"). Packet d-n3 bumped the same way.
+- `0.9.0` is a 0.x minor, since the plugin's id changed (the hq sitting's ruling); agentik-r1 kept `0.8.0` (its ruling 4), and its r2 (§8.6) bumps the major. The tag is the owner's; none here.
+
+## 2. Rulings
+
+1. The sync is the only writer of the vendored files; none is edited by hand. Run agentik-commons' `scripts/sync` once, its operand this worktree's root.
+2. The Makefile gains one step. `.PHONY` and `check-unlocked`'s list each take `plugin-version-check` right after `hygiene`, so the list reads as the third acceptance line has it. A target `plugin-version-check:` with one tab-indented recipe line, `$(PY) scripts/plugin-version-check`, goes between `hygiene`'s recipe and `validate:`, a blank line on each side. It runs after the vendored sha check (`hygiene`'s first line, which §5 pairs it with) and before `validate`, so a machine with no `claude` still runs it. No `PYTHONDONTWRITEBYTECODE`, since no sibling line sets it. Nothing else in the Makefile moves, and no comment or help text spells `scripts/plugin-version-check`, so the second acceptance line counts the recipe alone.
+3. The bump, in act 3's commit with the wiring: `0.8.0` becomes `0.9.0` in `plugin.json`'s `version` (nothing else in that file), `pyproject.toml`'s `version` line, and the `VERSION` line of `src/decisions/common.py` and of `tests/test_plugin.py`. In `design/readme/source.md` the `--version` row's `agentik-decisions 0.8.0` becomes `agentik-decisions 0.9.0`, and nothing else: the source sits 6 bytes under `test_source_size`'s 24,576, so no 0.9.0 note fits (§4). Then one `make readme`, which rewrites both status lines and the sidecar under its 900 s wall: the only `claude` the builder runs, once, after the bump, since README.md is never edited by hand; its two outputs commit with act 3. On a nonzero exit, stop before act 3's commit, leave the tree as it is, and report its last stderr lines.
+4. `.hygiene-allow` is not edited. A new hit is red: report the group and its count, and leave the branch as it is.
+5. Commits by explicit path: this packet alone (the packet copy-in rule); then the files the sync changed; then the Makefile, the four version files, `design/readme/source.md`, `README.md`, `design/readme/rendered.sha256` and the charter. One `make check`, last, started only when `ps -axo command | grep -E '(^|/)make (check|check-unlocked)( |$)' | grep -v grep` prints nothing, since sibling repos build this packet today (a relay night's child runs `make check-fast`, which that line does not match). Look again after 20 to 60 s with jitter, for up to 20 minutes, then report unrun. A last stderr line `bounded: stop: lock`, `load` or `wall` is unrun, not red: wait 60 s and run it once more.
+
+## 3. Interfaces
+
+`make check` gains a step, red when a file under `plugin/` changed after the commit that last moved the version; `make plugin-version-check` runs it alone. `agentik-decisions --version` prints `0.9.0`, and `doctor`'s tool row warns until `make install`, the hq sitting's step after the merge. The plugin's id, commands and skills, and the vendored scripts' flags and exits, do not change.
+
+## 4. Findings that name this row
+
+agentik-hq `HANDOFF.md` items 3 (its first bullet's last sentence) and 5 are answered for this repo by this merge. Then agentik-commons' marketplace line for `decisions` (`0.8.0`) trails, and commons' `make check` (`scripts/marketplace-versions --if-complete`) reads it as exit 1 until the hq sitting's bump helper moves it after the merge; the line is not this packet's. Left stale, for this repo's `NICE_TO_HAVE.md` (the builder names them in the handover): `CLAUDE.md`'s checks line and the Makefile's comment and `hygiene` message name three of the four vendored files, `CLAUDE.md`'s list of `make check`'s steps lacks the new one; the source's version notes stop at 0.8.0, since a 0.9.0 note needs a trim first.
+
+## 5. Forbidden reads
+
+Transcripts; anything under `~/.local/state` or `~/.claude/projects`; any other repo, except agentik-commons' `scripts/sync`, `bin/agentik`, `scripts/hygiene`, `scripts/bounded`, `scripts/plugin-version-check` and `GUIDE.md`.
+
+## 6. Report
+
+At most six lines: the branch head and its three commits; the files the sync changed; each acceptance line's result; the hand checks (`shasum -a 256 -c scripts/vendored.sha256` prints four lines ending `: OK`; `cmp` of the four vendored files against commons' exits 0; `scripts/plugin-version-check; echo rc=$?` after act 3's commit reads `rc=0`); `make readme`'s exit with `git diff --stat main -- README.md`; `make check`'s result (green; red, with the failing target's last lines; or unrun, on a `bounded: stop:` line).
