@@ -84,7 +84,7 @@ make doctor
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the uv tool's that `make install` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--json]` | each repository's `NICE_TO_HAVE.md` placed against the build order in its `HANDOFF.md`: S1 and S2 items first, then each open step with the items that share a path with it, then S3, then S4; an item with no level prints `S4?`; it reads no ledger and writes nothing |
-| `--version` | `agentik-decisions 0.8.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.9.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -135,8 +135,7 @@ The first label holds at most four words, since ` (Recommended)` follows it, and
 `ask` skips, with one warning each, a block whose **Your answer:** line is filled in, which `agentik decisions answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
 The render runs in a temp dir as `OPEN-QUESTIONS.md`, beside a copy of the repo's `.claude/respeak/`, and its `claude -p` child runs as a marked session helper.
-It writes the rendered blocks back under `.new.lock`, both files or neither.
-It keeps any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and it refreshes each Proposed line.
+It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
 It then prints one AskUserQuestion call per four questions: the header `Decision N`, the question from where things stand and the choice, and each option's label and effect.
 With respeak absent, a failed render, or a directory `ask` cannot write, the text stays, one warning goes to stderr, and the exit is 0; a failed render's warning carries the renderer's first error line.
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
@@ -148,29 +147,19 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 `--amends M` replaces entry M's paragraph, keeps its tail whole and appends one amendment to it, and exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a paragraph under half the old one's length is refused unless `--shorter`.
-Every run removes question N and its Proposed line, and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither.
-It then rewrites the `CLAUDE.md` block when that file holds the markers.
+Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
 A `--into` target that is the ledger itself exits 2 before anything is written.
-Once both files are written, the answer stands.
-When the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
+Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
 
 `render` lints first in every mode: the section shape, the entry shape, unique numbers and both caps.
-An entry's tail opens with its date and names a source after it; `amended DATE` names no source.
-An entry's body holds more than its tail, and its bold title and its tail each appear once.
-A Proposed line's tail names `OPEN-QUESTIONS.md`.
-A Superseded line holds a date and names its fate.
+An entry's tail opens with its date and names a source after it, where `amended DATE` names none; its body is more than its tail; its bold title and its tail each appear once; a Proposed line's tail names `OPEN-QUESTIONS.md`; and a Superseded line holds a date and names its fate.
 After an unknown `## ` heading no entry belongs to the section or the area before it.
-When an `OPEN-QUESTIONS.md` sits beside the ledger, its first heading starts `# Decisions for the owner`.
-At most five questions stay open, and each block holds the four labels in order.
-It carries 2 to 4 options, with the first alone recommended, and no two labels equal ignoring case.
-Each block ends in an answer line, no two blocks share a number, and each question has its Proposed line.
-Front matter and a `## ` line inside a code fence are skipped.
+When an `OPEN-QUESTIONS.md` sits beside the ledger, its first heading starts `# Decisions for the owner`, at most five questions are open, each block holds the four labels in order, 2 to 4 options with the first alone recommended and no two labels equal ignoring case, and an answer line, no two blocks share a number, and each question has its Proposed line; front matter and a `## ` line inside a code fence are skipped.
 Lines under `## Decided without asking` are `- ` bullets after an optional paragraph, and each line under `## Answered` ends in `(DATE; source)`.
 Each problem prints `file:line: message`, and the exit is 1.
 Otherwise it writes the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->`, replacing a stale block in place, or appends it after one blank line when the markers are absent.
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
-The block holds one line naming its source and the command that regenerates it, then the `Every session` entries verbatim.
-It adds one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
+The block holds one line naming its source and the command that regenerates it, the `Every session` entries verbatim, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
 Proposed and Superseded entries stay out.
 Rendered into a file that sits beside no ledger, such as `~/.claude/CLAUDE.md`, the block names the ledger whole, and its commands carry `--ledger`.
 A target that is the ledger itself, by its path, a link, a hard link or its name in another case on a case-insensitive disk, exits 2 and writes nothing.
@@ -276,7 +265,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.8.0`, rendered `2026-10-13`, `361` unittest cases.
+Status: version `0.9.0`, rendered `2026-10-17`, `362` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -285,11 +274,11 @@ Status: version `0.8.0`, rendered `2026-10-13`, `361` unittest cases.
 | The plugin: two skills, six commands and respeak's include file | Working |
 | The session provider in `doctor` | Working |
 
-Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date, or names only `amended DATE`. It also refuses an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`. It takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
+Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
 
 Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
-Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `make install` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case. Both exited 0, and wrote the block into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
-Version `0.5.2` makes `answer --text` the body only. `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
+Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `make install` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0, and wrote the block into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
+Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
 Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
 Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
 Version `0.4.0` drops `new --answers`: `new` takes two to four `--option` flags instead, and `ask` and `answer` carry a question from the file to the owner and the answer into the ledger.

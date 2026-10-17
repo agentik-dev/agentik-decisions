@@ -11,12 +11,12 @@ export PY
 # lock file .check.lock (a flock), an 840 s wall, held off above load 4 x cores; r6 edge 1: every
 # `claude` start is bounded too, and a machine without claude reads unrun.
 
-.PHONY: check check-unlocked gates test lint doclint hygiene validate decisions doctor install venv readme
+.PHONY: check check-unlocked gates test lint doclint hygiene plugin-version-check validate decisions doctor install venv readme
 
 check:
 	@$(PY) scripts/bounded --lock .check.lock --wall 840 --load 4 -- $(MAKE) check-unlocked
 
-check-unlocked: gates test lint doclint hygiene validate decisions
+check-unlocked: gates test lint doclint hygiene plugin-version-check validate decisions
 	@if [ ! -f design/readme/source.md ]; then echo "readme: refused, absent design/readme/source.md"; exit 2; \
 	elif shasum -c --status design/readme/rendered.sha256 2>/dev/null; then echo "readme: fresh"; \
 	else echo "readme: stale, run make readme"; exit 2; fi
@@ -48,6 +48,9 @@ hygiene:
 	@shasum -a 256 -c --status scripts/vendored.sha256 || { echo "hygiene: scripts/{agentik,hygiene,bounded} differ from scripts/vendored.sha256; rerun agentik-commons' scripts/sync"; exit 2; }
 	@printf '%s  %s\n' $(DOCLINT_SHA) scripts/doclint | shasum -a 256 -c --status || { echo "hygiene: scripts/doclint differs from the canonical copy (the guide section 6)"; exit 2; }
 	$(PY) scripts/hygiene
+
+plugin-version-check:
+	$(PY) scripts/plugin-version-check
 
 validate:
 	@command -v claude >/dev/null 2>&1 || { echo "validate: unrun, no claude on PATH"; exit 2; }

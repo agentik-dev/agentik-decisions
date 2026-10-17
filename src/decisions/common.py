@@ -15,7 +15,7 @@ __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_t
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
