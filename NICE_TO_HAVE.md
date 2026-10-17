@@ -1,6 +1,6 @@
 ---
 status: current
-updated: 2026-10-13
+updated: 2026-10-17
 owner: the owner
 audience: the owner, agent
 ---
@@ -68,3 +68,9 @@ The d18 items below come from its two review rounds (2026-09-28). Each names the
 - (agentik-r1 review, S4) `pyenv version-name` warns until the new venv exists (.python-version's first line); builds still resolve the old venv.
 - (agentik-r1 review, S4, not reproduced) the selector's hint names the front-door form, outside the ask skill's `Bash(agentik-decisions *)`, so a model following it would meet a permission prompt.
 - (the observer, 2026-10-14, S4, reproduced) `render --check` with no `--into` compares the ledger's block with the repo's own CLAUDE.md, so a ledger whose `Every session` block renders into another scope's CLAUDE.md (the portfolio ledger's, into `~/.claude/CLAUDE.md`) reads exit 1 and prints a diff that adds the whole block, though nothing drifted; only `--into <that file>` reads exit 0. The ledger could name its render target (a header line `render` reads), or `--check` could say the repo's CLAUDE.md holds no generated block and name `--into`.
+
+## sync-vc1's build (2026-10-17): what it leaves (S4)
+
+- (sync-vc1 review, S4) `design/readme/source.md` line 249 (README.md the same) says `make check` runs, in order, `gates`, `test`, `lint`, `doclint`, `hygiene`, `validate`, `decisions`, leaving out `plugin-version-check` between `hygiene` and `validate`; line 255 names three vendored copies while `scripts/vendored.sha256` pins four; and the Layout block (lines 288 to 310) lacks `scripts/plugin-version-check` and `scripts/vendored.sha256`. The source sits 6 bytes under `test_source_size`'s 24,576-byte cap, so the next README packet trims first.
+- (sync-vc1 review, S4) From now on any packet that edits `plugin/` lists `plugin/.claude-plugin/plugin.json` in its may-touch row and bumps the version, or `make check` reads red (GUIDE §7).
+- (sync-vc1 review, S4) agentik-commons' marketplace line for `decisions` stays `0.8.0` until the hq sitting's bump, which follows this merge.
