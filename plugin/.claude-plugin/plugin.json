@@ -1,6 +1,6 @@
 {
   "name": "decisions",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Six verbs over one sectioned DECISIONS.md per repo: show, find, new, ask, answer and render, plus doctor and backlog. A repo owns its ledger; this plugin carries no data.",
   "author": {"name": "Kevin Tegtmeier"},
   "homepage": "https://github.com/agentik-dev/agentik-decisions",
