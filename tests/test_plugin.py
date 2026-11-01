@@ -53,7 +53,13 @@ def read(path):
 class StructureTest(unittest.TestCase):
 
     def test_exactly_the_six_commands(self):
-        self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "commands"))), list(COMMANDS))
+        # d25: and /decisions:install-cli, which runs the plugin's own launcher, never PATH's
+        self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "commands"))),
+                         sorted(COMMANDS + ("install-cli.md",)))
+        text = read(os.path.join(PLUGIN, "commands", "install-cli.md"))
+        self.assertIn("allowed-tools: [Bash(*/bin/agentik-decisions install-cli*)]", text)
+        self.assertIn("!`${CLAUDE_PLUGIN_ROOT}/bin/agentik-decisions install-cli $ARGUMENTS`",
+                      text)
 
     def test_commands_under_thirty_lines_each_running_its_verb(self):
         for name in COMMANDS:
@@ -68,7 +74,8 @@ class StructureTest(unittest.TestCase):
         # d23 section 6: respeak's include file is the one file beside the directories;
         # d25 (hq design/04 section 2): the package lives in lib/.
         self.assertEqual(sorted(os.listdir(PLUGIN)),
-                         [".claude-plugin", "commands", "lib", "respeak-include.md", "skills"])
+                         [".claude-plugin", "bin", "commands", "lib", "respeak-include.md",
+                          "skills"])
 
     def test_skill_sizes(self):
         front, body = split_frontmatter(read(SKILL))

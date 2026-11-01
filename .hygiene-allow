@@ -47,6 +47,9 @@ history/sessions/*: sibling             # the session prompts name the plugin
 plugin/*: sibling                       # the respeak include names both plugins
 plugin/.claude-plugin/*: sibling        # the manifest names the plugin
 plugin/commands/*: sibling              # the commands name the plugin
+plugin/bin/agentik-decisions: sibling   # the canonical launcher, named for the tool (d25)
+plugin/lib/agentik-decisions: sibling   # the runner, named for the tool, imports the package
+plugin/lib/agentik-tool.conf: sibling   # the tool's names for install-cli (GUIDE 10)
 plugin/skills/*/*: sibling              # the skills name the plugin
 scripts/*: sibling                      # the plugin's name and the public siblings
 src/*: sibling                          # the entry point is named for the plugin

@@ -13,7 +13,7 @@ from unittest import mock
 import decisions
 from tests.hermetic import REPO, SAMPLE, Hermetic
 
-VERBS = ("show", "find", "new", "ask", "answer", "render", "doctor", "backlog")
+VERBS = ("show", "find", "new", "ask", "answer", "render", "doctor", "backlog", "install-cli")
 DROPPED = ("scope", "rule", "against", "supersede", "convert", "stats", "init", "check",
            "index")
 
