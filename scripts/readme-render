@@ -39,7 +39,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugin" / "lib"))
 from decisions import speak  # noqa: E402  the finder lives in the package
 
 SOURCE = "design/readme/source.md"
@@ -93,7 +93,7 @@ def status_line(repo):
         version = json.loads((repo / MANIFEST).read_text(encoding="utf-8"))["version"]
     except (OSError, ValueError, KeyError) as exc:
         raise Refused("no version in %s: %s" % (MANIFEST, exc))
-    env = dict(os.environ, PYTHONPATH="src")
+    env = dict(os.environ, PYTHONPATH="plugin/lib")
     try:
         run = subprocess.run([sys.executable, "-c", COUNT], cwd=repo, env=env,
                              capture_output=True, text=True, timeout=COUNT_WALL)

@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentik-decisions"
-version = "0.9.0"
+version = "0.10.1"
 description = "Six verbs over one sectioned DECISIONS.md per repo: show, find, new, ask, answer and render, plus doctor and backlog."
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = []
 
 [project.scripts]
@@ -15,5 +15,5 @@ agentik-decisions = "decisions.cli:main"
 decisions = "decisions.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "plugin/lib"}
 packages = ["decisions"]

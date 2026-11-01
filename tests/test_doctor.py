@@ -73,12 +73,16 @@ class Doctor(Hermetic):
         self.assertIn("newer python available: 3.14.7", got["python"][1])
 
     def test_current_python_is_ok(self):
-        self.pyenv_list("  3.12.1\n  %d.%d.%d\n" % sys.version_info[:3])
+        self.pyenv_list("  3.9.0\n  %d.%d.%d\n" % sys.version_info[:3])
         self.assertEqual(self.checks()[0]["python"][0], "ok")
 
-    def test_python_outside_pyenv_fails(self):
+    def test_python_outside_pyenv_at_the_floor_is_ok_and_below_it_fails(self):
+        # d25: the plugin's launcher runs /usr/bin/python3, 3.9 its floor (hq entry 6)
         self.prefix = "/usr"
-        self.assertEqual(self.checks()[0]["python"][0], "fail")
+        self.assertEqual(self.checks()[0]["python"][0], "ok")
+        status, detail = doctor.check_python(self.env, prefix="/usr", version=(3, 8, 18))
+        self.assertEqual(status, "fail")
+        self.assertIn("want 3.9+", detail)
 
     def test_pyenv_absent_warns(self):
         os.remove(os.path.join(self.bin, "pyenv"))
@@ -144,7 +148,7 @@ class Doctor(Hermetic):
         # import it and name the checkout's version, so the tool runs without it
         self.tool('echo "agentik-decisions %s${PYTHONPATH:+ PYTHONPATH=$PYTHONPATH}'
                   '${PYTHONHOME:+ PYTHONHOME=$PYTHONHOME}"' % current())
-        self.env.update(PYTHONPATH="src", PYTHONHOME="/nowhere")
+        self.env.update(PYTHONPATH="plugin/lib", PYTHONHOME="/nowhere")
         got = self.checks()[0]["tool"]
         self.assertEqual(got[0], "ok", got[1])
 
@@ -192,20 +196,21 @@ class Doctor(Hermetic):
         self.assertEqual(code, 2)
 
     def test_a_uv_tool_python_is_ok(self):
-        # the python row: `make install` runs the tool under uv, so a uv tool at 3.12+ is ok
+        # the python row: an install before d25 ran the tool under uv, so a uv tool is ok
         prefix = os.path.join(self.home, ".local", "share", "uv", "tools", "agentik-decisions")
         os.makedirs(prefix)
         status, detail = doctor.check_python(self.env, prefix=prefix, version=(3, 13, 15))
         self.assertEqual(status, "ok", detail)
         self.assertIn("uv tool", detail)
-        self.assertEqual(doctor.check_python(self.env, prefix=prefix, version=(3, 11, 9))[0],
+        self.assertEqual(doctor.check_python(self.env, prefix=prefix, version=(3, 8, 10))[0],
                          "fail")
         moved = os.path.join(self.tmp, "uv-tools", "agentik-decisions")
         os.makedirs(moved)
         env = dict(self.env, UV_TOOL_DIR=os.path.dirname(moved))
         self.assertEqual(doctor.check_python(env, prefix=moved, version=(3, 12, 0))[0], "ok")
-        self.assertEqual(doctor.check_python(self.env, prefix=moved, version=(3, 12, 0))[0],
-                         "fail")
+        status, detail = doctor.check_python(self.env, prefix=moved, version=(3, 12, 0))
+        self.assertEqual(status, "ok")
+        self.assertNotIn("uv tool", detail)
 
     def test_provider_absent(self):
         got, provider = self.checks()
@@ -281,9 +286,10 @@ class Doctor(Hermetic):
         self.assertTrue(text_out.getvalue().startswith("warn python: newer python available"))
 
     def test_a_fail_exits_2(self):
-        self.prefix = "/usr"
+        # d25: any python at the floor outside pyenv is ok, so a floor above this one fails
         with mock.patch.dict(os.environ, self.env, clear=True), \
-                mock.patch.object(sys, "prefix", self.prefix):
+                mock.patch.object(sys, "prefix", self.prefix), \
+                mock.patch.object(doctor, "MIN_PYTHON", (99, 0)):
             code = decisions.main(["doctor", "--ledger", os.path.join(self.repo, "DECISIONS.md")],
                                   out=io.StringIO(), err=io.StringIO())
         self.assertEqual(code, 2)

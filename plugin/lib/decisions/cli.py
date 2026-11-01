@@ -22,6 +22,9 @@ Verbs
                                   CLAUDE.md beside the ledger, or in PATH
     doctor [--json]               the interpreter, the tool, the plugin, the
                                   provider, the ledger and respeak
+    install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
+                                  its `decisions` link and the `agentik` door
+                                  under P (default ~/.local): 0, or 1 it could not
     backlog [REPO...] [--json]    each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order; writes nothing
 
@@ -148,6 +151,11 @@ def build_parser():
     backlog.add_argument("repos", nargs="*", metavar="REPO",
                          help="a repo's directory; the default is the git top level")
     backlog.add_argument("--json", action="store_true")
+
+    install = subs.add_parser("install-cli",
+                              help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
+    install.add_argument("--prefix", default=None,
+                         help="where bin/ and share/ go; the default is ~/.local")
     return parser
 
 
@@ -162,6 +170,10 @@ def main(argv=None, out=None, err=None):
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
     if argv is None:
+        # the launcher's record of what Apple's python added, undone before any child (GUIDE 10)
+        with contextlib.suppress(ImportError):
+            import agentik_install
+            agentik_install.restore_parent_env()
         alias_note(sys.argv[0], err)
         argv = sys.argv[1:]
     argv = list(argv)
@@ -174,6 +186,8 @@ def main(argv=None, out=None, err=None):
     if not args.verb:
         err.write("decisions: name a verb: %s\n" % ", ".join(VERBS))
         return 2
+    if args.verb == "install-cli":
+        return cmd_install_cli(args, out, err)
     try:
         if args.verb == "doctor":
             # `doctor` finds the ledger for itself and reports its absence as a check.
@@ -188,6 +202,13 @@ def main(argv=None, out=None, err=None):
         return 2
 
 
+def cmd_install_cli(args, out, err):
+    """The canonical install-cli (agentik_install, beside the package in lib/): 0 or 1."""
+    import agentik_install
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        return agentik_install.install_cli(args.prefix)
+
+
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
-         "backlog": cmd_backlog}
+         "backlog": cmd_backlog, "install-cli": cmd_install_cli}

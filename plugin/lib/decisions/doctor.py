@@ -2,8 +2,9 @@
 
     ok|warn|fail <name>: <detail>
 
-Checks: python (a pyenv 3.12+ interpreter, a newer 3.x pyenv can install a
-warn; or the uv tool's interpreter at 3.12+, as `make install` runs it), tool
+Checks: python (3.9+, the plugin's floor, hq entry 6: under pyenv, a newer 3.x
+pyenv can install a warn; the uv tool's or one outside pyenv, as the plugin's
+launcher runs /usr/bin/python3, ok; below the floor a fail), tool
 (`agentik-decisions` on PATH at this package's version; another version, none
 its `--version` names, or only the old name `decisions`, is a warn), marketplace
 and plugin (the two json files under ~/.claude/plugins/: `agentik` and
@@ -49,7 +50,7 @@ ALIAS = "decisions"
 SESSION_STATE = ("agentik-session", "claude-code-session")
 MARKETPLACE_HINT = "claude plugin marketplace add agentik-dev/agentik-commons"
 PLUGIN_HINT = "claude plugin install decisions@agentik"
-MIN_PYTHON = (3, 12)
+MIN_PYTHON = (3, 9)    # the plugin's floor (hq entry 6, design/04 §2)
 # `pyenv install --list` waits on pyenv's rehash lock under load (ADV6-6).
 PYENV_TIMEOUT = 10
 # `agentik-decisions --version` on PATH is a child too, so it is bounded (ADV6-6), and only
@@ -84,12 +85,14 @@ def check_python(env, prefix=None, version=None):
     have = "%d.%d.%d" % version
     pyenv_root = env.get("PYENV_ROOT") or os.path.join(_home(env), ".pyenv")
     tools = uv_tools(env)
-    if version[:2] >= MIN_PYTHON and below(prefix, tools):
-        # `make install` runs the tool under uv: its interpreter is uv's, not pyenv's.
+    if version[:2] < MIN_PYTHON:
+        return "fail", "%s at %s; want %d.%d+" % ((have, prefix) + MIN_PYTHON)
+    if below(prefix, tools):
+        # an install before d25 ran the tool under uv: its interpreter is uv's, not pyenv's.
         return "ok", "%s at %s (uv tool)" % (have, prefix)
-    if version[:2] < MIN_PYTHON or not below(prefix, os.path.join(pyenv_root, "versions")):
-        return "fail", "%s at %s; want 3.12+ under %s/versions/ or a uv tool under %s" % (
-            have, prefix, pyenv_root, tools)
+    if not below(prefix, os.path.join(pyenv_root, "versions")):
+        # the plugin's launcher runs /usr/bin/python3, or AGENTIK_PYTHON (design/04 §2)
+        return "ok", "%s at %s (outside pyenv, newer releases unchecked)" % (have, prefix)
     pyenv = shutil.which("pyenv", path=env.get("PATH"))
     if not pyenv:
         return "warn", "%s at %s; pyenv not on PATH, newer releases unchecked" % (have, prefix)
@@ -156,7 +159,7 @@ def check_tool(env):
         alias = shutil.which(ALIAS, path=env.get("PATH"))
         if alias:
             return "warn", "%s: alias only; make install" % alias
-        return "warn", "`%s` not on PATH (make install)" % TOOL
+        return "warn", "`%s` not on PATH (/decisions:install-cli)" % TOOL
     # B2: a PYTHONPATH naming a checkout would make the installed tool import it.
     clean = {k: v for k, v in env.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
     try:

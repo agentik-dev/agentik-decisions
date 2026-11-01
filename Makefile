@@ -27,14 +27,22 @@ gates:
 	echo "gates: tests/gates.py at $$harness"; \
 	$(PY) "$$tmp/tests/gates.py" --skips-allow "$$tmp/tests/skips.allow"
 
+# d25, hq entry 6: the plugin runs at a 3.9 floor on Apple's /usr/bin/python3, so `test`
+# runs the suite again under it, each module but tests/test_bounded.py, whose
+# scripts/bounded is a dev tool on 3.11's process_group= (design/04 section 6).
+FLOOR ?= /usr/bin/python3
+FLOOR_TESTS = $(patsubst %.py,%,$(subst /,.,$(filter-out tests/test_bounded.py,$(wildcard tests/test_*.py))))
 test:
 	@$(BASE) [ -n "$$harness" ] || { echo "$(NO_BASE)" >&2; exit 2; }; \
 	$(call HARNESS,tests/run.py tests/gates.py tests/skips.allow) \
 	echo "test: tests/run.py at $$harness"; \
-	PYTHONPATH=src $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow"
+	PYTHONPATH=plugin/lib $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow" || exit 1; \
+	[ -x "$(FLOOR)" ] || { echo "test: the floor unrun, no $(FLOOR)" >&2; exit 2; }; \
+	echo "test: the floor, $(FLOOR), tests/test_bounded.py excepted"; \
+	PYTHONPATH=plugin/lib $(FLOOR) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow" $(FLOOR_TESTS)
 
 lint:
-	$(PY) -m compileall -q src tests
+	$(PY) -m compileall -q src plugin/lib tests
 
 doclint:
 	$(PY) scripts/doclint
@@ -89,23 +97,26 @@ override HARNESS = tmp=$$(mktemp -d) || exit 2; trap 'rm -rf "$$tmp"' EXIT; \
 # --check` over its ledger; this repo keeps no DECISIONS.md, so the step says so.
 decisions:
 	@if [ -f DECISIONS.md ]; then echo "decisions: render --check"; \
-	PYTHONPATH=src $(PY) -m decisions render --check; \
+	PYTHONPATH=plugin/lib $(PY) -m decisions render --check; \
 	else echo "decisions: no DECISIONS.md, no block to check"; fi
 
 doctor:
-	PYTHONPATH=src $(PY) -m decisions doctor
+	PYTHONPATH=plugin/lib $(PY) -m decisions doctor
 
-# The tool, `agentik-decisions` and its alias `decisions` (until 2026-12-31), as a
-# uv tool; then the `agentik` front door from its vendored copy (agentik-r1 D3).
-# The plugin comes from agentik-commons' `agentik` marketplace (agentik-r1 5.2).
-BINDIR ?= $(HOME)/.local/bin
+# d25 (hq design/04 sections 3 and 6): optional, for developers, since the plugin runs with
+# no CLI. It refuses a dirty tree, then runs the plugin's own launcher's install-cli, which
+# freezes plugin/lib under $(PREFIX)/share/agentik-decisions/<hash>/ and writes
+# $(PREFIX)/bin/agentik-decisions, its `decisions` link (until 2026-12-31) and the `agentik`
+# door. PREFIX defaults to $(HOME)/.local, so HOME or PREFIX aims it at a temp home.
+PREFIX ?= $(HOME)/.local
 install:
-	uv tool install .
-	install -m 755 scripts/agentik $(BINDIR)/agentik
+	@if [ -n "$$(git status --porcelain 2>/dev/null)" ] || ! git rev-parse --verify --quiet HEAD >/dev/null; then \
+	echo "install: refused, the tree is dirty or has no HEAD; commit first" >&2; exit 2; fi
+	plugin/bin/agentik-decisions install-cli --prefix "$(PREFIX)"
 
 # The virtualenv .python-version names first, with pyflakes for the gate. No .pth:
-# every `-m decisions` line sets PYTHONPATH=src, and the installed tool comes from
-# `uv tool install` only (r6 decision 3).
+# every `-m decisions` line sets PYTHONPATH=plugin/lib, and the installed tool comes from
+# install-cli only (d25).
 venv:
 	@pyenv virtualenvs --bare | grep -qx '3.12.7/envs/agentik-decisions' \
 		|| pyenv virtualenv 3.12.7 agentik-decisions
@@ -123,4 +134,4 @@ venv:
 # ADV10-6: the whole render under a 900 s wall; each child inside it has its own timeout.
 RESPEAK_PYTHON ?= $(shell { pyenv prefix agentik-respeak || pyenv prefix claude-code-respeak; } 2>/dev/null)/bin/python3
 readme:
-	PYTHONPATH=src $(PY) scripts/bounded --wall 900 -- $(PY) scripts/readme-render --python "$(RESPEAK_PYTHON)" $(if $(RESPEAK_ROOT),--plugin-root "$(RESPEAK_ROOT)")
+	PYTHONPATH=plugin/lib $(PY) scripts/bounded --wall 900 -- $(PY) scripts/readme-render --python "$(RESPEAK_PYTHON)" $(if $(RESPEAK_ROOT),--plugin-root "$(RESPEAK_ROOT)")
