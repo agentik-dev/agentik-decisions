@@ -159,7 +159,7 @@ def check_tool(env):
         alias = shutil.which(ALIAS, path=env.get("PATH"))
         if alias:
             return "warn", "%s: alias only; make install" % alias
-        return "warn", "`%s` not on PATH (make install)" % TOOL
+        return "warn", "`%s` not on PATH (/decisions:install-cli)" % TOOL
     # B2: a PYTHONPATH naming a checkout would make the installed tool import it.
     clean = {k: v for k, v in env.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
     try:
