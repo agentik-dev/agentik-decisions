@@ -82,9 +82,9 @@ make doctor
 | `answer N (--pick L \| --other T) --source S [--text P] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
 | `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
-| `doctor [--json]` | the interpreter (pyenv's, or the uv tool's that `make install` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
+| `doctor [--json]` | the interpreter (pyenv's, or the uv tool's that `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--json]` | each repository's `NICE_TO_HAVE.md` placed against the build order in its `HANDOFF.md`: S1 and S2 items first, then each open step with the items that share a path with it, then S3, then S4; an item with no level prints `S4?`; it reads no ledger and writes nothing |
-| `--version` | `agentik-decisions 0.9.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.10.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -241,8 +241,8 @@ Each file runs alone in seconds:
 | `tests/test_readme.py` | this README: the icon, the render path, the status line and the shape |
 
 ```
-PYTHONPATH=src python3 -m unittest tests.test_ledger
-PYTHONPATH=src python3 -m unittest tests.test_readme
+PYTHONPATH=plugin/lib python3 -m unittest tests.test_ledger
+PYTHONPATH=plugin/lib python3 -m unittest tests.test_readme
 make check
 ```
 
@@ -265,7 +265,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.9.0`, rendered `2026-10-17`, `362` unittest cases.
+Status: version `0.10.0`, rendered `2026-11-01`, `369` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -277,7 +277,7 @@ Status: version `0.9.0`, rendered `2026-10-17`, `362` unittest cases.
 Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
 
 Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
-Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `make install` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0, and wrote the block into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
+Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the uv tool's interpreter at 3.12 or later, which `install-cli` sets up, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0 and wrote into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
 Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
 Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
 Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
@@ -298,7 +298,7 @@ plugin/skills/ask/         the skill that asks the owner: /decisions:ask
 plugin/commands/           show, find, new, answer, render, backlog
 plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md imports it
 src/decisions.py           the runner
-src/decisions/             the package, each module under a thousand lines
+plugin/lib/decisions/     the package, each module under a thousand lines
 design/                    the current design, its packet and this README's source
 scripts/readme-render      make readme: the status line, the render, the verifier, the stamp
 scripts/hygiene            the name and path lint
