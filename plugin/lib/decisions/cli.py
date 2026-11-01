@@ -25,8 +25,10 @@ Verbs
     install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
                                   its `decisions` link and the `agentik` door
                                   under P (default ~/.local): 0, or 1 it could not
-    backlog [REPO...] [--json]    each repo's NICE_TO_HAVE.md placed against its
-                                  HANDOFF.md build order; writes nothing
+    backlog [REPO...] [--order FILE] [--json]
+                                  each repo's NICE_TO_HAVE.md placed against its
+                                  HANDOFF.md build order, or FILE's steps for that
+                                  repo or `suite`; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog` reads no ledger and ignores it. `--version` prints
@@ -150,6 +152,9 @@ def build_parser():
                               help="each repo's NICE_TO_HAVE.md against its build order")
     backlog.add_argument("repos", nargs="*", metavar="REPO",
                          help="a repo's directory; the default is the git top level")
+    backlog.add_argument("--order", metavar="FILE",
+                         help="one HANDOFF.md for every REPO: its steps whose `repo` cell "
+                              "is the repo's name less `agentik-`, or `suite`")
     backlog.add_argument("--json", action="store_true")
 
     install = subs.add_parser("install-cli",

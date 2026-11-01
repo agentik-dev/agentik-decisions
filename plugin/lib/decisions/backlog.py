@@ -2,12 +2,15 @@
 order (design d23 sections 1 to 4); its items are column-0 bullets and the rows of
 a table under NICE_HEADER (d26, agentik-hq design/05 section 2).
 
-    decisions backlog [REPO...] [--json]
+    decisions backlog [REPO...] [--order FILE] [--json]
 
 REPO is a directory, by default the git top level of the working directory (or
 the working directory outside a work tree). The verb reads the two files and
 nothing else: it writes nothing, takes no lock, runs no model, renders nothing
-through respeak and ignores `--ledger`. An item's level is the session plugin's
+through respeak and ignores `--ledger`. `--order FILE` (d26) reads FILE as the one
+HANDOFF.md of every REPO, each REPO taking only the steps whose `repo` cell is its
+directory name less `agentik-`, or `suite`; a table with no `repo` column gives every
+REPO every step. An item's level is the session plugin's
 S1 to S4; an unlevelled item is placed as S4 and printed `S4?`. Exit 0 whenever
 the files could be read; 2 for usage, a REPO that is not a directory, or a file
 unreadable or not UTF-8.
@@ -23,6 +26,8 @@ __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
 NICE = "NICE_TO_HAVE.md"
 HANDOFF = "HANDOFF.md"
+PREFIX_NAME = "agentik-"
+SUITE = "suite"
 MARKER = "<!-- decisions: build order -->"
 TITLE = 80
 LEAD = 120
@@ -225,8 +230,9 @@ def nice_items(text):
 
 def build_order(text):
     """(order, steps): order is {line, heading, open} or None; steps in file order,
-    each {n, line, title, done, spans}. The first step shape found in the section, a
-    `N. ` item or a numbered table row, wins; the other is ignored."""
+    each {n, line, title, done, spans, repo}. The first step shape found in the section, a
+    `N. ` item or a numbered table row, wins; the other is ignored. A row's repo is its
+    cell under the `repo` column of the header above its table's separator, else None."""
     rows = gathered(text)
     marker = next((n for n, kind, payload, _ in rows if kind == "prose"
                    and payload.strip() == MARKER), None)
@@ -239,11 +245,15 @@ def build_order(text):
             break
     if start is None:
         return None, []
-    steps, shape = [], None
+    steps, shape, header, last = [], None, None, None
     for n, kind, payload, joined in rows[start + 1:]:
         if kind == "heading" and payload[0] <= 2:
             break
         if kind == "row" and not (payload and NUMBER.fullmatch(payload[0])):
+            if payload and all(SEPARATOR.match(c) for c in payload):
+                header = last
+            else:
+                last = payload
             continue
         if kind in ("step", "row"):
             shape = shape or kind
@@ -256,12 +266,15 @@ def build_order(text):
             cut = joined.find(". ")
             lead = (joined[:cut] if cut >= 0 else joined)[:LEAD]
             steps.append({"n": number, "line": n, "title": trimmed(title)[:TITLE],
-                          "done": bool(DONE.search(lead)), "spans": spans(joined)})
+                          "done": bool(DONE.search(lead)), "spans": spans(joined),
+                          "repo": None})
         elif kind == "row":
             title = payload[1] if len(payload) > 1 else ""
+            column = header.index("repo") if header and "repo" in header else None
+            repo = None if column is None else (payload[column] if column < len(payload) else "")
             steps.append({"n": int(payload[0]), "line": n, "title": trimmed(title)[:TITLE],
                           "done": payload[-1].startswith("done"),
-                          "spans": spans(" | ".join(payload))})
+                          "spans": spans(" | ".join(payload)), "repo": repo})
     heading = rows[start]
     order = {"line": heading[0], "heading": heading[2][1],
              "open": sum(1 for s in steps if not s["done"])}
@@ -300,23 +313,45 @@ def placement(items, steps):
     return rows
 
 
-def view(repo):
-    """The view of one repo, or None when it holds no NICE_TO_HAVE.md."""
+def short_name(repo):
+    """The repo's directory name less a leading `agentik-` (d26)."""
+    name = os.path.basename(repo)
+    return name[len(PREFIX_NAME):] if name.startswith(PREFIX_NAME) else name
+
+
+def for_repo(steps, repo):
+    """The steps of an `--order` FILE that `repo` takes: those with no repo column,
+    and those whose cell is its short name or `suite`."""
+    names = (short_name(repo), SUITE)
+    return [s for s in steps if s["repo"] is None or s["repo"] in names]
+
+
+def view(repo, ordered=None):
+    """The view of one repo, or None when it holds no NICE_TO_HAVE.md; `ordered`,
+    (path, order, steps) of an `--order` FILE, stands for the repo's HANDOFF.md."""
     nice, handoff = os.path.join(repo, NICE), os.path.join(repo, HANDOFF)
     if not os.path.lexists(nice):
         return None
     items = nice_items(read_text(nice))
-    has_handoff = os.path.lexists(handoff)
-    order, steps = build_order(read_text(handoff)) if has_handoff else (None, [])
+    if ordered is None:
+        has_handoff = os.path.lexists(handoff)
+        order, steps = build_order(read_text(handoff)) if has_handoff else (None, [])
+        handoff = handoff if has_handoff else None
+    else:
+        handoff, order, steps = ordered
+        steps = for_repo(steps, repo)
+        if order:
+            order = dict(order, open=sum(1 for s in steps if not s["done"]))
     rows = placement(items, steps)
-    return {"repo": repo, "nice": nice, "handoff": handoff if has_handoff else None,
-            "order": order, "steps": steps, "rows": rows}
+    return {"repo": repo, "nice": nice, "handoff": handoff, "order": order,
+            "steps": steps, "rows": rows, "ordered": ordered is not None}
 
 
 def as_json(v):
     keys = ("rank", "line", "title", "level", "placed_as", "level_from", "after_step", "span")
     return {"repo": v["repo"], "nice": v["nice"], "handoff": v["handoff"], "order": v["order"],
-            "steps": [{k: s[k] for k in ("n", "line", "title", "done")} for s in v["steps"]],
+            "steps": [{k: s[k] for k in ("n", "line", "title", "done") + (
+                ("repo",) if v["ordered"] else ())} for s in v["steps"]],
             "items": [dict({k: i[k] for k in keys}, **({"id": i["id"]} if "id" in i else {}))
                       for kind, i in v["rows"] if kind == "item"]}
 
@@ -324,19 +359,20 @@ def as_json(v):
 def as_text(v):
     name = os.path.basename(v["repo"])
     order = v["order"]
+    doc = os.path.basename(v["handoff"]) if v["handoff"] else HANDOFF
     if order:
-        head = 'HANDOFF.md:%d "%s", %d open steps' % (order["line"], order["heading"],
-                                                     order["open"])
+        head = '%s:%d "%s", %d open steps' % (doc, order["line"], order["heading"],
+                                             order["open"])
     elif v["handoff"] is None:
         head = "none (no HANDOFF.md)"
     else:
-        head = "none (no build-order section in HANDOFF.md)"
+        head = "none (no build-order section in %s)" % doc
     lines = ["== %s  build order: %s" % (name, head)]
     items = 0
     bare = 0
     for kind, row in v["rows"]:
         if kind == "step":
-            lines.append("step %d  HANDOFF.md:%d  %s" % (row["n"], row["line"], row["title"]))
+            lines.append("step %d  %s:%d  %s" % (row["n"], doc, row["line"], row["title"]))
         else:
             items += 1
             bare += row["level"] is None
@@ -357,9 +393,15 @@ def cmd_backlog(args, out, err):
         if not os.path.isdir(name):
             raise Refusal("backlog: %s is not a directory" % name)
         repos.append(os.path.realpath(name))
+    ordered, order_file = None, getattr(args, "order", None)
+    if order_file is not None:
+        if not os.path.isfile(order_file):
+            raise Refusal("backlog: --order %s is not a file" % order_file)
+        path = os.path.realpath(order_file)
+        ordered = (path,) + build_order(read_text(path))
     views, skipped = [], []
     for repo in repos:
-        v = view(repo)
+        v = view(repo, ordered)
         if v is None:
             skipped.append(repo)
         else:

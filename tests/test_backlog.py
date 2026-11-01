@@ -561,6 +561,67 @@ class Backlog(Hermetic):
         ranks = [(i["rank"], i.get("id")) for i in self.repo("rows")["items"]][:3]
         self.assertEqual(ranks, [(1, None), (2, None), (3, "n1")])
 
+    # d26: `--order FILE`, one HANDOFF.md for every REPO (the fixture `order`)
+
+    def ordered(self, *names):
+        order = os.path.join(fixture("order"), "HANDOFF.md")
+        data = self.view("--order", order, *[os.path.join(fixture("order"), n) for n in names])
+        return {os.path.basename(r["repo"]): r for r in data["repos"]}
+
+    def test_order_attaches_by_repo(self):
+        got = self.ordered("agentik-relay", "agentik-session")
+        relay, session = got["agentik-relay"], got["agentik-session"]
+        self.assertEqual(relay["handoff"],
+                         os.path.realpath(os.path.join(fixture("order"), "HANDOFF.md")))
+        # the repo's own HANDOFF.md is not read: FILE's steps, the relay's and the suite's
+        self.assertEqual([(s["n"], s["repo"]) for s in relay["steps"]], [(1, "relay"), (2, "suite")])
+        self.assertEqual(relay["order"], {"line": 3, "heading": "Build order", "open": 2})
+        after = {i["id"]: i["after_step"] for i in relay["items"]}
+        # r2 shares a path only with the session's step 4, so it is not attached
+        self.assertEqual((after["r1"], after["r2"]), (1, None))
+        self.assertEqual({i["id"]: i["after_step"] for i in session["items"]}["s2"], 4)
+        lines = self.text_of("agentik-relay", "agentik-session")
+        self.assertIn("step 1  HANDOFF.md:7  The relay's drain", lines[0])
+        self.assertNotIn("The relay's drain", lines[1])
+
+    def test_order_suite_step_for_every_repo(self):
+        got = self.ordered("agentik-relay", "agentik-session")
+        for name in ("agentik-relay", "agentik-session"):
+            self.assertIn((2, "suite"), [(s["n"], s["repo"]) for s in got[name]["steps"]], name)
+        self.assertEqual({i["id"]: i["after_step"] for i in got["agentik-relay"]["items"]}["r3"], 2)
+
+    def test_order_done_step_attracts_nothing(self):
+        session = self.ordered("agentik-session")["agentik-session"]
+        self.assertEqual([(s["n"], s["done"]) for s in session["steps"]],
+                         [(2, False), (3, True), (4, False)])
+        self.assertEqual(session["order"]["open"], 2)
+        after = {i["id"]: (i["after_step"], i["placed_as"]) for i in session["items"]}
+        # s1 shares its path with the done step 3 alone; s3 with the relay's step 1
+        self.assertEqual(after, {"s1": (None, "S3"), "s2": (4, "S3"), "s3": (None, "S4")})
+
+    def test_order_no_repo_column_is_todays_view(self):
+        table = fixture("table")
+        plain = self.view(table)["repos"][0]
+        data = self.view("--order", os.path.join(table, "HANDOFF.md"), table)["repos"][0]
+        self.assertEqual(data["items"], plain["items"])
+        self.assertEqual(data["order"], plain["order"])
+        self.assertEqual([(s["n"], s["repo"]) for s in data["steps"]],
+                         [(s["n"], None) for s in plain["steps"]])
+        self.assertNotIn("repo", plain["steps"][0])
+        code, out, _err = self.run_cli("--order", os.path.join(table, "HANDOFF.md"), table)
+        self.assertEqual((code, out), (0, "\n".join(self.text("table")) + "\n"))
+
+    def test_order_not_a_file_exit_2(self):
+        code, out, err = self.run_cli("--order", self.empty_dir("nofile"), fixture("rows"))
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("--order", err)
+
+    def text_of(self, *names):
+        code, out, err = self.run_cli("--order", os.path.join(fixture("order"), "HANDOFF.md"),
+                                      *[os.path.join(fixture("order"), n) for n in names])
+        self.assertEqual(code, 0, err)
+        return out.split("\n\n")
+
 
 class Shipped(unittest.TestCase):
     """Not hermetic: it reads CLAUDE.md, which `Hermetic` guards, and calls no verb."""
