@@ -1,6 +1,6 @@
 ---
 status: draft
-updated: 2026-10-11
+updated: 2026-11-01
 owner: the owner
 audience: agent
 ---
@@ -10,12 +10,14 @@ This records the owner's answers of 2026-10-11 to the observer's mods study (exa
 
 ## 1. The verb
 
-`decisions backlog [REPO...] [--json]`
+`decisions backlog [REPO...] [--order FILE] [--json]`
 
 - REPO is a directory, by default the working directory's git top level. Each gets its own block.
 - It reads `NICE_TO_HAVE.md` and `HANDOFF.md`, writes nothing, takes no lock, runs no model, and ignores `--ledger`.
 - Text: `== <name>  build order: HANDOFF.md:<line> "<heading>", <k> open steps` (or `none` and why); the rows in placement order, `step <n>  HANDOFF.md:<line>  <title>` and `<rank> <level>  NICE_TO_HAVE.md:<line>  <title>`; then `<u> of <m> items carry no level (placed as S4)`. A repo without NICE_TO_HAVE.md says so; with two or more REPO it joins one closing `skipped (no NICE_TO_HAVE.md): ...` line.
 - `--json`: `{"repos": [{"repo", "nice", "handoff", "order", "steps": [{"n", "line", "title", "done"}], "items": [{"rank", "line", "title", "level", "placed_as", "level_from", "after_step", "span"}]}], "skipped"}`.
+- `--order FILE` (d26, agentik-hq design/05 §5): FILE is the one `HANDOFF.md` of every REPO, whose own is not read. A REPO takes only FILE's steps whose `repo` cell (section 3) is its directory name less `agentik-`, or `suite`; its `open` counts those, and `--json` gives each step its `repo`. A table with no `repo` column gives every REPO every step, the view without the flag. FILE not a file is exit 2.
+- A row item (section 2) prints its id before its title, `<rank> <level>  NICE_TO_HAVE.md:<line>  <id>  <title>`, and carries `"id"` in `--json`; a bullet has no id.
 - Exit (entry 25): 0 whenever the files could be read, whatever they hold. 2 for usage, a REPO that is not a directory, or a file unreadable or not UTF-8. Never 1, which stays render's.
 
 ## 2. Parsing NICE_TO_HAVE.md
@@ -23,12 +25,14 @@ This records the owner's answers of 2026-10-11 to the observer's mods study (exa
 - An item is a column-0 `- ` bullet with its indented lines; prose, headings and nested bullets are not items. Its lead is its bold lead, else its text to the first `: ` or `. `, else its first 120 characters (example-app's line 50, `- Refuse a slash in a workflow kind. (workflow.md review S4 (4))`, leads `Refuse a slash in a workflow kind`). Its title is its lead, at most 80 characters.
 - A level is a lone token `\bS[1-4]\b` (`S21` is not one), read in three places, the first found winning: the item's lead, in a form below; a sentence `Each line is S<n>.` or `Each line below is S<n>.` under a heading before its first item, as in example-ops; a `##` or `###` heading, over every item to the next heading of its depth or higher, as in agent-relay's `## AR70 ...: notes, no block, S4 (...)`. A token elsewhere is text (example-ops's "calls S3" is AWS). Two in one place: the most urgent wins.
 - The lead, trimmed of spaces and a final `.` or `,`, holds a level in five forms only: `^S[1-4]$` (`- S4: ...`), `^S[1-4],` (`- S4, unconfirmed source: ...`), `[,;] S[1-4]$` (session's `- S21 (2026-10-10), S4: ...`), `\(S[1-4]\)$` (`- **Rename it (S4).**`) and `^S[1-4] · `, the middle dot U+00B7 between two spaces (agentik-agents' `- **S3 · tests: ...**`; `S3·x` is text; d24). A level named mid-lead is text: example-app's `- Row rtfix4 takes findings S1 and S2 of the rt2 review: ...` reads `S4?`.
+- An item is also a row of a table whose header is exactly `| id | level | area | finding | evidence | from |` and whose next line is its separator (d26, agentik-hq design/05 §2), its rows on the lines after, to the first line that is not a row. The level is the `level` cell alone, `^S[1-4]$` (`level_from: "cell"`), anything else unlevelled; never a heading's or a sentence's, and a row leaves the heading's sentence open for the bullets after it. The title is the lead of `finding`, as a bullet's; the spans are those of `area`, `finding` and `evidence`, in that order; cells split on unescaped pipes and keep `\|`. Rows and bullets come out in file order. A table under another header, one with no separator line, or one in a fence yields nothing. The bullet forms above stay: the tool is public and the observer keeps bullets. To write one: `` | n12 | S3 | `plugin/lib/x.py` | the finding, on one line | `x.py:40` | 2026-11-01, d26 | ``, every `|` in a cell written `\|`.
 - An unlevelled item keeps `level: null`, is placed as S4 (a review note's level) and printed `S4?`, never guessed higher. No item is judged landed; an item leaves its file when it lands.
 
 ## 3. Reading the build order
 
 - The section is the `##` after the line `<!-- decisions: build order -->`, else the first `##` starting, case-insensitively, with `Build order`, `Open work`, `Next work` or the word `Next`, up to the next `##`. Owner-step lists do not match.
 - Steps, in file order: column-0 items `N. ` (example-mac, example-config) and table rows whose first cell is an integer (example-app). A section holding both shapes reads only the first one found, and the other is ignored. The title is the bold lead or the row's second cell, else 80 characters.
+- A row's `repo` is its cell under the `repo` column of the header row above its table's separator (d26); a table with no such column, and a `N. ` step, have none. `--order` alone reads it (section 1).
 - A step is done when its lead (to the first `. `, at most 120 characters) holds the word `done` or `DECIDED`, or a row's last cell starts `done`. Done steps leave the text order.
 - With no such section (example-ops, the plugin repos), the level order alone.
 

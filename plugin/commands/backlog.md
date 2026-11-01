@@ -1,6 +1,6 @@
 ---
 description: Each repo's NICE_TO_HAVE.md placed against its HANDOFF.md build order
-argument-hint: "[REPO...] [--json]"
+argument-hint: "[REPO...] [--order FILE] [--json]"
 allowed-tools: Bash(agentik-decisions *)
 ---
 
