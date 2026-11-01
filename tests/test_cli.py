@@ -6,8 +6,8 @@ import os
 import shutil
 import subprocess
 import sys
+import re
 import tempfile
-import tomllib
 from unittest import mock
 
 import decisions
@@ -132,11 +132,14 @@ class Names(Hermetic):
         return code, out.getvalue(), err.getvalue()
 
     def test_both_entry_points_name_one_main(self):
-        with open(os.path.join(REPO, "pyproject.toml"), "rb") as handle:
-            project = tomllib.load(handle)["project"]
-        self.assertEqual(project["name"], "agentik-decisions")
-        self.assertEqual(project["scripts"], {"agentik-decisions": "decisions.cli:main",
-                                              "decisions": "decisions.cli:main"})
+        # read as text, since tomllib is 3.11 and the suite runs at the 3.9 floor too (d25)
+        with open(os.path.join(REPO, "pyproject.toml"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertEqual(re.search(r'(?m)^name = "([^"]+)"$', text).group(1), "agentik-decisions")
+        table = text.split("[project.scripts]\n", 1)[1].split("\n[", 1)[0]
+        self.assertEqual(dict(re.findall(r'(?m)^([a-z-]+) = "([^"]+)"$', table)),
+                         {"agentik-decisions": "decisions.cli:main",
+                          "decisions": "decisions.cli:main"})
 
     def test_version_under_either_name(self):
         for argv0 in ("/x/bin/agentik-decisions", "/x/bin/decisions", "decisions"):

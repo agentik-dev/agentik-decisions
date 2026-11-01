@@ -27,11 +27,19 @@ gates:
 	echo "gates: tests/gates.py at $$harness"; \
 	$(PY) "$$tmp/tests/gates.py" --skips-allow "$$tmp/tests/skips.allow"
 
+# d25, hq entry 6: the plugin runs at a 3.9 floor on Apple's /usr/bin/python3, so `test`
+# runs the suite again under it, each module but tests/test_bounded.py, whose
+# scripts/bounded is a dev tool on 3.11's process_group= (design/04 section 6).
+FLOOR ?= /usr/bin/python3
+FLOOR_TESTS = $(patsubst %.py,%,$(subst /,.,$(filter-out tests/test_bounded.py,$(wildcard tests/test_*.py))))
 test:
 	@$(BASE) [ -n "$$harness" ] || { echo "$(NO_BASE)" >&2; exit 2; }; \
 	$(call HARNESS,tests/run.py tests/gates.py tests/skips.allow) \
 	echo "test: tests/run.py at $$harness"; \
-	PYTHONPATH=plugin/lib $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow"
+	PYTHONPATH=plugin/lib $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow" || exit 1; \
+	[ -x "$(FLOOR)" ] || { echo "test: the floor unrun, no $(FLOOR)" >&2; exit 2; }; \
+	echo "test: the floor, $(FLOOR), tests/test_bounded.py excepted"; \
+	PYTHONPATH=plugin/lib $(FLOOR) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow" $(FLOOR_TESTS)
 
 lint:
 	$(PY) -m compileall -q src plugin/lib tests
