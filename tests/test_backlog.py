@@ -498,6 +498,130 @@ class Backlog(Hermetic):
             self.assertEqual(decisions.main(["doctor"], out=out, err=io.StringIO()), 0)
         self.assertIn("warn respeak: ", out.getvalue())
 
+    # d26: design/05 section 2's NICE rows (the fixture `rows`)
+
+    def rows_items(self):
+        with open(os.path.join(fixture("rows"), NICE), encoding="utf-8") as handle:
+            return decisions.nice_items(handle.read())
+
+    def test_row_level_from_cell(self):
+        got = self.item("rows", "| n1 |")
+        self.assertEqual((got["level"], got["level_from"], got["id"]), ("S2", "cell", "n1"))
+        self.assertEqual(self.item("rows", "| n4 |")["level"], "S3")
+        # S4 when the cell says so, under a heading's S2 and a sentence's S1
+        self.assertEqual(self.item("rows", "| n6 |")["level"], "S4")
+        # anything but `^S[1-4]$` is unlevelled, as today: placed S4, never the heading's
+        for needle in ("| n2 |", "| n3 |", "| n5 |", "| n7 |"):
+            got = self.item("rows", needle)
+            self.assertEqual((got["level"], got["level_from"], got["placed_as"]),
+                             (None, None, "S4"), needle)
+
+    def test_row_title_and_escaped_pipe(self):
+        self.assertEqual(self.item("rows", "| n1 |")["title"], "The hint names make install")
+        self.assertEqual(self.item("rows", "| n2 |")["title"], "An unsure level cell")
+        self.assertEqual(self.item("rows", "| n4 |")["title"],
+                         "A cell holding `a \\| b` keeps its pipe")
+        # an S1 in the finding is text, as a token outside a lead is
+        self.assertEqual(self.item("rows", "| n5 |")["title"], "An empty level cell")
+
+    def test_row_spans_from_area_finding_evidence(self):
+        by_id = {i.get("id"): i for i in self.rows_items()}
+        self.assertEqual(by_id["n4"]["spans"], ["scripts/doclint",
+                                                "plugin/lib/tool/backlog.py",
+                                                "tests/fixtures/x.md"])
+        self.assertEqual(by_id["n1"]["spans"], ["plugin/lib/tool/doctor.py", "doctor.py"])
+        self.assertEqual(by_id["n2"]["spans"], [])
+
+    def test_rows_and_bullets_in_file_order(self):
+        items = self.rows_items()
+        self.assertEqual([i.get("id") for i in items],
+                         [None, "n1", "n2", "n3", "n4", "n5", None, "n6", "n7", None])
+        self.assertEqual([i["line"] for i in items], sorted(i["line"] for i in items))
+        # the bullets around the rows keep their levels: the lead's, then the sentence's
+        bullets = [(i["level"], i["level_from"]) for i in items if "id" not in i]
+        self.assertEqual(bullets, [("S3", "lead"), ("S1", "lead"), ("S1", "sentence")])
+
+    def test_other_table_yields_nothing(self):
+        lines = [i["line"] for i in self.repo("rows")["items"]]
+        for needle in ("Another header yields nothing", "Five columns is another header",
+                       "No separator line", "A fenced row is no item"):
+            self.assertNotIn(line_of("rows", needle), lines, needle)
+        self.assertEqual(len(lines), 10)
+
+    def test_row_id_in_text_and_json(self):
+        line = line_of("rows", "| n1 |")
+        self.assertIn("3 S2  NICE_TO_HAVE.md:%d  n1  The hint names make install" % line,
+                      self.text("rows"))
+        got = self.item("rows", "| n1 |")
+        self.assertEqual(set(got), {"rank", "line", "title", "level", "placed_as",
+                                    "level_from", "after_step", "span", "id"})
+        bullet = self.item("rows", "- S1: a bullet after the table")
+        self.assertNotIn("id", bullet)
+        # S1 first in file order, then S2: the two S1 bullets, then n1
+        ranks = [(i["rank"], i.get("id")) for i in self.repo("rows")["items"]][:3]
+        self.assertEqual(ranks, [(1, None), (2, None), (3, "n1")])
+
+    # d26: `--order FILE`, one HANDOFF.md for every REPO (the fixture `order`)
+
+    def ordered(self, *names):
+        order = os.path.join(fixture("order"), "HANDOFF.md")
+        data = self.view("--order", order, *[os.path.join(fixture("order"), n) for n in names])
+        return {os.path.basename(r["repo"]): r for r in data["repos"]}
+
+    def test_order_attaches_by_repo(self):
+        got = self.ordered("agentik-relay", "agentik-session")
+        relay, session = got["agentik-relay"], got["agentik-session"]
+        self.assertEqual(relay["handoff"],
+                         os.path.realpath(os.path.join(fixture("order"), "HANDOFF.md")))
+        # the repo's own HANDOFF.md is not read: FILE's steps, the relay's and the suite's
+        self.assertEqual([(s["n"], s["repo"]) for s in relay["steps"]], [(1, "relay"), (2, "suite")])
+        self.assertEqual(relay["order"], {"line": 3, "heading": "Build order", "open": 2})
+        after = {i["id"]: i["after_step"] for i in relay["items"]}
+        # r2 shares a path only with the session's step 4, so it is not attached
+        self.assertEqual((after["r1"], after["r2"]), (1, None))
+        self.assertEqual({i["id"]: i["after_step"] for i in session["items"]}["s2"], 4)
+        lines = self.text_of("agentik-relay", "agentik-session")
+        self.assertIn("step 1  HANDOFF.md:7  The relay's drain", lines[0])
+        self.assertNotIn("The relay's drain", lines[1])
+
+    def test_order_suite_step_for_every_repo(self):
+        got = self.ordered("agentik-relay", "agentik-session")
+        for name in ("agentik-relay", "agentik-session"):
+            self.assertIn((2, "suite"), [(s["n"], s["repo"]) for s in got[name]["steps"]], name)
+        self.assertEqual({i["id"]: i["after_step"] for i in got["agentik-relay"]["items"]}["r3"], 2)
+
+    def test_order_done_step_attracts_nothing(self):
+        session = self.ordered("agentik-session")["agentik-session"]
+        self.assertEqual([(s["n"], s["done"]) for s in session["steps"]],
+                         [(2, False), (3, True), (4, False)])
+        self.assertEqual(session["order"]["open"], 2)
+        after = {i["id"]: (i["after_step"], i["placed_as"]) for i in session["items"]}
+        # s1 shares its path with the done step 3 alone; s3 with the relay's step 1
+        self.assertEqual(after, {"s1": (None, "S3"), "s2": (4, "S3"), "s3": (None, "S4")})
+
+    def test_order_no_repo_column_is_todays_view(self):
+        table = fixture("table")
+        plain = self.view(table)["repos"][0]
+        data = self.view("--order", os.path.join(table, "HANDOFF.md"), table)["repos"][0]
+        self.assertEqual(data["items"], plain["items"])
+        self.assertEqual(data["order"], plain["order"])
+        self.assertEqual([(s["n"], s["repo"]) for s in data["steps"]],
+                         [(s["n"], None) for s in plain["steps"]])
+        self.assertNotIn("repo", plain["steps"][0])
+        code, out, _err = self.run_cli("--order", os.path.join(table, "HANDOFF.md"), table)
+        self.assertEqual((code, out), (0, "\n".join(self.text("table")) + "\n"))
+
+    def test_order_not_a_file_exit_2(self):
+        code, out, err = self.run_cli("--order", self.empty_dir("nofile"), fixture("rows"))
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("--order", err)
+
+    def text_of(self, *names):
+        code, out, err = self.run_cli("--order", os.path.join(fixture("order"), "HANDOFF.md"),
+                                      *[os.path.join(fixture("order"), n) for n in names])
+        self.assertEqual(code, 0, err)
+        return out.split("\n\n")
+
 
 class Shipped(unittest.TestCase):
     """Not hermetic: it reads CLAUDE.md, which `Hermetic` guards, and calls no verb."""

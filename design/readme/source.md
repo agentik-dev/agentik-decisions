@@ -83,8 +83,8 @@ make doctor
 | `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
-| `backlog [REPO...] [--json]` | each repository's `NICE_TO_HAVE.md` placed against the build order in its `HANDOFF.md`: S1 and S2 items first, then each open step with the items that share a path with it, then S3, then S4; an item with no level prints `S4?`; it reads no ledger and writes nothing |
-| `--version` | `agentik-decisions 0.10.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
+| `--version` | `agentik-decisions 0.11.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -209,7 +209,7 @@ The session plugin is an optional provider and never a requirement: `doctor` rep
 ## Design
 
 - The portfolio's ledger decides where decisions live and names the six verbs; this version follows it.
-- `design/d23-backlog-view.md`: the backlog view this version adds, and respeak kept optional.
+- `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
 - `design/d18-one-flow.md`: the design of the flow, one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
 - `design/d17-four-verbs.md`: the packet that built version `0.3.0`.
 - `history/design/` and `history/packets/`: the designs and packets of the per-file format before it.
@@ -265,7 +265,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.10.1`, rendered `2026-11-01`, `369` unittest cases.
+Status: version `0.11.0`, rendered `2026-11-01`, `380` unittest cases.
 
 | Surface | State |
 |---|---|
