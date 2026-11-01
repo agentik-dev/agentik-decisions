@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unittest
 
 from tests.hermetic import REPO, SAMPLE, Hermetic
 
@@ -22,6 +23,51 @@ SKIPPING = ("import unittest\n\n\nclass S(unittest.TestCase):\n"
             "    @unittest.skip('probe')\n    def test_skips(self):\n        pass\n")
 FAILING = ("import unittest\n\n\nclass F(unittest.TestCase):\n"
            "    def test_fails(self):\n        self.fail('forged')\n")
+
+
+class Install(unittest.TestCase):
+    """d25: `make install` refuses a dirty tree, then runs the plugin's install-cli under PREFIX,
+    by default HOME/.local; a clone of HEAD, a temp HOME, PATH=/usr/bin:/bin."""
+
+    def setUp(self):
+        self.t = os.path.realpath(tempfile.mkdtemp(prefix="decisions-install-"))
+        self.addCleanup(shutil.rmtree, self.t, True)
+        self.clone = os.path.join(self.t, "clone")
+        subprocess.run(["git", "clone", "-q", REPO, self.clone], check=True, capture_output=True,
+                       timeout=60)
+        self.home = os.path.join(self.t, "home")
+        os.makedirs(self.home)
+
+    def make(self, *argv):
+        return subprocess.run(["make", "-s", "install"] + list(argv), cwd=self.clone,
+                              env={"HOME": self.home, "PATH": "/usr/bin:/bin"},
+                              capture_output=True, text=True, timeout=120)
+
+    def version(self, launcher):
+        return subprocess.run([launcher, "--version"], env={"HOME": self.home, "PATH": "/usr/bin:/bin"},
+                              capture_output=True, text=True, timeout=60).stdout
+
+    def test_a_clean_tree_installs_under_home_then_prefix(self):
+        run = self.make()
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        bindir = os.path.join(self.home, ".local", "bin")
+        self.assertTrue(os.path.islink(os.path.join(bindir, "decisions")))
+        self.assertTrue(os.access(os.path.join(bindir, "agentik"), os.X_OK))
+        self.assertTrue(self.version(os.path.join(bindir, "agentik-decisions")).startswith(
+            "agentik-decisions "))
+        prefix = os.path.join(self.t, "p")
+        run = self.make("PREFIX=" + prefix)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertTrue(os.access(os.path.join(prefix, "bin", "agentik-decisions"), os.X_OK))
+        self.assertTrue(os.path.isdir(os.path.join(prefix, "share", "agentik-decisions")))
+
+    def test_a_dirty_tree_is_refused_and_writes_nothing(self):
+        with open(os.path.join(self.clone, "stray"), "w", encoding="utf-8") as handle:
+            handle.write("x\n")
+        run = self.make()
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("install: refused", run.stderr)
+        self.assertEqual(os.listdir(self.home), [])
 
 
 class Gate(Hermetic):

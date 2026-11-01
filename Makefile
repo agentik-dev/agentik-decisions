@@ -103,17 +103,20 @@ decisions:
 doctor:
 	PYTHONPATH=plugin/lib $(PY) -m decisions doctor
 
-# The tool, `agentik-decisions` and its alias `decisions` (until 2026-12-31), as a
-# uv tool; then the `agentik` front door from its vendored copy (agentik-r1 D3).
-# The plugin comes from agentik-commons' `agentik` marketplace (agentik-r1 5.2).
-BINDIR ?= $(HOME)/.local/bin
+# d25 (hq design/04 sections 3 and 6): optional, for developers, since the plugin runs with
+# no CLI. It refuses a dirty tree, then runs the plugin's own launcher's install-cli, which
+# freezes plugin/lib under $(PREFIX)/share/agentik-decisions/<hash>/ and writes
+# $(PREFIX)/bin/agentik-decisions, its `decisions` link (until 2026-12-31) and the `agentik`
+# door. PREFIX defaults to $(HOME)/.local, so HOME or PREFIX aims it at a temp home.
+PREFIX ?= $(HOME)/.local
 install:
-	uv tool install .
-	install -m 755 scripts/agentik $(BINDIR)/agentik
+	@if [ -n "$$(git status --porcelain 2>/dev/null)" ] || ! git rev-parse --verify --quiet HEAD >/dev/null; then \
+	echo "install: refused, the tree is dirty or has no HEAD; commit first" >&2; exit 2; fi
+	plugin/bin/agentik-decisions install-cli --prefix "$(PREFIX)"
 
 # The virtualenv .python-version names first, with pyflakes for the gate. No .pth:
 # every `-m decisions` line sets PYTHONPATH=plugin/lib, and the installed tool comes from
-# `uv tool install` only (r6 decision 3).
+# install-cli only (d25).
 venv:
 	@pyenv virtualenvs --bare | grep -qx '3.12.7/envs/agentik-decisions' \
 		|| pyenv virtualenv 3.12.7 agentik-decisions
