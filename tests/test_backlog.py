@@ -471,7 +471,7 @@ class Backlog(Hermetic):
         home = self.empty_dir("home")
         os.makedirs(os.path.join(home, ".claude", "plugins", "cache"))
         env = {"HOME": home, "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-               "PYTHONPATH": os.path.join(REPO, "src")}
+               "PYTHONPATH": os.path.join(REPO, "plugin", "lib")}
         self.assertIsNone(speak.respeak_root(env, os.path.join(home, ".claude", "plugins",
                                                                 "cache")))
         run = subprocess.run([sys.executable, "-m", "unittest", "-q", "tests.test_ask",

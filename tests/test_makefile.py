@@ -1,6 +1,6 @@
 """The Makefile's harness (ADV11-1, ADV11-2) and its `decisions` step.
 
-Each test copies `Makefile`, `src/` and the harness (tests/run.py, gates.py,
+Each test copies `Makefile`, `src/`, `plugin/lib/` and the harness (tests/run.py, gates.py,
 skips.allow) into a temp repo and runs `make PY=<this python> <goal>` there.
 `test` runs the runner and skip pin extracted at the base: HEAD on main, the
 merge base with `main` on a branch, and no `main` is exit 2. Neither the
@@ -35,8 +35,9 @@ class Gate(Hermetic):
         self.root = tempfile.mkdtemp(prefix="decisions-makefile-")
         self.addCleanup(shutil.rmtree, self.root, True)
         shutil.copy(os.path.join(REPO, "Makefile"), self.root)
-        shutil.copytree(os.path.join(REPO, "src"), os.path.join(self.root, "src"),
-                        ignore=shutil.ignore_patterns("__pycache__"))
+        for rel in ("src", os.path.join("plugin", "lib")):
+            shutil.copytree(os.path.join(REPO, rel), os.path.join(self.root, rel),
+                            ignore=shutil.ignore_patterns("__pycache__"))
         self.git("init", "-q", "-b", self.BRANCH)
         if self.HARNESS_LATER:
             self.commit("base")

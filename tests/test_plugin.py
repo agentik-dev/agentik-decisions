@@ -14,7 +14,7 @@ COMMANDS = ("answer.md", "backlog.md", "find.md", "new.md", "render.md", "show.m
 VERSION = "0.9.0"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
-             "src/decisions/__init__.py", "src/decisions/cli.py")
+             "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
 
 
 def split_frontmatter(text):
@@ -65,9 +65,10 @@ class StructureTest(unittest.TestCase):
             self.assertIn("`agentik-decisions %s $ARGUMENTS`" % name[:-3], text, name)
 
     def test_no_hook_and_no_scripts(self):
-        # d23 section 6: respeak's include file is the one file beside the two directories.
+        # d23 section 6: respeak's include file is the one file beside the directories;
+        # d25 (hq design/04 section 2): the package lives in lib/.
         self.assertEqual(sorted(os.listdir(PLUGIN)),
-                         [".claude-plugin", "commands", "respeak-include.md", "skills"])
+                         [".claude-plugin", "commands", "lib", "respeak-include.md", "skills"])
 
     def test_skill_sizes(self):
         front, body = split_frontmatter(read(SKILL))
@@ -131,7 +132,7 @@ class StructureTest(unittest.TestCase):
         self.assertEqual(project.group(1), VERSION)
         # d-n1: `agentik-decisions --version` and doctor's tool row read the package's own copy
         self.assertEqual(re.search(r'(?m)^VERSION = "([^"]+)"$', read(os.path.join(
-            ROOT, "src", "decisions", "common.py"))).group(1), VERSION)
+            ROOT, "plugin", "lib", "decisions", "common.py"))).group(1), VERSION)
 
     def test_descriptions_name_six_verbs_plus_doctor(self):
         """F8: entry 4 of the cross-repo ledger names six verbs, the five commands and
@@ -156,12 +157,14 @@ class StructureTest(unittest.TestCase):
 
     def test_no_data_in_plugin(self):
         # The skill's own directory, skills/decisions/, is the layout's; any
-        # other directory named decisions/ would be a repo's data.
+        # other directory named decisions/ would be a repo's data, but for the package
+        # in lib/ (d25), which holds code alone.
         skill_dir = os.path.dirname(SKILL)
+        package = os.path.join(PLUGIN, "lib", "decisions")
         for dirpath, dirnames, filenames in os.walk(PLUGIN):
             for name in dirnames:
                 path = os.path.join(dirpath, name)
-                if name == "decisions" and path != skill_dir:
+                if name == "decisions" and path not in (skill_dir, package):
                     self.fail("data directory in the plugin: %s" % path)
             self.assertNotIn("DECISIONS.md", filenames)
 

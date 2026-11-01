@@ -31,10 +31,10 @@ test:
 	@$(BASE) [ -n "$$harness" ] || { echo "$(NO_BASE)" >&2; exit 2; }; \
 	$(call HARNESS,tests/run.py tests/gates.py tests/skips.allow) \
 	echo "test: tests/run.py at $$harness"; \
-	PYTHONPATH=src $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow"
+	PYTHONPATH=plugin/lib $(PY) "$$tmp/tests/run.py" --skips-allow "$$tmp/tests/skips.allow"
 
 lint:
-	$(PY) -m compileall -q src tests
+	$(PY) -m compileall -q src plugin/lib tests
 
 doclint:
 	$(PY) scripts/doclint
@@ -89,11 +89,11 @@ override HARNESS = tmp=$$(mktemp -d) || exit 2; trap 'rm -rf "$$tmp"' EXIT; \
 # --check` over its ledger; this repo keeps no DECISIONS.md, so the step says so.
 decisions:
 	@if [ -f DECISIONS.md ]; then echo "decisions: render --check"; \
-	PYTHONPATH=src $(PY) -m decisions render --check; \
+	PYTHONPATH=plugin/lib $(PY) -m decisions render --check; \
 	else echo "decisions: no DECISIONS.md, no block to check"; fi
 
 doctor:
-	PYTHONPATH=src $(PY) -m decisions doctor
+	PYTHONPATH=plugin/lib $(PY) -m decisions doctor
 
 # The tool, `agentik-decisions` and its alias `decisions` (until 2026-12-31), as a
 # uv tool; then the `agentik` front door from its vendored copy (agentik-r1 D3).
@@ -104,7 +104,7 @@ install:
 	install -m 755 scripts/agentik $(BINDIR)/agentik
 
 # The virtualenv .python-version names first, with pyflakes for the gate. No .pth:
-# every `-m decisions` line sets PYTHONPATH=src, and the installed tool comes from
+# every `-m decisions` line sets PYTHONPATH=plugin/lib, and the installed tool comes from
 # `uv tool install` only (r6 decision 3).
 venv:
 	@pyenv virtualenvs --bare | grep -qx '3.12.7/envs/agentik-decisions' \
@@ -123,4 +123,4 @@ venv:
 # ADV10-6: the whole render under a 900 s wall; each child inside it has its own timeout.
 RESPEAK_PYTHON ?= $(shell { pyenv prefix agentik-respeak || pyenv prefix claude-code-respeak; } 2>/dev/null)/bin/python3
 readme:
-	PYTHONPATH=src $(PY) scripts/bounded --wall 900 -- $(PY) scripts/readme-render --python "$(RESPEAK_PYTHON)" $(if $(RESPEAK_ROOT),--plugin-root "$(RESPEAK_ROOT)")
+	PYTHONPATH=plugin/lib $(PY) scripts/bounded --wall 900 -- $(PY) scripts/readme-render --python "$(RESPEAK_PYTHON)" $(if $(RESPEAK_ROOT),--plugin-root "$(RESPEAK_ROOT)")

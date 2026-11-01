@@ -144,7 +144,7 @@ class Doctor(Hermetic):
         # import it and name the checkout's version, so the tool runs without it
         self.tool('echo "agentik-decisions %s${PYTHONPATH:+ PYTHONPATH=$PYTHONPATH}'
                   '${PYTHONHOME:+ PYTHONHOME=$PYTHONHOME}"' % current())
-        self.env.update(PYTHONPATH="src", PYTHONHOME="/nowhere")
+        self.env.update(PYTHONPATH="plugin/lib", PYTHONHOME="/nowhere")
         got = self.checks()[0]["tool"]
         self.assertEqual(got[0], "ok", got[1])
 

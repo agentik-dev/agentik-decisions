@@ -15,5 +15,5 @@ agentik-decisions = "decisions.cli:main"
 decisions = "decisions.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "plugin/lib"}
 packages = ["decisions"]
