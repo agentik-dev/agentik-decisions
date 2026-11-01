@@ -1,5 +1,6 @@
 """`backlog`: each repo's NICE_TO_HAVE.md, placed against its HANDOFF.md build
-order (design d23 sections 1 to 4).
+order (design d23 sections 1 to 4); its items are column-0 bullets and the rows of
+a table under NICE_HEADER (d26, agentik-hq design/05 section 2).
 
     decisions backlog [REPO...] [--json]
 
@@ -46,6 +47,11 @@ NUMBER = re.compile(r"[0-9]+")
 ROW_CELL = re.compile(r"(?<!\\)\|")
 PREFIX = re.compile(r"(?i)^(build order|open work|next work|next\b)")
 DONE = re.compile(r"\bdone\b|\bDECIDED\b")
+# d26: a NICE table is this exact header row, then a separator row of as many cells;
+# its level is the `level` cell alone, `^S[1-4]$`, anything else unlevelled
+NICE_HEADER = ["id", "level", "area", "finding", "evidence", "from"]
+SEPARATOR = re.compile(r"^:?-+:?$")
+CELL_LEVEL = re.compile(r"^S([1-4])$")
 
 
 def blocks(text):
@@ -144,13 +150,46 @@ def spans(text):
     return out
 
 
+def row_item(n, cells):
+    """A NICE row as an item (d26): the level from its `level` cell (level_from
+    `cell`), the title the lead of `finding` as a bullet's, the spans of `area`,
+    `finding` and `evidence` in that order, and its `id`; a cell keeps its `\\|`."""
+    cells = (list(cells) + [""] * len(NICE_HEADER))[:len(NICE_HEADER)]
+    ident, cell, area, finding, evidence = cells[:5]
+    m = CELL_LEVEL.match(cell)
+    level = "S" + m.group(1) if m else None
+    found = []
+    for part in (area, finding, evidence):
+        for span in spans(part):
+            if span not in found:
+                found.append(span)
+    return {"line": n, "id": ident, "title": trimmed(lead_of(finding))[:TITLE],
+            "level": level, "level_from": "cell" if level else None, "spans": found}
+
+
 def nice_items(text):
-    """Each column-0 `- ` item of NICE_TO_HAVE.md, in file order, as a dict: line,
-    title, level, level_from, spans."""
+    """Each column-0 `- ` item of NICE_TO_HAVE.md and each row of a NICE_HEADER
+    table, in file order, as a dict: line, title, level, level_from, spans; a row's
+    also id. A row never takes a heading's or a sentence's level, nor marks one seen."""
     items = []
     # the open headings, innermost last: [depth, heading level, sentence level, seen item]
     stack = []
+    # the table being read, its rows on consecutive lines: [next line, header, body]
+    table = None
     for n, kind, payload, joined in gathered(text):
+        if kind == "row":
+            if table is None or n != table[0]:
+                table = [n + 1, payload, False]
+            elif not table[2]:
+                nice = (table[1] == NICE_HEADER and len(payload) == len(NICE_HEADER)
+                        and all(SEPARATOR.match(c) for c in payload))
+                table = [n + 1, NICE_HEADER if nice else None, True]
+            else:
+                table[0] = n + 1
+                if table[1] is not None:
+                    items.append(row_item(n, payload))
+            continue
+        table = None
         if kind == "heading":
             depth, title = payload
             while stack and stack[-1][0] >= depth:
@@ -278,7 +317,8 @@ def as_json(v):
     keys = ("rank", "line", "title", "level", "placed_as", "level_from", "after_step", "span")
     return {"repo": v["repo"], "nice": v["nice"], "handoff": v["handoff"], "order": v["order"],
             "steps": [{k: s[k] for k in ("n", "line", "title", "done")} for s in v["steps"]],
-            "items": [{k: i[k] for k in keys} for kind, i in v["rows"] if kind == "item"]}
+            "items": [dict({k: i[k] for k in keys}, **({"id": i["id"]} if "id" in i else {}))
+                      for kind, i in v["rows"] if kind == "item"]}
 
 
 def as_text(v):
@@ -301,7 +341,8 @@ def as_text(v):
             items += 1
             bare += row["level"] is None
             lines.append("%d %s  NICE_TO_HAVE.md:%d  %s" % (
-                row["rank"], row["level"] or "S4?", row["line"], row["title"]))
+                row["rank"], row["level"] or "S4?", row["line"],
+                row["id"] + "  " + row["title"] if "id" in row else row["title"]))
     lines.append("%d of %d items carry no level (placed as S4)" % (bare, items))
     return lines
 

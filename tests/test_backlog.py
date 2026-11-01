@@ -498,6 +498,69 @@ class Backlog(Hermetic):
             self.assertEqual(decisions.main(["doctor"], out=out, err=io.StringIO()), 0)
         self.assertIn("warn respeak: ", out.getvalue())
 
+    # d26: design/05 section 2's NICE rows (the fixture `rows`)
+
+    def rows_items(self):
+        with open(os.path.join(fixture("rows"), NICE), encoding="utf-8") as handle:
+            return decisions.nice_items(handle.read())
+
+    def test_row_level_from_cell(self):
+        got = self.item("rows", "| n1 |")
+        self.assertEqual((got["level"], got["level_from"], got["id"]), ("S2", "cell", "n1"))
+        self.assertEqual(self.item("rows", "| n4 |")["level"], "S3")
+        # S4 when the cell says so, under a heading's S2 and a sentence's S1
+        self.assertEqual(self.item("rows", "| n6 |")["level"], "S4")
+        # anything but `^S[1-4]$` is unlevelled, as today: placed S4, never the heading's
+        for needle in ("| n2 |", "| n3 |", "| n5 |", "| n7 |"):
+            got = self.item("rows", needle)
+            self.assertEqual((got["level"], got["level_from"], got["placed_as"]),
+                             (None, None, "S4"), needle)
+
+    def test_row_title_and_escaped_pipe(self):
+        self.assertEqual(self.item("rows", "| n1 |")["title"], "The hint names make install")
+        self.assertEqual(self.item("rows", "| n2 |")["title"], "An unsure level cell")
+        self.assertEqual(self.item("rows", "| n4 |")["title"],
+                         "A cell holding `a \\| b` keeps its pipe")
+        # an S1 in the finding is text, as a token outside a lead is
+        self.assertEqual(self.item("rows", "| n5 |")["title"], "An empty level cell")
+
+    def test_row_spans_from_area_finding_evidence(self):
+        by_id = {i.get("id"): i for i in self.rows_items()}
+        self.assertEqual(by_id["n4"]["spans"], ["scripts/doclint",
+                                                "plugin/lib/tool/backlog.py",
+                                                "tests/fixtures/x.md"])
+        self.assertEqual(by_id["n1"]["spans"], ["plugin/lib/tool/doctor.py", "doctor.py"])
+        self.assertEqual(by_id["n2"]["spans"], [])
+
+    def test_rows_and_bullets_in_file_order(self):
+        items = self.rows_items()
+        self.assertEqual([i.get("id") for i in items],
+                         [None, "n1", "n2", "n3", "n4", "n5", None, "n6", "n7", None])
+        self.assertEqual([i["line"] for i in items], sorted(i["line"] for i in items))
+        # the bullets around the rows keep their levels: the lead's, then the sentence's
+        bullets = [(i["level"], i["level_from"]) for i in items if "id" not in i]
+        self.assertEqual(bullets, [("S3", "lead"), ("S1", "lead"), ("S1", "sentence")])
+
+    def test_other_table_yields_nothing(self):
+        lines = [i["line"] for i in self.repo("rows")["items"]]
+        for needle in ("Another header yields nothing", "Five columns is another header",
+                       "No separator line", "A fenced row is no item"):
+            self.assertNotIn(line_of("rows", needle), lines, needle)
+        self.assertEqual(len(lines), 10)
+
+    def test_row_id_in_text_and_json(self):
+        line = line_of("rows", "| n1 |")
+        self.assertIn("3 S2  NICE_TO_HAVE.md:%d  n1  The hint names make install" % line,
+                      self.text("rows"))
+        got = self.item("rows", "| n1 |")
+        self.assertEqual(set(got), {"rank", "line", "title", "level", "placed_as",
+                                    "level_from", "after_step", "span", "id"})
+        bullet = self.item("rows", "- S1: a bullet after the table")
+        self.assertNotIn("id", bullet)
+        # S1 first in file order, then S2: the two S1 bullets, then n1
+        ranks = [(i["rank"], i.get("id")) for i in self.repo("rows")["items"]][:3]
+        self.assertEqual(ranks, [(1, None), (2, None), (3, "n1")])
+
 
 class Shipped(unittest.TestCase):
     """Not hermetic: it reads CLAUDE.md, which `Hermetic` guards, and calls no verb."""
