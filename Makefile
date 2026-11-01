@@ -46,6 +46,7 @@ lint:
 
 doclint:
 	$(PY) scripts/doclint
+	$(PY) scripts/recordlint
 
 # The guide section 6: scripts/{agentik,hygiene,bounded} are agentik-commons'
 # canonical copies, vendored by its scripts/sync with their sums in
