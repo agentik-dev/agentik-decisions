@@ -4,7 +4,13 @@
            (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
-`--other` carries the owner's free text, restated. With `--area A` entry N is
+`--other` carries the owner's free text, restated. The owner's typed text T, the
+rest of the block's **Your answer:** line and every non-blank line under it, holds
+both (d28): T that names an option (its label once `*` and backticks at either end,
+case, a trailing ` (Recommended)` and a period are dropped) refuses `--other` and a
+`--pick` of another option; any other T refuses `--pick` and prints T, and under
+`--other X` the label is `Other: X; the owner's line: T` (`Other: X` when X is T,
+ignoring case). T never enters the ledger: `--text` stays the caller's. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
@@ -114,20 +120,74 @@ def drop_line(text, index):
     return "".join(lines[:start] + lines[index + 1:])
 
 
+def normal(text):
+    """`text` lowercased, with `*` and backticks at either end, a trailing ` (Recommended)`
+    and a period before or after it dropped until none is left (d28 ruling)."""
+    marker, last = questions.RECOMMENDED.strip().lower(), None
+    text = text.lower()
+    while text != last:
+        last = text
+        text = text.strip("*` ").rstrip(".").rstrip()
+        text = text[:-len(marker)] if text.endswith(marker) else text
+    return text
+
+
+def named(block, typed):
+    """The option labels `typed` names: the one it equals ignoring case, else each whose
+    normal form is its normal form, so two labels one normal form apart are both named
+    (d28 ruling; review r1 F1, F2)."""
+    labels = [label for label, _marked, _effect in block.options]
+    exact = [label for label in labels if label.lower() == typed.lower()]
+    return exact or [label for label in labels if normal(label) == normal(typed)]
+
+
 def pick(block, args):
-    if args.other is not None:
-        other = ask.clean(args.other)
-        if not other:
-            raise Refusal("answer: empty --other; nothing written")
-        return "Other: " + other
-    wanted = ask.clean(args.pick).lower()
+    """The label of the answer, `--pick`'s option or `Other: X`, held to the owner's
+    typed text T, `block.answer` (d28): T that names an option takes only `--pick` of
+    it; any other T refuses `--pick` and stays in `--other`'s label. An unknown
+    `--pick` keeps its own refusal."""
+    typed = block.answer or ""
+    options = named(block, typed) if typed else []
+    option = options[0] if len(options) == 1 else None
+    names = ("answer: question %d's %s line names the option `%s`; pass --pick with it; "
+             "nothing written" % (block.number, questions.ANSWER, option))
+    twins = ("answer: question %d's %s line could name any of %s; ask the owner to type one "
+             "label as it stands; nothing written"
+             % (block.number, questions.ANSWER, ", ".join("`%s`" % o for o in options)))
+    if args.other is None:
+        label = pick_label(block, args.pick)
+        if label is None:
+            raise Refusal("answer: question %d has no option %r; its options are %s; nothing "
+                          "written" % (block.number, args.pick,
+                                       ", ".join(l for l, _m, _e in block.options)))
+        if len(options) > 1:
+            raise Refusal(twins)
+        if typed and option is None:
+            raise Refusal("answer: question %d's %s line says more than a label; pass "
+                          "--other, which keeps the line; nothing written:\n%s"
+                          % (block.number, questions.ANSWER, typed))
+        if option is not None and label != option:
+            raise Refusal(names)
+        return label
+    other = ask.clean(args.other)
+    if not other:
+        raise Refusal("answer: empty --other; nothing written")
+    if len(options) > 1:
+        raise Refusal(twins)
+    if option is not None:
+        raise Refusal(names)
+    if typed and other.lower() != typed.lower():
+        return "Other: %s; the owner's line: %s" % (other, typed)
+    return "Other: " + other
+
+
+def pick_label(block, wanted):
+    """The option whose label is `wanted`, ignoring case and ` (Recommended)`, or None."""
+    wanted = ask.clean(wanted).lower()
     marker = questions.RECOMMENDED.lower()
     wanted = wanted[:-len(marker)] if wanted.endswith(marker) else wanted
-    for label, _marked, _effect in block.options:
-        if label.lower() == wanted:
-            return label
-    raise Refusal("answer: question %d has no option %r; its options are %s; nothing written"
-                  % (block.number, args.pick, ", ".join(l for l, _m, _e in block.options)))
+    return next((label for label, _marked, _effect in block.options
+                 if label.lower() == wanted), None)
 
 
 def cmd_answer(args, path, out, err):

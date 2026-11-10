@@ -16,9 +16,13 @@ the owner, or at close.
    through respeak once, writes them back into OPEN-QUESTIONS.md, and prints a
    JSON list of AskUserQuestion calls. A warning with exit 0 means the text
    stayed as it was; exit 2 names an unknown N or a held lock. A question
-   whose **Your answer:** line is filled in is not asked: run
-   `agentik-decisions answer N` for it first, from that line. A question the lint
-   refuses is not asked either; its warning names the fault.
+   whose **Your answer:** line is filled in, or text under it, is not asked:
+   run `agentik-decisions answer N` for it first, from that text, which `answer`
+   reads. Text that names an option takes `--pick` with that option; `answer`
+   refuses any other pick and `--other`. Any other text, a label with a
+   condition or free words, takes `--other`, restated; `answer` refuses
+   `--pick` for it and keeps the owner's words in the Answered line. A question
+   the lint refuses is not asked either; its warning names the fault.
 2. Pass each call to AskUserQuestion as it stands, back to back in one turn.
    Never reword a question, a label or a description.
 3. For each answer, run

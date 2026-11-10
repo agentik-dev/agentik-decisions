@@ -260,6 +260,22 @@ class Ask(Base):
         self.assertEqual((code, json.loads(out)), (0, []))
         self.assertIn("`agentik decisions answer 9`", err)
 
+    def test_typed_under_the_line_is_not_asked(self):
+        """d28 (hq audit row d1): text the owner typed under an empty **Your answer:** line
+        is the answer, so the block is skipped with the same warning."""
+        self.new("Q one", "Q two")
+        self.write(self.questions, self.read(self.questions).replace(
+            "**Your answer:**\n", "**Your answer:**\n\nPin, once 3.13\nships.\n", 1))
+        self.rendered()
+        code, out, err = self.ask()
+        self.assertEqual(code, 0, err)
+        self.assertEqual([q["header"] for c in json.loads(out) for q in c["questions"]],
+                         ["Decision 10"])
+        self.assertEqual(len(err.splitlines()), 1, err)
+        self.assertIn("question 9 is answered on its **Your answer:** line; run "
+                      "`agentik decisions answer 9` for it first", err)
+        self.assertIn("Pin, once 3.13\nships.", self.read(self.questions))
+
     def test_a_block_the_lint_refuses_is_not_asked(self):
         """d-n2 item 4 (1b F9): a block with five options, which AskUserQuestion rejects,
         is skipped with the lint's words; the others are asked."""

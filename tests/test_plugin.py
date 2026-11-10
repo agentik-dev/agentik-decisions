@@ -11,7 +11,7 @@ PLUGIN = os.path.join(ROOT, "plugin")
 SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
 COMMANDS = ("answer.md", "backlog.md", "find.md", "new.md", "render.md", "show.md")
-VERSION = "0.11.0"
+VERSION = "0.12.1"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
@@ -119,6 +119,22 @@ class StructureTest(unittest.TestCase):
                        "matches none",
                        "run `agentik-decisions answer N` for it first"):
             self.assertIn(needed, text, needed)
+
+    def test_ask_skill_enters_a_typed_line(self):
+        """d28 (hq audit row d1): step 1 says text under the line counts and how each kind
+        of typed text is entered; the command page says it in one sentence."""
+        front, body = split_frontmatter(read(ASK))
+        self.assertLess(len(body), 60)
+        step1 = " ".join("\n".join(body).split("\n2. ")[0].split())
+        for needed in ("or text under it", "Text that names an option takes `--pick` with "
+                       "that option", "refuses any other pick and `--other`",
+                       "Any other text, a label with a condition or free words, takes "
+                       "`--other`", "refuses `--pick` for it",
+                       "keeps the owner's words in the Answered line"):
+            self.assertIn(needed, step1, needed)
+        page = " ".join(read(os.path.join(PLUGIN, "commands", "answer.md")).split())
+        self.assertIn("`answer` reads the question's **Your answer:** line and the text under "
+                      "it", page)
 
     def test_answer_pages_carry_into(self):
         """Round 2 F1: the cross-repo ledger's block lives in the user-level CLAUDE.md, so

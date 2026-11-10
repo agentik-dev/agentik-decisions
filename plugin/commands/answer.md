@@ -6,7 +6,9 @@ allowed-tools: Bash(agentik-decisions *)
 
 Run `agentik-decisions answer $ARGUMENTS` and relay its output verbatim. Run it only on
 the owner's answer: a pick from AskUserQuestion, or the text on the question's
-**Your answer:** line. `--text` is the entry's body only, never its bold title
+**Your answer:** line. `answer` reads the question's **Your answer:** line and the
+text under it: text that names an option takes only `--pick` of it, and any other
+text only `--other`, whose Answered line keeps the owner's words. `--text` is the entry's body only, never its bold title
 or its `(date; source)` tail, which `answer` writes; a `--text` holding either
 is refused. It is needed except with `--no-entry`; with `--amends M` it is the
 whole paragraph in force after the answer, every sentence that stays with the

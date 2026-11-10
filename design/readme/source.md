@@ -84,7 +84,7 @@ make doctor
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
-| `--version` | `agentik-decisions 0.11.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.12.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -132,7 +132,7 @@ An empty part, or a title the ledger's lint cannot take, exits 2 and writes noth
 So does an option count outside 2 to 4, a label over five words or holding `(Recommended)`, a choice that does not end in `?`, or a sixth open question.
 The first label holds at most four words, since ` (Recommended)` follows it, and no label is `Other` in any case, since AskUserQuestion adds that option itself.
 
-`ask` skips, with one warning each, a block whose **Your answer:** line is filled in, which `agentik decisions answer N` enters first, and a block the lint refuses.
+`ask` skips, with one warning each, a block whose **Your answer:** line is filled in or has text under it, which `agentik decisions answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
 The render runs in a temp dir as `OPEN-QUESTIONS.md`, beside a copy of the repo's `.claude/respeak/`, and its `claude -p` child runs as a marked session helper.
 It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
@@ -141,6 +141,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it, and other text refuses `--pick` and stays in the Answered line, as `Other: X; the owner's line: T`, never in the ledger.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
@@ -265,7 +266,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.11.0`, rendered `2026-11-01`, `380` unittest cases.
+Status: version `0.12.1`, rendered `2026-11-01`, `391` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -281,8 +282,6 @@ Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a war
 Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
 Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
 Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
-Version `0.4.0` drops `new --answers`: `new` takes two to four `--option` flags instead, and `ask` and `answer` carry a question from the file to the owner and the answer into the ledger.
-Version `0.3.0` broke `0.2.0` on purpose: the per-file format and its verbs are gone, and a repository moves its entries into one ledger by hand.
 
 ## Layout
 
