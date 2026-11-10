@@ -36,14 +36,15 @@ def filler(start, count, area="The work"):
 
 
 def tree_repo(root, files):
-    """A git repo at `root` holding `files`, committed, with no global config."""
+    """A git repo at `root` holding `files` (text, or bytes as they are), committed, with
+    no global config."""
     os.makedirs(root, exist_ok=True)
     env = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
     for path, text in files.items():
         full = os.path.join(root, path)
         os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "w", encoding="utf-8") as handle:
-            handle.write(text)
+        with open(full, "wb") as handle:
+            handle.write(text if isinstance(text, bytes) else text.encode("utf-8"))
     for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "fixture"]):
         subprocess.run([GIT, "-c", "user.name=f", "-c", "user.email=f",
                         "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false"] + args,
@@ -254,3 +255,101 @@ class Audit(Hermetic):
         code, _, err = self.run_cli("--tree", os.path.join(self.top, "none.json"))
         self.assertEqual((code, "audit: --tree" in err), (2, True))
         self.assertEqual(self.run_cli(ledger=os.path.join(self.top, "absent.md"))[0], 2)
+
+    # The fold of d33's refuter round: F1, F2, F3, F5, F8 and F9's cases.
+    def write(self, name, text, newline=None):
+        path = os.path.join(self.top, name)
+        with open(path, "w", encoding="utf-8", newline=newline) as handle:
+            handle.write(text)
+        return path
+
+    # F1: a tracked file that is not UTF-8 still counts its citations.
+    def test_p5_reads_a_file_that_is_not_utf8(self):
+        other = os.path.join(self.top, "other")
+        tree_repo(other, {"latin.md": b"caf\xe9: see ledger-hq entry 4\n"})
+        view = self.view(self.repo, other)
+        self.assertNotIn("P5", self.marks(view, 4))
+        self.assertEqual([os.path.basename(r) for r in view["not_read"]], [])
+
+    # F2: a citation wrapped across a line counts, alone in its file or not.
+    def test_p5_citation_wrapped_across_a_line(self):
+        other = os.path.join(self.top, "other")
+        tree_repo(other, {"mixed.md": "ledger-hq entry 7, and the rule of entry\n10 stands.\n",
+                          "wrap.md": "The rule of the ledger's entry\n11 as it stands.\n"})
+        view = self.view(self.repo, other)
+        for n in (7, 10, 11):
+            self.assertNotIn("P5", self.marks(view, n), n)
+
+    # F8: `N to M` and `N-M` name every number from N to M.
+    def test_p5_a_range_cites_every_number_in_it(self):
+        other = os.path.join(self.top, "other")
+        tree_repo(other, {"range.md": "See ledger-hq entries 3 to 5, and entries 9-11.\n"})
+        view = self.view(self.repo, other)
+        for n in (4, 10, 11):
+            self.assertNotIn("P5", self.marks(view, n), n)
+        for n in (12, 13):
+            self.assertIn("P5", self.marks(view, n), n)
+
+    # F3 and M4: with no repo read, no entry is marked P5, and P5 is named not detected.
+    def test_p5_not_detected_when_no_repo_is_read(self):
+        empty = self.write("empty.json", '{"repos": []}')
+        view = self.view("--tree", empty)
+        self.assertTrue(all(m["mark"] != "P5" for c in view["candidates"] for m in c["marks"]))
+        self.assertEqual(view["not_detected"], ["P5", "P7"])
+        out = self.text("--tree", empty)
+        self.assertEqual(len([x for x in out.splitlines() if x.startswith("not detected: P5")]),
+                         1)
+        read = self.view()
+        self.assertEqual(read["not_detected"], ["P7"])
+        self.assertNotIn("not detected: P5", self.text())
+
+    # F5: `not read:` names the tree row, not the path's last part.
+    def test_not_read_names_the_tree_row(self):
+        tree = os.path.join(self.repo, "suite.json")
+        with open(tree, "w", encoding="utf-8") as handle:
+            json.dump({"repos": [{"name": "ledger-hq"},
+                                 {"name": "obs", "path": "absent-dir"}]}, handle)
+        out = self.text("--tree", tree)
+        self.assertIn("not read: obs", out)
+        self.assertNotIn("absent-dir", out)
+
+    # M18 and M22: a directory git cannot read is not read, and never in the tree.
+    def test_a_plain_directory_is_not_read_and_exits_zero(self):
+        plain = os.path.join(self.top, "plain")
+        os.makedirs(plain)
+        view = self.view(self.repo, plain)
+        self.assertEqual([os.path.basename(r) for r in view["tree"]], ["ledger-hq"])
+        self.assertEqual([os.path.basename(r) for r in view["not_read"]], ["plain"])
+        self.assertIn("not read: plain", self.text(self.repo, plain))
+
+    # M3: P4 compares bytes, not characters.
+    def test_p4_counts_bytes(self):
+        ledger = self.write("p4.md", HEAD + "### The work\n\n"
+                            + entry(1, "Accented tail", "x" * 20, "2026-10-01; " + "é" * 8)
+                            + entry(2, "Plain tail", "x" * 20, "2026-10-01; " + "e" * 8))
+        view = self.view(ledger=ledger)
+        self.assertIn("P4", self.marks(view, 1))
+        self.assertNotIn("P4", self.marks(view, 2))
+
+    # M11: P8 takes two shared title words at least.
+    def test_p8_one_shared_word_is_no_lead(self):
+        ledger = self.write("p8.md", HEAD + "### The work\n\n"
+                            + entry(1, "Budget", "The tool counts turns.", "2026-10-01; a")
+                            + entry(2, "The token budget", "The tool counts tokens.",
+                                    "2026-10-01; a"))
+        self.assertEqual(self.view(ledger=ledger)["leads"], [])
+
+    # M7 and M8: a CLAUDE.md that keeps CRLF costs each line and the block its CR bytes.
+    def test_bytes_take_crlf_from_the_claude_md(self):
+        with open(os.path.join(self.repo, "CLAUDE.md"), "w", encoding="utf-8",
+                  newline="") as handle:
+            handle.write("# x\r\n")
+        view = self.view()
+        target = os.path.join(self.repo, "CLAUDE.md")
+        block = render.block(parse(read_text(self.ledger)), self.ledger, target)
+        line = [x for x in block.splitlines() if x.startswith("1. **Short rule.**")][0]
+        self.assertEqual(view["candidates"][0]["bytes"], len(line.encode()) + 2)
+        other = [c for c in view["candidates"] if c["number"] == 3][0]
+        self.assertEqual(other["bytes"], len("- 3 Moved rule (The work)\r\n".encode()))
+        self.assertEqual(view["block_bytes"], render.block_bytes(block, True))
+        self.assertNotEqual(view["block_bytes"], render.block_bytes(block, False))
