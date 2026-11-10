@@ -179,7 +179,7 @@ Exit codes:
 |---|---|
 | 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` and `audit` whenever a view printed; `answer` whose block write failed after both files were written, with its warning |
 | 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory, an `audit` REPO or `--tree` it cannot read, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (an absent `--ledger` file among them), or a missing `backlog` directory or a file it cannot read as UTF-8, an `analyze` window it cannot read or argument neither an analysis nor a directory, an `audit` REPO that is not a directory or `--tree` FILE it cannot read, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
 
 ## The plugin
 
