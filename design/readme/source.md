@@ -79,13 +79,13 @@ make doctor
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
-| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
+| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH] [--every-turn]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
 | `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
-| `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
+| `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
-| `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed; `not measured:` where it cannot; writes nothing |
+| `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `--version` | `agentik-decisions 0.15.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
@@ -151,6 +151,7 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 `--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`: the first date, a count of the older amendments, then its own whole; the tail it cut prints as `tail was:`, and `git log -p -S'amended A' -- DECISIONS.md` finds an older amendment whole on a `-` line. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
+The block is loaded on every turn: `answer` and `render` name its growth, `X B to Y B, +D B`, and an answer that makes it larger under `Every session` exits 2 and writes nothing, naming the tail note's share when that grows; an entry outside `Every session`, listed by title only, or `--every-turn` lets it through.
 At 25 entries in force, `--area` exits 2 first and names the ways out: a line under `## Superseded`, `--amends M` or `--no-entry`.
 A line no part of its block takes, such as text typed off the **Your answer:** line, refuses `--pick`, and `--other` keeps it in the Answered line.
 Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
@@ -284,7 +285,7 @@ Status: version `0.15.1`, rendered `2026-11-01`, `435` unittest cases.
 | The plugin: two skills, seven commands and respeak's include file | Working |
 | The session provider in `doctor` | Working |
 
-Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
+Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. `answer` requires one of `--area`, `--amends` and `--no-entry`.
 
 
 ## Layout

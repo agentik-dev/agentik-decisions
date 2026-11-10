@@ -1,7 +1,7 @@
 """`answer`: the owner's answer to question N, recorded (design d18 section 1.2).
 
     answer N (--pick L | --other T) --source S [--text P | --add S]
-           (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
+           (--area A | --amends M [--shorter] | --no-entry) [--into PATH] [--every-turn]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
 `--other` carries the owner's free text, restated. The owner's typed text T, the
@@ -45,6 +45,15 @@ refused with exit 2 before anything is written. Once both files are written the 
 stands: a block that cannot be rewritten is a warning on stderr naming the
 `agentik decisions render` command, with the `--ledger` and `--into` the answer used,
 and the exit stays 0.
+
+The block is loaded on every turn (d32), so the rewrite's line names its growth,
+`answer: rewrote the block in PATH: X B to Y B, +D B; the block is loaded on every
+turn`. An answer that touches `Every session`, by `--amends M` with M in force there
+or an `--area` that resolves to it, and makes larger the block render would write at
+the target, markers or none, is refused with exit 2 before anything is written: the
+refusal names the bytes, and the entry's tail note's share when the note grows. The
+way out is an entry outside `Every session`, which the block lists by title only, or
+`--every-turn`, valid only with `--area` or `--amends`. Same size or smaller passes.
 """
 
 import os
