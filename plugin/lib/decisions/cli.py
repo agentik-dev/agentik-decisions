@@ -1,5 +1,5 @@
-"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog
-and analyze.
+"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog,
+analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -40,6 +40,12 @@ Verbs
                                   of lines in records, record commits a landing,
                                   commits a charter, NICE_TO_HAVE.md's rows;
                                   writes nothing
+    audit [REPO...] [--tree FILE] [--json]
+                                  the ledger's retire and rewrite candidates,
+                                  marks P1 to P6 and P8 a lead, Every session
+                                  first with each line's bytes in the block;
+                                  P5 reads the tree, each REPO, FILE's repos or
+                                  the ledger's git top; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog` and `analyze` read no ledger and ignore it. `--version` prints
@@ -51,7 +57,7 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
-       read; `analyze` whenever its view printed; `answer` whose block write failed
+       read; `analyze` and `audit` whenever its view printed; `answer` whose block write failed
        after both files were written (a warning on stderr names `agentik decisions
        render`)
     1  `render`: a lint problem, or with --check a stale block
@@ -61,7 +67,8 @@ Exit codes
        changes the exit; a `--ledger` naming an absent file fails), or a `backlog`
        REPO that is not a directory or a file it cannot read as UTF-8, or an
        `analyze` window it cannot read or argument that is neither an analysis
-       nor a directory
+       nor a directory, or an `audit` REPO that is not a directory or `--tree`
+       FILE it cannot read
 """
 
 import argparse

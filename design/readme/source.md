@@ -3,7 +3,7 @@
 <img src="assets/icon.svg" alt="" width="56" align="left">
 
 agentik-decisions is a Claude Code plugin, `decisions@agentik`, plus a stdlib Python tool, `agentik-decisions`, for the decisions a repository has settled.
-A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog` and `analyze`.
+A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `analyze` and `audit`.
 
 ## Why it exists
 
@@ -86,7 +86,8 @@ make doctor
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
-| `--version` | `agentik-decisions 0.16.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, `Every session` first with each line's block bytes; writes nothing |
+| `--version` | `agentik-decisions 0.17.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -176,9 +177,9 @@ Exit codes:
 
 | code | meaning |
 |---|---|
-| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` whenever its view printed; `answer` whose block write failed after both files were written, with its warning |
+| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` and `audit` whenever a view printed; `answer` whose block write failed after both files were written, with its warning |
 | 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory, an `audit` REPO or `--tree` it cannot read, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
 
 ## The plugin
 
@@ -195,6 +196,7 @@ The plugin carries manners and no data; a repository owns its ledger.
 | command | `/decisions:render [--check]` | the lint, then the block in `CLAUDE.md` |
 | command | `/decisions:backlog [REPO...]` | the backlog, placed against the build order; the skill runs it before S4 work |
 | command | `/decisions:analyze [churn] [REPO...]` | churn from git, read only |
+| command | `/decisions:audit [REPO...]` | retire and rewrite candidates, read only |
 
 One example each:
 
@@ -206,6 +208,7 @@ One example each:
 /decisions:render --check
 /decisions:backlog
 /decisions:analyze churn
+/decisions:audit
 ```
 
 Or say it: "which decisions cover the relay?" reaches the skill.
@@ -221,7 +224,7 @@ The session plugin is an optional provider and never a requirement: `doctor` rep
 - `design/d29-churn.md`: `analyze`, and the block's short tails.
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
 - `design/d18-one-flow.md`: the design of the flow, one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
-- `design/d17-four-verbs.md`: the packet that built version `0.3.0`.
+- `design/d17-four-verbs.md`: built `0.3.0`.
 - `history/design/` and `history/packets/`: the designs and packets of the per-file format before it.
 - `history/sittings/`: one charter per working session; each handover lists the choices made inside the design.
 
@@ -237,12 +240,13 @@ Each file runs alone in seconds:
 | `tests/test_answer.py` | `answer`: a pick, an amendment, no entry, both files or neither, the block |
 | `tests/test_ask.py` | `ask` under a stub renderer: the calls, the fields, one render in a temp dir, the write-back, the skipped blocks, the helper marks, no respeak |
 | `tests/test_render.py` | `render`, `--check` and `--lint`, with the file's hash before and after |
-| `tests/test_cli.py` | the six verbs, `doctor`, `backlog` and `analyze`, the dropped ones, and where the ledger is found |
+| `tests/test_cli.py` | the six verbs, `doctor`, `backlog`, `analyze` and `audit`, the dropped ones, and where the ledger is found |
 | `tests/test_common.py` | the bounded child, the git top and the one-rename write |
 | `tests/test_doctor.py` | `doctor` under a fake `pyenv` and a temp home |
 | `tests/test_backlog.py` | `backlog` over fixtures trimmed from real files: the levels, the build order, the placement, the exits, no write and no render |
 | `tests/test_analyze.py` | `analyze` over five fixture repos: the classes, the four ratios, the exits, the bound, no write |
-| `tests/test_plugin.py` | the plugin subtree: seven commands, the two skills, one version |
+| `tests/test_audit.py` | `audit`: the marks, the order, no write, the exits |
+| `tests/test_plugin.py` | the plugin subtree: eight commands, the two skills, one version |
 | `tests/test_makefile.py` | the harness `make test` runs, and the `decisions` step |
 | `tests/test_hermetic.py` | the suite reads no live state |
 | `tests/test_gates.py` | a skip is a gate that did not run, never a pass |
@@ -276,17 +280,14 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.16.1`, rendered `2026-11-01`, `446` unittest cases.
+Status: version `0.17.0`, rendered `2026-11-01`, `458` unittest cases.
 
 | Surface | State |
 |---|---|
-| Verbs `show`, `find`, `new`, `ask`, `answer`, `render`, `doctor`, `backlog`, `analyze` | Working |
+| Verbs `show`, `find`, `new`, `ask`, `answer`, `render`, `doctor`, `backlog`, `analyze`, `audit` | Working |
 | The lint: section shape, entry shape, the tail, the fate, unique numbers, both caps, the questions file, the legacy line | Working |
-| The plugin: two skills, seven commands and respeak's include file | Working |
+| The plugin: two skills, eight commands and respeak's include file | Working |
 | The session provider in `doctor` | Working |
-
-Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. `answer` requires one of `--area`, `--amends` and `--no-entry`.
-
 
 ## Layout
 
@@ -299,7 +300,7 @@ assets/icon.svg            the project icon
 plugin/                    the plugin, self-contained: what an install copies
 plugin/skills/decisions/   the skill that consults and drafts
 plugin/skills/ask/         the skill that asks the owner: /decisions:ask
-plugin/commands/           show, find, new, answer, render, backlog, analyze
+plugin/commands/           show, find, new, answer, render, backlog, analyze, audit
 plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md imports it
 src/decisions.py           the runner
 plugin/lib/decisions/     the package, each module under a thousand lines
