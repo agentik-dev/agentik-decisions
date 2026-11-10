@@ -86,7 +86,7 @@ make doctor
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
-| `--version` | `agentik-decisions 0.16.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.16.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -276,7 +276,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.16.0`, rendered `2026-11-01`, `442` unittest cases.
+Status: version `0.16.1`, rendered `2026-11-01`, `446` unittest cases.
 
 | Surface | State |
 |---|---|
