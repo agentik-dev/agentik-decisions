@@ -1,6 +1,6 @@
 """`answer`: the owner's answer to question N, recorded (design d18 section 1.2).
 
-    answer N (--pick L | --other T) --source S [--text P]
+    answer N (--pick L | --other T) --source S [--text P | --add S]
            (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
@@ -10,7 +10,12 @@ both (d28): T that names an option (its label once `*` and backticks at either e
 case, a trailing ` (Recommended)` and a period are dropped) refuses `--other` and a
 `--pick` of another option; any other T refuses `--pick` and prints T, and under
 `--other X` the label is `Other: X; the owner's line: T` (`Other: X` when X is T,
-ignoring case). T never enters the ledger: `--text` stays the caller's. With `--area A` entry N is
+ignoring case). T never enters the ledger: `--text` stays the caller's. A line no
+part of its block takes (d30: a part is a label's or the **Report.** bold line and
+the lines under it to a blank, an option line under the third label, or the
+**Your answer:** line and all under it) refuses `--pick`, after an unknown one, and
+`--other X` takes it whatever T names, as `Other: X; the owner's line: W`, W those
+lines then T. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
@@ -18,15 +23,19 @@ A is stripped of spaces and leading `#`s, a newline in it and two prefix matches
 are refused,
 a name no heading matches is a new `### A`, last under `## In force`, and the
 success line names the heading. The title takes a period unless it ends in `?`
-or `!`. `--amends M` replaces entry M's paragraph with `--text`, the whole
-paragraph in force after the answer, adds to its tail an amendment and prints
-`replaced:` with the old paragraph; an entry whose tail is missing or does not
-open with a date is refused, and a paragraph under half the old one's length
-is refused unless `--shorter`, which is valid only with `--amends`; `--no-entry`
-writes no entry. One of the three is required: argparse refuses with exit 2.
+or `!`. At 25 entries in force `--area` is refused first, naming the ways out: a
+line under `## Superseded`, `--amends M` or `--no-entry`. `--amends M` replaces
+entry M's paragraph with `--text`, the whole paragraph in force after the answer,
+adds to its tail an amendment and prints `replaced:` with the old paragraph; an
+entry whose tail is missing or does not open with a date is refused, and a
+`--text` that drops a sentence of it, one not held whole, is refused and listed
+unless `--shorter`, which is valid only with `--amends`. `--add S` in place of
+`--text`, under `--amends M` alone, appends S to the paragraph as it stands and
+prints no `replaced:`. `--no-entry` writes no entry. One of the three is required: argparse refuses with exit 2.
 `--text` is the body only, in both modes (D22): `answer` writes the bold title
 and the `(DATE; source)` tail, and `--amends` keeps M's own, so a `--text` that
-opens with a bold title or ends in a dated tail is refused. Every run removes
+opens with a bold title or ends in a dated tail is refused, as is a `--text` or
+`--add` holding a `(` that opens with a date and never closes. Every run removes
 question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`. The
 run holds `.new.lock`, lints both texts (an open count over the cap, which the
 answer lowers, is no refusal), and writes both files or neither;
