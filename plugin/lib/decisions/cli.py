@@ -71,6 +71,7 @@ import sys
 
 from .analyze import cmd_analyze
 from .answer import cmd_answer
+from .audit import cmd_audit
 from .backlog import cmd_backlog
 from .ask import cmd_new
 from .selector import cmd_ask
@@ -192,6 +193,15 @@ def build_parser():
                          help="the window's end, 00:00:00 UTC; the default is now")
     analyze.add_argument("--json", action="store_true")
 
+    audit = subs.add_parser("audit", parents=[ledger],
+                            help="the ledger's retire and rewrite candidates; writes nothing")
+    audit.add_argument("repos", nargs="*", metavar="REPO",
+                       help="a repo of the tree P5 and P6 read; the default is the ledger's "
+                            "git top")
+    audit.add_argument("--tree", default=None, metavar="FILE",
+                       help='a file {"repos": [{"name": N, "path": P}]} naming the tree\'s repos')
+    audit.add_argument("--json", action="store_true")
+
     install = subs.add_parser("install-cli",
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
@@ -254,4 +264,5 @@ def cmd_install_cli(args, out, err):
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "analyze": cmd_analyze, "install-cli": cmd_install_cli}
+         "backlog": cmd_backlog, "analyze": cmd_analyze, "audit": cmd_audit,
+         "install-cli": cmd_install_cli}
