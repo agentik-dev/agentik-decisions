@@ -18,6 +18,8 @@ and every 7 days before it. A value it cannot measure prints `-` and a
 CLAUDE.md block, loaded on every turn, at the first-parent commit at or before
 `since` and `until`, null without a commit, a CLAUDE.md or a block; its text line,
 `block  X B to Y B, +D B`, `-` for a null end, is left out when both are (d32).
+The block is read from the commit's blob, so a CLAUDE.md that is a symlink reads
+as no block.
 
 It runs only `git rev-parse`, `log`, `rev-list` and `show`, each bounded at
 `common.GIT_TIMEOUT`; it writes no file, takes no lock and ignores `--ledger`.
