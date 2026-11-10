@@ -16,8 +16,11 @@ not detected.
 The tree is each REPO directory, plus the repos of `--tree FILE`, a file of the shape
 `{"repos": [{"name": N, "path": P}]}` (a relative path, or a name without one,
 resolves against the directory above the file's); with neither, the ledger's git top.
-A repo absent or that git cannot read prints `not read: <name>`; with no repo read, no
-entry is marked P5.
+A repo absent or that git cannot read prints `not read: <name>`, the tree row's name;
+with no repo read, no entry is marked P5 and P5 is named not detected. P5's files are
+those git grep finds holding the word `entry`, `entries` or an alias, so a citation
+wrapped across a line counts; a file that is not UTF-8 is read with replacement; `N to
+M` and `N-M` name every number from N to M.
 
 The Every session entries print first, then the other entries in force, each with
 the bytes its line costs in the block `render` writes into the CLAUDE.md beside the
@@ -54,6 +57,10 @@ WORD = re.compile(r"[a-z0-9]+")
 STOP = frozenset("a an the and or of to in on for by is are be its it one each every no not "
                  "with as at from this that what who which how where when s".split())
 ERE_SPECIAL = re.compile(r"([.^$*+?()\[\]{}|\\])")
+SPAN_TOKEN = re.compile(r"\d+|\bto\b|-", re.IGNORECASE)
+DATE = re.compile(r"\d{4}\s*-\s*\d{1,2}\s*-\s*\d{1,2}")
+RANGE_MAX = 99
+NOT_DETECTED_P5 = "not detected: P5 (an entry nothing cites): no repo of the tree was read"
 NOT_DETECTED = ("not detected: P7 (a subject that is process, not product; hq entry 7): "
                 "a reader confirms it")
 OWNER = ("audit edits nothing. The owner acts in one batch: `agentik decisions new` puts each "
@@ -80,38 +87,57 @@ def cites_pattern(aliases):
 
 
 def cited_numbers(text, pattern):
+    """The numbers `text` cites. `N to M` and `N-M` name every number from N to M when
+    N < M <= N + RANGE_MAX; a date's `YYYY-MM-DD` names its parts only."""
     found = set()
     for match in pattern.finditer(text):
-        found.update(int(n) for n in re.findall(r"\d+", match.group(1)))
+        group = match.group(1)
+        spans = not DATE.search(group)
+        last, ranged = None, False
+        for token in SPAN_TOKEN.findall(group):
+            if not token.isdigit():
+                ranged = True
+                continue
+            n = int(token)
+            if spans and ranged and last is not None and last < n <= last + RANGE_MAX:
+                found.update(range(last, n + 1))
+            else:
+                found.add(n)
+            last, ranged = n, False
     return found
 
 
 def tree_of(args, ledger_path):
-    """(repos to read, repos absent), from REPO..., `--tree FILE`, else the ledger's top."""
+    """(repos to read, repos absent, {path: the name its `not read:` line prints}), from
+    REPO..., `--tree FILE`, else the ledger's top. A tree row's name is its `name`."""
     names = list(getattr(args, "repos", None) or [])
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("audit: %s is not a directory" % name)
     repos, missing = [os.path.realpath(n) for n in names], []
+    shown = {r: os.path.basename(r) for r in repos}
     tree = getattr(args, "tree", None)
     if tree is not None:
         if not os.path.isfile(tree):
             raise Refusal("audit: --tree %s is not a file" % tree)
         try:
             rows = json.loads(read_text(tree))["repos"]
-            wanted = [os.path.expanduser(row.get("path") or row["name"]) for row in rows]
+            wanted = [(os.path.expanduser(row.get("path") or row["name"]), str(row["name"]))
+                      for row in rows]
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise Refusal('audit: --tree %s is not {"repos": [{"name": N, "path": P}]}: %s'
                           % (tree, exc))
         root = os.path.dirname(os.path.dirname(os.path.realpath(tree)))
-        for path in wanted:
+        for path, name in wanted:
             path = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
             if path not in repos and path not in missing:
                 (repos if os.path.isdir(path) else missing).append(path)
+                shown[path] = name
     if not names and tree is None:
         here = os.path.dirname(os.path.realpath(ledger_path))
         repos = [os.path.realpath(git_top(here) or here)]
-    return repos, missing
+        shown = {repos[0]: os.path.basename(repos[0])}
+    return repos, missing, shown
 
 
 def grep_files(repo, ere, exclude):
@@ -136,7 +162,9 @@ def citations(entries, real, top, repos):
     cited = set()
     for entry in entries:
         cited |= cited_numbers(entry.text, pattern) - {entry.number}
-    ere = "(entry|entries|%s)[[:space:]]+[0-9]" % "|".join(
+    # The word alone picks a file, so `entry` ending a line and its number on the next
+    # still pick it; the Python pattern decides what is cited (d33 fold, F2).
+    ere = "(entry|entries|%s)([[:space:]]|$)" % "|".join(
         ERE_SPECIAL.sub(r"\\\1", a) for a in aliases)
     unread = []
     for repo in repos:
@@ -146,10 +174,13 @@ def citations(entries, real, top, repos):
             unread.append(repo)
             continue
         for name in files:
+            # A file that is not UTF-8 is read with replacement: its citations count (F1).
             try:
-                cited |= cited_numbers(read_text(name), pattern)
-            except Refusal:
+                with open(name, encoding="utf-8", errors="replace") as handle:
+                    text = handle.read()
+            except OSError:
                 continue
+            cited |= cited_numbers(text, pattern)
     return cited, unread
 
 
@@ -257,11 +288,15 @@ def audit(path, repos, missing, verbs):
             "at_cap": len(in_force) >= IN_FORCE_CAP, "every_session": len(every),
             "every_session_cap": EVERY_SESSION_CAP,
             "block_bytes": render.block_bytes(generated, crlf) or 0,
-            "candidates": candidates, "leads": leads, "not_detected": ["P7"],
+            "candidates": candidates, "leads": leads,
+            "not_detected": ["P7"] if any_read else ["P5", "P7"],
             "tree": [r for r in repos if r not in unread], "not_read": missing + unread}
 
 
-def as_text(v):
+def as_text(v, names=None):
+    """The text view; `names` maps a repo's path to the name its row gives it."""
+    def name(path):
+        return (names or {}).get(path) or os.path.basename(path)
     lines = ["audit: %s: %d of %d in force%s, %d of %d under Every session; the block is "
              "%s B, loaded on every turn" % (
                  display(v["ledger"]), v["in_force"], v["cap"],
@@ -279,17 +314,20 @@ def as_text(v):
         lines.append("P8 %d %s / %d %s: share %s" % (
             lead["numbers"][0], lead["titles"][0], lead["numbers"][1], lead["titles"][1],
             ", ".join(lead["shared"])))
+    if "P5" in v["not_detected"]:
+        lines.append(NOT_DETECTED_P5)
     lines.append(NOT_DETECTED)
-    lines.append("tree: %s" % (", ".join(os.path.basename(r) for r in v["tree"]) or "none"))
+    lines.append("tree: %s" % (", ".join(name(r) for r in v["tree"]) or "none"))
     if v["not_read"]:
-        lines.append("not read: %s" % ", ".join(os.path.basename(r) for r in v["not_read"]))
+        lines.append("not read: %s" % ", ".join(name(r) for r in v["not_read"]))
     lines.append(OWNER)
     return "\n".join(lines) + "\n"
 
 
 def cmd_audit(args, path, out, err):
     from .cli import VERBS
-    repos, missing = tree_of(args, path)
+    repos, missing, names = tree_of(args, path)
     v = audit(path, repos, missing, set(VERBS))
-    out.write(json.dumps(v, indent=2) + "\n" if getattr(args, "json", False) else as_text(v))
+    out.write(json.dumps(v, indent=2) + "\n" if getattr(args, "json", False)
+              else as_text(v, names))
     return 0
