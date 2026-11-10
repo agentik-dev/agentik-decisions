@@ -1,4 +1,5 @@
-"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor and backlog.
+"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog
+and analyze.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -29,9 +30,15 @@ Verbs
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
                                   repo or `suite`; writes nothing
+    analyze [churn] [REPO...] [--since Nd|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
+                                  churn from each repo's git history over the
+                                  window (14 days to now by default): the share
+                                  of lines in records, record commits a landing,
+                                  commits a charter, NICE_TO_HAVE.md's rows;
+                                  writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog` reads no ledger and ignores it. `--version` prints
+working directory; `backlog` and `analyze` read no ledger and ignore it. `--version` prints
 the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -40,14 +47,17 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
-       read; `answer` whose block write failed after both files were written (a
-       warning on stderr names `agentik decisions render`)
+       read; `analyze` whenever its view printed; `answer` whose block write failed
+       after both files were written (a warning on stderr names `agentik decisions
+       render`)
     1  `render`: a lint problem, or with --check a stale block
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
        changes the exit; a `--ledger` naming an absent file fails), or a `backlog`
-       REPO that is not a directory or a file it cannot read as UTF-8
+       REPO that is not a directory or a file it cannot read as UTF-8, or an
+       `analyze` window it cannot read or argument that is neither an analysis
+       nor a directory
 """
 
 import argparse
@@ -55,6 +65,7 @@ import contextlib
 import os
 import sys
 
+from .analyze import cmd_analyze
 from .answer import cmd_answer
 from .backlog import cmd_backlog
 from .ask import cmd_new
@@ -160,6 +171,18 @@ def build_parser():
                               "is the repo's name less `agentik-`, or `suite`")
     backlog.add_argument("--json", action="store_true")
 
+    analyze = subs.add_parser("analyze", parents=[ledger],
+                              help="what a repo's history says: churn, from git; writes nothing")
+    analyze.add_argument("repos", nargs="*", metavar="[churn] REPO",
+                         help="the analysis, `churn`, then each repo's directory; the "
+                              "default is every analysis of the git top level")
+    analyze.add_argument("--since", default=None, metavar="Nd|YYYY-MM-DD",
+                         help="the window's start, 00:00:00 UTC; the default is 14d before "
+                              "--until")
+    analyze.add_argument("--until", default=None, metavar="YYYY-MM-DD",
+                         help="the window's end, 00:00:00 UTC; the default is now")
+    analyze.add_argument("--json", action="store_true")
+
     install = subs.add_parser("install-cli",
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
@@ -203,6 +226,9 @@ def main(argv=None, out=None, err=None):
         if args.verb == "backlog":
             # `backlog` reads NICE_TO_HAVE.md and HANDOFF.md, never a ledger.
             return cmd_backlog(args, out, err)
+        if args.verb == "analyze":
+            # `analyze` reads git and NICE_TO_HAVE.md, never a ledger.
+            return cmd_analyze(args, out, err)
         path = locate(getattr(args, "ledger", None), os.getcwd())
         return VERBS[args.verb](args, path, out, err)
     except Refusal as exc:
@@ -219,4 +245,4 @@ def cmd_install_cli(args, out, err):
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "install-cli": cmd_install_cli}
+         "backlog": cmd_backlog, "analyze": cmd_analyze, "install-cli": cmd_install_cli}

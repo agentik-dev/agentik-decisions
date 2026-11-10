@@ -40,6 +40,7 @@ assets/*: sibling                       # the icon's file name
 design/d17-four-verbs.md: sibling       # the design names the plugin
 design/d18-one-flow.md: sibling         # the design names the plugin
 design/d23-backlog-view.md: sibling     # the design names the plugin
+design/d29-churn.md: sibling            # the design names the suite's repos it measured
 design/packets/*: sibling               # the packets name the plugin and its repo
 design/readme/*: sibling                # the README's source, the same names
 history/design/*: sibling               # the design records name the plugin
