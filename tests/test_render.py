@@ -524,3 +524,13 @@ class T2(Hermetic):
             self.assert_refused()
             self.git("update-index", flag.replace("--", "--no-"), "DECISIONS.md")
             self.git("checkout", "--", "DECISIONS.md")
+
+    def test_fold_writes_nothing_for_a_refused_target(self):
+        for into, why in ((self.ledger, "is the ledger itself"),
+                          (self.target, "GENERATED markers are not one BEGIN")):
+            if into == self.target:
+                self.write("%s\nno end\n" % BEGIN)
+            code, out, err = self.run_cli("--fold-tails", "--into", into)
+            self.assertEqual((code, out), (2, ""))
+            self.assertIn(why, err)
+            self.assertEqual(self.read(), FIXTURE)

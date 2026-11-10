@@ -194,15 +194,16 @@ def cmd_render(args, path, out, err):
         return 1
     if args.lint:
         return 0
-    if getattr(args, "fold_tails", False):
-        cmd_fold(path, out, err)
-        ledger = load(path)
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if is_ledger(target, path):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
+    if getattr(args, "fold_tails", False):
+        apply(old, "", display(target))  # a target refused is refused before the fold
+        cmd_fold(path, out, err)
+        ledger = load(path)
     new = apply(old, block(ledger, path, target), display(target))
     if args.check:
         if new == old:
