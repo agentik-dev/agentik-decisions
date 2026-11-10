@@ -554,6 +554,7 @@ class T2(Hermetic):
 LOADED = "the block is loaded on every turn"
 LONG = ("Each entry is one paragraph, written for a human who acts on it without opening the "
         "source.")
+WIDE = LONG.replace("paragraph,", "paragraph, \u00a7 2 \u2014")
 
 
 def held(text):
@@ -561,6 +562,15 @@ def held(text):
     lines = text.splitlines(keepends=True)
     marks = [i for i, line in enumerate(lines) if line.strip() in (BEGIN, END)]
     return len("".join(lines[marks[0]:marks[1] + 1]).encode()) if len(marks) == 2 else 0
+
+
+def on_disk(path):
+    """The bytes of the block in the file at `path` as they are on disk, line ends kept."""
+    with open(path, "rb") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    marks = [i for i, line in enumerate(lines) if line.strip() in (BEGIN.encode(),
+                                                                    END.encode())]
+    return len(b"".join(lines[marks[0]:marks[1] + 1])) if len(marks) == 2 else 0
 
 
 class TurnRender(Base):
@@ -576,12 +586,14 @@ class TurnRender(Base):
         line = self.line("1. ")
         with open(self.ledger, encoding="utf-8") as handle:
             text = handle.read()
-        self.write(text.replace(line, line.replace("English.", "English. " + LONG)),
+        self.write(text.replace(line, line.replace("English.", "English. " + WIDE)),
                    self.ledger)
         code, out, err = self.run_cli()
         self.assertEqual(code, 0, err)
         after = held(self.read())
-        self.assertEqual(after - size, len(LONG) + 1)
+        # sizes are bytes: WIDE's `§` and em dash take 2 and 3 bytes each
+        self.assertEqual(after - size, len(WIDE.encode()) + 1)
+        self.assertEqual(after, on_disk(self.target))
         self.assertEqual(out.replace(self.tmp + os.sep, ""),
                          "render: wrote CLAUDE.md: %d B to %d B, +%d B; %s\n"
                          % (size, after, after - size, LOADED))
@@ -590,12 +602,16 @@ class TurnRender(Base):
         self.assertNotIn(" B to ", out)
 
     def test_every_turn_lint_prints_size(self):
+        line = self.line("1. ")
+        self.write(self.read(self.ledger).replace(line, line.replace("English.",
+                                                                     "English. " + WIDE)),
+                   self.ledger)
         self.write("# Notes\n")
         self.assertEqual(self.run_cli()[0], 0)
         other = os.path.join(self.tmp, "other.md")
         self.assertEqual(self.run_cli("--into", other)[0], 0)
         for argv, name in (((), "CLAUDE.md"), (("--into", other), "other.md")):
-            size = held(self.read(other if argv else None))
+            size = on_disk(other if argv else self.target)
             with self.subTest(argv=argv):
                 code, out, err = self.run_cli("--lint", *argv)
                 self.assertEqual((code, err), (0, ""))
@@ -606,3 +622,13 @@ class TurnRender(Base):
         code, out, _ = self.run_cli("--lint")
         self.assertEqual(code, 1)
         self.assertNotIn("is loaded on every turn", out)
+
+    def test_every_turn_lint_gives_no_size_for_a_refused_target(self):
+        self.write("# Notes\n")
+        self.assertEqual(self.run_cli()[0], 0)
+        self.write(self.read() * 2)  # two blocks: render refuses this target
+        code, out, err = self.run_cli("--lint")
+        self.assertEqual((code, out), (0, ""))
+        self.assertEqual(len(err.splitlines()), 1, err)
+        self.assertIn("markers are not one block, so no size", err)
+        self.assertEqual(self.run_cli()[0], 2)

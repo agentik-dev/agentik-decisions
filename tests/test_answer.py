@@ -940,6 +940,7 @@ GROWTH = re.compile(r": (\d+) B to (\d+) B, ([+-]\d+) B; " + LOADED)
 OLD1 = "Every entry reads as plain present-tense English."
 LONG = ("Each entry is one paragraph, written for a human who acts on it without opening the "
         "source.")
+WIDE = LONG.replace("paragraph,", "paragraph, \u00a7 2 \u2014")
 
 
 def held(text):
@@ -952,6 +953,14 @@ def held(text):
 def raw(path):
     with open(path, "rb") as handle:
         return handle.read()
+
+
+def on_disk(path):
+    """The bytes of the block in the file at `path` as they are on disk, line ends kept."""
+    lines = raw(path).splitlines(keepends=True)
+    marks = [i for i, line in enumerate(lines) if line.strip() in (BEGIN.encode(),
+                                                                    END.encode())]
+    return len(b"".join(lines[marks[0]:marks[1] + 1])) if len(marks) == 2 else 0
 
 
 class TurnAnswer(Base):
@@ -1007,10 +1016,12 @@ class TurnAnswer(Base):
     def test_every_turn_amends_refuses_growth(self):
         size = held(self.read(self.claude))
         added, err = self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                                  "--add", LONG)
+                                  "--add", WIDE)
+        # sizes are bytes: WIDE's `§` and em dash take 2 and 3 bytes each
+        self.assertIn(", %d B to %d B, which" % (size, size + added), err)
         self.assertIn("; 30 B of it is the entry's tail note; nothing written", err)
         self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                     "--text", OLD1 + " " + LONG)
+                     "--text", OLD1 + " " + WIDE)
         # the tail note is paid every turn too: a same-length reword of an entry never
         # amended grows the block by the note alone, and is refused
         same = OLD1.replace("plain", "clear")
@@ -1020,7 +1031,7 @@ class TurnAnswer(Base):
         self.assertEqual(added_same, 30)
         self.assertIn("30 B of it is the entry's tail note", err)
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                                     "--add", LONG, "--every-turn")
+                                     "--add", WIDE, "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.grew(out, size), added)
 
@@ -1041,6 +1052,52 @@ class TurnAnswer(Base):
                                      "--area", "Build")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.grew(out, size), len("- 9 Pin the interpreter (Build)\n"))
+
+    def test_every_turn_heading_matched_in_any_case(self):
+        # a ledger whose heading is `### every session`, lower case, is still Every session
+        self.write(self.ledger, self.read(self.ledger).replace("### Every session",
+                                                               "### every session"))
+        self.render()
+        self.refused("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
+                     "--area", "Every session")
+        self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1", "--add", LONG)
+
+    def test_every_turn_crlf_sizes_are_the_bytes_on_disk(self):
+        with open(self.claude, "wb") as handle:
+            handle.write(b"# Notes\r\n")
+        out, err = io.StringIO(), io.StringIO()
+        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=out, err=err),
+                         0, err.getvalue())
+        size = on_disk(self.claude)
+        self.assertIn(b"\r\n" + BEGIN.encode(), raw(self.claude))
+        self.assertIn(": 0 B to %d B, +%d B;" % (size, size), out.getvalue())
+        out = io.StringIO()
+        self.assertEqual(decisions.main(["render", "--lint", "--ledger", self.ledger], out=out,
+                                        err=io.StringIO()), 0)
+        self.assertIn(" is %d B; it is loaded" % size, out.getvalue())
+        added, err = self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                  "--add", WIDE)
+        self.assertIn(", %d B to %d B, which" % (size, size + added), err)
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--add", WIDE, "--every-turn")
+        self.assertEqual(code, 0, err)
+        after = on_disk(self.claude)
+        self.assertEqual(after - size, added)
+        self.assertIn(": %d B to %d B, +%d B;" % (size, after, after - size), out)
+
+    def test_every_turn_lint_refuses_before_the_check(self):
+        # a result that fails the lint is refused on the lint, never told to pass --every-turn
+        text = self.read(self.ledger)
+        start = text.index("### Every session")
+        self.write(self.ledger, text[:start] + text[text.index("### ", start + 4):])
+        self.render()
+        before = self.files()
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
+                                     "--area", "Every session")
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("the result fails the lint; nothing written", err)
+        self.assertNotIn("--every-turn", err)
+        self.assertEqual(self.files(), before)
 
     def test_every_turn_same_or_smaller_passes(self):
         code, _, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
