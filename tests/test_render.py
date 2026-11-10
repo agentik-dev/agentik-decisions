@@ -501,11 +501,15 @@ class T2(Hermetic):
         self.assert_refused()
 
     def test_fold_refuses_a_changed_ledger_named_in_another_case(self):
-        self.write(FIXTURE.replace("one table.", "one table, never a list."), self.ledger)
-        self.ledger = os.path.join(self.tmp, "decisions.md")
-        if not os.path.exists(self.ledger):
-            self.skipTest("a case-sensitive disk")
-        self.assert_refused()
+        changed = FIXTURE.replace("one table.", "one table, never a list.")
+        self.write(changed, self.ledger)
+        real, self.ledger = self.ledger, os.path.join(self.tmp, "decisions.md")
+        # no skip: on a case-sensitive disk the name is no file, refused as well
+        code, out, err = self.run_cli("--fold-tails")
+        self.assertEqual((code, out), (2, ""))
+        if os.path.exists(self.ledger):
+            self.assertIn("HEAD does not hold", err)
+        self.assertEqual(self.read(real), changed)
 
     def test_fold_refuses_through_a_tracked_link(self):
         real = os.path.join(self.tmp, "real")
