@@ -13,7 +13,9 @@ or its `(date; source)` tail, which `answer` writes; a `--text` holding either
 is refused. It is needed except with `--no-entry`; with `--amends M` it is the
 whole paragraph in force after the answer, every sentence that stays with the
 change made: one that drops a sentence is refused unless `--shorter`, and
-`--add S` in its place appends S to the paragraph as it stands. A line no part of its
+`--add S` in its place appends S to the paragraph as it stands. `--amends M`
+writes M's tail in form T2, its first date, a count of the older amendments and
+this one whole, and prints the tail it cut as `tail was:`. A line no part of its
 block takes refuses `--pick`; `--other` keeps it in the Answered line.
 One of `--area`, `--amends` and `--no-entry` is required. `--area A` resolves
 as `agentik-decisions show --area A` does, a unique prefix included, but among the

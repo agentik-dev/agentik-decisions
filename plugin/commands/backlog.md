@@ -5,4 +5,5 @@ allowed-tools: Bash(agentik-decisions *)
 ---
 
 Run `agentik-decisions backlog $ARGUMENTS` and relay its output verbatim. It writes
-nothing. An item printed `S4?` carries no level and is placed as S4.
+nothing. An item printed `S4?` carries no level and is placed as S4. A closed lead
+(`**Closed`, `~~`, `[x]`) is no item: `N closed, not placed` counts it.
