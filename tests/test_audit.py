@@ -353,3 +353,72 @@ class Audit(Hermetic):
         self.assertEqual(other["bytes"], len("- 3 Moved rule (The work)\r\n".encode()))
         self.assertEqual(view["block_bytes"], render.block_bytes(block, True))
         self.assertNotEqual(view["block_bytes"], render.block_bytes(block, False))
+
+
+# d34: every Every session entry prints with its bytes, marked or not;
+# `Other entries in force:` keeps its marked entries only; `--json` gains
+# `every_session_entries` and keeps every key it had.
+
+D33_KEYS = ["at_cap", "block_bytes", "candidates", "cap", "every_session",
+            "every_session_cap", "in_force", "leads", "ledger", "not_detected",
+            "not_read", "tree"]
+
+
+class AuditEvery(Hermetic):
+
+    def setUp(self):
+        super().setUp()
+        self.top = tempfile.mkdtemp(prefix="decisions-d34-")
+        self.addCleanup(shutil.rmtree, self.top, True)
+        self.repo = os.path.join(self.top, "ledger-hq")
+        tree_repo(self.repo, {"DECISIONS.md": HEAD + EVERY + OTHERS,
+                              "docs/here.md": "x\n",
+                              "notes.md": "See entry 1, entries 2, 3 and 5; hq 6.\n"})
+        self.ledger = os.path.join(self.repo, "DECISIONS.md")
+
+    def text(self, *argv, ledger=None):
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["--ledger", ledger or self.ledger, "audit"] + list(argv),
+                              out=out, err=err)
+        self.assertEqual(code, 0, err.getvalue())
+        return out.getvalue()
+
+    def cost(self, title):
+        block = render.block(parse(read_text(self.ledger)),
+                             self.ledger, os.path.join(self.repo, "CLAUDE.md"))
+        line = [x for x in block.splitlines() if x.startswith(title)][0]
+        return len(line.encode()) + 1
+
+    def test_every_entry_under_every_session_prints_marked_or_not(self):
+        lines = self.text().splitlines()
+        start = lines.index("Every session, paid every turn:")
+        end = lines.index("Other entries in force:")
+        section = lines[start + 1:end]
+        self.assertEqual(len(section), 2)
+        self.assertTrue(section[0].startswith(
+            "1 Short rule  %d B  P2 amended 3 times" % self.cost("1. **Short rule.**")))
+        self.assertEqual(section[1], "2 Clean rule  %d B" % self.cost("2. **Clean rule.**"))
+        # `Other entries in force:` keeps its marked entries only
+        out = "\n".join(lines)
+        others = out[out.index("Other entries in force:"):out.index("Leads, for a reader")]
+        self.assertNotIn("5 Mentions move", others)
+        self.assertNotIn("2 Clean rule", others)
+        self.assertIn("3 Moved rule", others)
+
+    def test_json_gains_every_session_entries_and_keeps_its_keys(self):
+        view = json.loads(self.text("--json"))
+        self.assertEqual(sorted(set(view) - {"every_session_entries"}), D33_KEYS)
+        rows = view["every_session_entries"]
+        self.assertEqual([(r["number"], r["bytes"], [m["mark"] for m in r["marks"]])
+                          for r in rows],
+                         [(1, self.cost("1. **Short rule.**"), ["P2", "P4"]),
+                          (2, self.cost("2. **Clean rule.**"), [])])
+        self.assertEqual(sorted(rows[1]), ["area", "bytes", "every_session", "marks",
+                                           "number", "title"])
+        self.assertNotIn(2, [c["number"] for c in view["candidates"]])
+
+    def test_no_every_session_entry_prints_none(self):
+        path = os.path.join(self.top, "plain", "DECISIONS.md")
+        tree_repo(os.path.dirname(path), {"DECISIONS.md": HEAD + OTHERS})
+        self.assertIn("Every session, paid every turn: none\n", self.text(ledger=path))
+        self.assertEqual(json.loads(self.text("--json", ledger=path))["every_session_entries"], [])
