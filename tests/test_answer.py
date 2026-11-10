@@ -10,6 +10,7 @@ from unittest import mock
 
 import decisions
 from decisions.ledger import LEGACY
+from decisions.render import BEGIN, END
 from tests.hermetic import SAMPLE
 from tests.test_new import PARTS, SAMPLE_QUESTIONS, Base, sha
 
@@ -927,3 +928,140 @@ class T2Answer(Base):
         self.assertIn("tail was: (2026-09-02; the sample)\n", out)
         self.assertEqual(decisions.main(["render", "--lint", "--ledger", self.ledger],
                                         out=io.StringIO(), err=io.StringIO()), 0)
+
+
+# d32: the generated block is loaded on every turn, so its growth is shown and, under
+# `Every session`, refused without `--every-turn`.
+LOADED = "the block is loaded on every turn"
+GROWTH = re.compile(r": (\d+) B to (\d+) B, ([+-]\d+) B; " + LOADED)
+OLD1 = "Every entry reads as plain present-tense English."
+LONG = ("Each entry is one paragraph, written for a human who acts on it without opening the "
+        "source.")
+
+
+def held(text):
+    """The bytes of the block between the markers in `text`, markers included; 0 without."""
+    lines = text.splitlines(keepends=True)
+    marks = [i for i, line in enumerate(lines) if line.strip() in (BEGIN, END)]
+    return len("".join(lines[marks[0]:marks[1] + 1]).encode()) if len(marks) == 2 else 0
+
+
+def raw(path):
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
+class TurnAnswer(Base):
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy(SAMPLE_QUESTIONS, self.questions)
+        self.claude = os.path.join(self.tmp, "CLAUDE.md")
+        self.write(self.claude, "# Notes\n")
+        self.render()
+        self.new("Pin the interpreter")
+
+    def new(self, title):
+        argv = list(PARTS)
+        argv[argv.index("--title") + 1] = title
+        code, _, err = self.run_cli(*argv)
+        self.assertEqual(code, 0, err)
+
+    def render(self):
+        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
+                                        err=io.StringIO()), 0)
+
+    def answer(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["answer"] + list(argv) + ["--ledger", self.ledger],
+                              out=out, err=err)
+        return code, out.getvalue(), err.getvalue()
+
+    def files(self):
+        return [raw(p) for p in (self.ledger, self.questions, self.claude)]
+
+    def refused(self, *argv):
+        before = self.files()
+        code, out, err = self.answer(*argv)
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertRegex(err, r"adds \d+ B to the block, \d+ B to \d+ B, which is loaded on "
+                              r"every turn")
+        for part in ("outside `Every session`", "by title only", "--every-turn",
+                     "nothing written"):
+            self.assertIn(part, err)
+        self.assertEqual(self.files(), before)
+        return int(re.search(r"adds (\d+) B", err).group(1)), err
+
+    def grew(self, out, before):
+        """The growth line `answer` printed, held to the CLAUDE.md block before and after."""
+        found = GROWTH.search(out)
+        self.assertIsNotNone(found, out)
+        after = held(self.read(self.claude))
+        self.assertIn("answer: rewrote the block in", out)
+        self.assertEqual([int(g) for g in found.groups()], [before, after, after - before])
+        return after - before
+
+    def test_every_turn_amends_refuses_growth(self):
+        size = held(self.read(self.claude))
+        added, err = self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                  "--add", LONG)
+        self.assertIn("; 30 B of it is the entry's tail note; nothing written", err)
+        self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                     "--text", OLD1 + " " + LONG)
+        # the tail note is paid every turn too: a same-length reword of an entry never
+        # amended grows the block by the note alone, and is refused
+        same = OLD1.replace("plain", "clear")
+        self.assertEqual(len(same), len(OLD1))
+        added_same, err = self.refused("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                       "--text", same, "--shorter")
+        self.assertEqual(added_same, 30)
+        self.assertIn("30 B of it is the entry's tail note", err)
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--add", LONG, "--every-turn")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.grew(out, size), added)
+
+    def test_every_turn_area_refuses_growth(self):
+        for area in ("Every session", "every session"):
+            with self.subTest(area=area):
+                _, err = self.refused("9", "--pick", "pin", "--source", "s", "--text",
+                                      "Pin it.", "--area", area)
+                self.assertNotIn("tail note", err)
+        os.remove(self.claude)  # the relay copies the same block: measured from the ledger
+        self.files = lambda: [raw(p) for p in (self.ledger, self.questions)]
+        self.refused("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
+                     "--area", "Every session")
+        self.write(self.claude, "# Notes\n")
+        self.render()
+        size = held(self.read(self.claude))
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
+                                     "--area", "Build")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.grew(out, size), len("- 9 Pin the interpreter (Build)\n"))
+
+    def test_every_turn_same_or_smaller_passes(self):
+        code, _, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                   "--add", LONG, "--every-turn")
+        self.assertEqual(code, 0, err)
+        size = held(self.read(self.claude))
+        self.new("Trim it")
+        code, out, err = self.answer("10", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--text", OLD1, "--shorter")
+        self.assertEqual(code, 0, err)
+        self.assertLess(self.grew(out, size), 0)
+        size = held(self.read(self.claude))
+        same = OLD1.replace("plain", "clear")
+        self.assertEqual(len(same), len(OLD1))
+        self.new("Reword it")
+        code, out, err = self.answer("11", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--text", same, "--shorter")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.grew(out, size), 0)
+
+    def test_every_turn_flag_needs_an_entry(self):
+        before = self.files()
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--no-entry",
+                                     "--every-turn")
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("--every-turn is valid only with --area or --amends", err)
+        self.assertEqual(self.files(), before)

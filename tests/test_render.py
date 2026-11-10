@@ -5,6 +5,7 @@ nothing, and the lint first in every mode."""
 import hashlib
 import io
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -538,3 +539,61 @@ class T2(Hermetic):
             self.assertEqual((code, out), (2, ""))
             self.assertIn(why, err)
             self.assertEqual(self.read(), FIXTURE)
+
+
+# d32: the block is loaded on every turn; render shows its growth and --lint its size.
+LOADED = "the block is loaded on every turn"
+LONG = ("Each entry is one paragraph, written for a human who acts on it without opening the "
+        "source.")
+
+
+def held(text):
+    """The bytes of the block between the markers in `text`, markers included; 0 without."""
+    lines = text.splitlines(keepends=True)
+    marks = [i for i, line in enumerate(lines) if line.strip() in (BEGIN, END)]
+    return len("".join(lines[marks[0]:marks[1] + 1]).encode()) if len(marks) == 2 else 0
+
+
+class TurnRender(Base):
+
+    def test_every_turn_render_prints_bytes(self):
+        self.write("# Notes\n")
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 0, err)
+        size = held(self.read())
+        self.assertEqual(out.replace(self.tmp + os.sep, ""),
+                         "render: wrote CLAUDE.md: 0 B to %d B, +%d B; %s\n"
+                         % (size, size, LOADED))
+        line = self.line("1. ")
+        with open(self.ledger, encoding="utf-8") as handle:
+            text = handle.read()
+        self.write(text.replace(line, line.replace("English.", "English. " + LONG)),
+                   self.ledger)
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 0, err)
+        after = held(self.read())
+        self.assertEqual(after - size, len(LONG) + 1)
+        self.assertEqual(out.replace(self.tmp + os.sep, ""),
+                         "render: wrote CLAUDE.md: %d B to %d B, +%d B; %s\n"
+                         % (size, after, after - size, LOADED))
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 0, err)
+        self.assertNotIn(" B to ", out)
+
+    def test_every_turn_lint_prints_size(self):
+        self.write("# Notes\n")
+        self.assertEqual(self.run_cli()[0], 0)
+        other = os.path.join(self.tmp, "other.md")
+        self.assertEqual(self.run_cli("--into", other)[0], 0)
+        for argv, name in (((), "CLAUDE.md"), (("--into", other), "other.md")):
+            size = held(self.read(other if argv else None))
+            with self.subTest(argv=argv):
+                code, out, err = self.run_cli("--lint", *argv)
+                self.assertEqual((code, err), (0, ""))
+                self.assertRegex(out, r"^render: the block for \S*%s is %d B; it is loaded on "
+                                      r"every turn\n$" % (re.escape(name), size))
+        with open(self.ledger, "a", encoding="utf-8") as handle:
+            handle.write("\n9. **Broken entry** no tail\n")
+        code, out, _ = self.run_cli("--lint")
+        self.assertEqual(code, 1)
+        self.assertNotIn("is loaded on every turn", out)
