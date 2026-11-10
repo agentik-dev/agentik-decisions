@@ -82,10 +82,11 @@ make doctor
 | `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
 | `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
+| `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
-| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
+| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed; `not measured:` where it cannot; writes nothing |
-| `--version` | `agentik-decisions 0.14.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.15.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -147,7 +148,7 @@ A sitting without AskUserQuestion runs `ask` for the render alone; the owner ans
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
-`--amends M` replaces entry M's paragraph, keeps its tail whole and appends one amendment to it, and exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
+`--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`: the first date, a count of the older amendments, then its own whole; the tail it cut prints as `tail was:`, and `git log -p -S'amended A' -- DECISIONS.md` finds an older amendment whole on a `-` line. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
 At 25 entries in force, `--area` exits 2 first and names the ways out: a line under `## Superseded`, `--amends M` or `--no-entry`.
@@ -157,7 +158,7 @@ A `--into` target that is the ledger itself exits 2 before anything is written.
 Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
 
 `render` lints first in every mode: the section shape, the entry shape, unique numbers and both caps.
-An entry's tail opens with its date and names a source after it, where `amended DATE` names none; its body is more than its tail; its bold title and its tail each appear once; a Proposed line's tail names `OPEN-QUESTIONS.md`; and a Superseded line holds a date and names its fate.
+An entry's tail opens with its date and names a source after it, where `amended DATE` and `amended K times, A to B` name none; its body is more than its tail; its bold title and its tail each appear once; a Proposed line's tail names `OPEN-QUESTIONS.md`; and a Superseded line holds a date and names its fate.
 After an unknown `## ` heading no entry belongs to the section or the area before it.
 When an `OPEN-QUESTIONS.md` sits beside the ledger, its first heading starts `# Decisions for the owner`, at most five questions are open, each block holds the four labels in order, 2 to 4 options with the first alone recommended and no two labels equal ignoring case, and an answer line, no two blocks share a number, and each question has its Proposed line; front matter and a `## ` line inside a code fence are skipped.
 Lines under `## Decided without asking` are `- ` bullets after an optional paragraph, and each line under `## Answered` ends in `(DATE; source)`.
@@ -176,7 +177,7 @@ Exit codes:
 |---|---|
 | 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` whenever its view printed; `answer` whose block write failed after both files were written, with its warning |
 | 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory; a `warn` never changes the exit |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
 
 ## The plugin
 
@@ -274,7 +275,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.14.0`, rendered `2026-11-01`, `419` unittest cases.
+Status: version `0.15.1`, rendered `2026-11-01`, `435` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -285,7 +286,6 @@ Status: version `0.14.0`, rendered `2026-11-01`, `419` unittest cases.
 
 Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
 
-Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
 
 ## Layout
 

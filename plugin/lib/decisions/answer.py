@@ -53,7 +53,8 @@ import shlex
 from . import ask, questions
 from .common import Refusal, commit_texts, held, read_text, write_text
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
-                     bold_title, display, dropped, final_parenthetical, load, parse, repeats,
+                     bold_title, display, dropped, final_parenthetical, folded, load, parse,
+                     repeats,
                      sentences, unclosed)
 from .lookup import pick_area
 from .render import BEGIN, END, TARGET, apply, block, is_ledger
@@ -123,8 +124,8 @@ def amend_entry(text, ledger, number, paragraph, amendment, shorter=False, add=N
                           "or --shorter to let these go; nothing written:\n%s"
                           % (number, len(lost), len(sentences(ask.clean(old))), "\n".join(lost)))
     lines = text.splitlines(keepends=True)
-    lines[entry.line - 1] = "%d. **%s** %s (%s; amended %s)\n" % (
-        number, titled.group(1), paragraph, tail, amendment)
+    lines[entry.line - 1] = "%d. **%s** %s (%s)\n" % (
+        number, titled.group(1), paragraph, folded(tail, amendment))
     return "".join(lines), replaced
 
 
@@ -273,12 +274,19 @@ def cmd_answer(args, path, out, err):
                          if e.section == PROPOSED and e.number == number), None)
         new_ledger = drop_line(ledger_text, proposed.line - 1) if proposed else ledger_text
         cause = "the owner's answer to decision %d, %s" % (number, source)
-        replaced = None
+        replaced, cut = None, None
         if args.no_entry:
             done = "no entry"
         elif args.amends is not None:
-            new_ledger, replaced = amend_entry(new_ledger, parse(new_ledger), args.amends, text,
-                                               "%s, %s" % (date, cause), args.shorter, add)
+            amendment, before = "%s, %s" % (date, cause), parse(new_ledger)
+            new_ledger, replaced = amend_entry(new_ledger, before, args.amends, text,
+                                               amendment, args.shorter, add)
+            # d31: the tail before, when form T2 cuts any of it.
+            was = final_parenthetical(next(e.body for e in before.entries
+                                           if e.section == IN_FORCE
+                                           and e.number == args.amends))
+            cut = was if folded(was, amendment) != "%s; amended %s" % (was, amendment) \
+                else None
             done = "entry %d amended" % args.amends
         else:
             line = "%d. %s %s (%s; %s)" % (number, bold_title(title), text, date, cause)
@@ -307,6 +315,8 @@ def cmd_answer(args, path, out, err):
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
         out.write("replaced: %s\n" % replaced)
+    if cut is not None:
+        out.write("tail was: (%s)\n" % cut)
     try:
         rewrite_block(path, target, out, err)
     except Refusal as exc:

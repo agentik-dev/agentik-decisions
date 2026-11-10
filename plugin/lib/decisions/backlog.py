@@ -32,7 +32,10 @@ MARKER = "<!-- decisions: build order -->"
 TITLE = 80
 LEAD = 120
 
-LEVEL = re.compile(r"\bS([1-4])\b")
+# d31 (b3): a count before the token (`0 S1, 10 S4`, a heading's tally) is no level.
+LEVEL = re.compile(r"(?<![0-9] )\bS([1-4])\b")
+# d31 (b3): a closed lead: `**Closed`, `~~`, `[x]`, or a bare `Closed` and a date.
+CLOSED = re.compile(r"^(?:\*\*Closed\b|~~|\[[xX]\]|Closed [0-9]{4}-[0-9]{2}-[0-9]{2}\b)")
 # The five forms a lead holds a level in (section 2); anything else is text. The
 # fifth (d24) is the level at the lead's head, then a middle dot, U+00B7, between
 # two spaces: `S3·x` is text. It goes last, so FORMS[0] keeps its title rule.
@@ -172,11 +175,11 @@ def row_item(n, cells):
             "level": level, "level_from": "cell" if level else None, "spans": found}
 
 
-def nice_items(text):
+def scanned(text):
     """Each column-0 `- ` item of NICE_TO_HAVE.md and each row of a NICE_HEADER
     table, in file order, as a dict: line, title, level, level_from, spans; a row's
     also id. A row never takes a heading's or a sentence's level, nor marks one seen."""
-    items = []
+    items, closed = [], []
     # the open headings, innermost last: [depth, heading level, sentence level, seen item]
     stack = []
     # the table being read, its rows on consecutive lines: [next line, header, body]
@@ -192,7 +195,11 @@ def nice_items(text):
             else:
                 table[0] = n + 1
                 if table[1] is not None:
-                    items.append(row_item(n, payload))
+                    cells = (list(payload) + [""] * len(NICE_HEADER))[:len(NICE_HEADER)]
+                    if CLOSED.match(cells[0]) or CLOSED.match(cells[3]):
+                        closed.append(n)
+                    else:
+                        items.append(row_item(n, payload))
             continue
         table = None
         if kind == "heading":
@@ -209,6 +216,9 @@ def nice_items(text):
         elif kind == "bullet":
             if stack:
                 stack[-1][3] = True
+            if CLOSED.match(joined):
+                closed.append(n)
+                continue
             lead = lead_of(joined)
             level, source = lead_level(lead), "lead"
             if level is None:
@@ -225,7 +235,12 @@ def nice_items(text):
                 title = trimmed(lead_of(rest)) if rest else title
             items.append({"line": n, "title": title[:TITLE], "level": level,
                           "level_from": source if level else None, "spans": spans(joined)})
-    return items
+    return items, closed
+
+
+def nice_items(text):
+    """The open items of NICE_TO_HAVE.md: `scanned` without its closed lines (d31)."""
+    return scanned(text)[0]
 
 
 def build_order(text):
@@ -332,7 +347,7 @@ def view(repo, ordered=None):
     nice, handoff = os.path.join(repo, NICE), os.path.join(repo, HANDOFF)
     if not os.path.lexists(nice):
         return None
-    items = nice_items(read_text(nice))
+    items, closed = scanned(read_text(nice))
     if ordered is None:
         has_handoff = os.path.lexists(handoff)
         order, steps = build_order(read_text(handoff)) if has_handoff else (None, [])
@@ -344,7 +359,8 @@ def view(repo, ordered=None):
             order = dict(order, open=sum(1 for s in steps if not s["done"]))
     rows = placement(items, steps)
     return {"repo": repo, "nice": nice, "handoff": handoff, "order": order,
-            "steps": steps, "rows": rows, "ordered": ordered is not None}
+            "steps": steps, "rows": rows, "ordered": ordered is not None,
+            "closed": closed}
 
 
 def as_json(v):
@@ -353,7 +369,8 @@ def as_json(v):
             "steps": [{k: s[k] for k in ("n", "line", "title", "done") + (
                 ("repo",) if v["ordered"] else ())} for s in v["steps"]],
             "items": [dict({k: i[k] for k in keys}, **({"id": i["id"]} if "id" in i else {}))
-                      for kind, i in v["rows"] if kind == "item"]}
+                      for kind, i in v["rows"] if kind == "item"],
+            "closed": v["closed"]}
 
 
 def as_text(v):
@@ -380,6 +397,8 @@ def as_text(v):
                 row["rank"], row["level"] or "S4?", row["line"],
                 row["id"] + "  " + row["title"] if "id" in row else row["title"]))
     lines.append("%d of %d items carry no level (placed as S4)" % (bare, items))
+    if v["closed"]:
+        lines.append("%d closed, not placed" % len(v["closed"]))
     return lines
 
 

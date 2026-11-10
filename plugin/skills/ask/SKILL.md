@@ -44,7 +44,9 @@ the owner, or at close.
    entry. With
    `--amends M`, `--text` is the whole paragraph in force after the answer:
    every sentence of M that stays, with the change made, never the change
-   alone; M's title and tail stay as they are. The run prints `replaced:`
+   alone; M's title stays, and its tail takes form T2, its first date, a
+   count of the older amendments and this one whole (`tail was:` prints a
+   cut). The run prints `replaced:`
    with M's old paragraph; a `--text` that drops a sentence of M is refused
    unless `--shorter`. `--add S` in place of `--text` appends S to M's
    paragraph as it stands. A line no part of its block takes, such as text

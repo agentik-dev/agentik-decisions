@@ -53,8 +53,11 @@ ANSWERED_LINE = re.compile(r"^- (\d+)\.\s")
 # source may follow it (`2026-09-28; amended 2026-09-29; the owner's word`).
 STAMP = r"\d{4}-\d{2}-\d{2}(?:\s+~?\d{1,2}:\d{2})?"
 AMENDED = r"(?i:amended)\b"
-TAIL = re.compile(r"%s(?:\s+and\s+%s)*[;,]\s*(?:%s\s+%s\s*[;,]\s*)*(?!%s)\S"
-                  % (STAMP, STAMP, AMENDED, STAMP, AMENDED))
+# d31: form T2's combined clause, `amended once, DATE` or `amended K times, DATE to
+# DATE`, names no source either; it sits before every `amended DATE`.
+COMBINED = r"%s\s+(?:once|\d+\s+times),\s*%s(?:\s+to\s+%s)?" % (AMENDED, STAMP, STAMP)
+TAIL = re.compile(r"%s(?:\s+and\s+%s)*[;,]\s*(?:%s\s*[;,]\s*)?(?:%s\s+%s\s*[;,]\s*)*(?!%s)\S"
+                  % (STAMP, STAMP, COMBINED, AMENDED, STAMP, AMENDED))
 # A fence opens and closes a code block, whose `## ` lines are text (d-n3 item 10).
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 
