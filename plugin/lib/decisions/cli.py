@@ -1,5 +1,5 @@
 """agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog,
-analyze and audit.
+expire, analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -34,6 +34,11 @@ Verbs
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
                                   repo or `suite`; writes nothing
+    expire [REPO...] [--order FILE] [--days N] [--write] [--json]
+                                  the closed NICE items and the S4 ones older
+                                  than N days (14) on no open step; --write
+                                  appends them to history/NICE-overflow.md
+                                  and takes them out, once HEAD holds the file
     analyze [churn] [REPO...] [--since Nd|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
                                   churn from each repo's git history over the
                                   window (14 days to now by default): the share
@@ -48,8 +53,8 @@ Verbs
                                   the ledger's git top; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog` and `analyze` read no ledger and ignore it. `--version` prints
-the version, which `doctor` compares with the tool on PATH.
+working directory; `backlog`, `expire` and `analyze` read no ledger and ignore it.
+`--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
 `decisions` is a second entry point until 2026-12-31 and, with stderr a
@@ -57,7 +62,8 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
-       read; `analyze` and `audit` whenever its view printed; `answer` whose block write failed
+       read; `expire` whenever its view printed or its move was made; `analyze`
+       and `audit` whenever its view printed; `answer` whose block write failed
        after both files were written (a warning on stderr names `agentik decisions
        render`)
     1  `render`: a lint problem, or with --check a stale block
@@ -67,7 +73,9 @@ Exit codes
        changes the exit; a `--ledger` naming an absent file fails), or a `backlog`
        REPO that is not a directory or a file it cannot read as UTF-8, or an
        `analyze` window it cannot read or argument that is neither an analysis
-       nor a directory, or an `audit` REPO that is not a directory or `--tree`
+       nor a directory, an `expire` REPO not a directory, --days under 1, or a
+       --write whose NICE_TO_HAVE.md HEAD does not hold, or an `audit` REPO that
+       is not a directory or `--tree`
        FILE it cannot read
 """
 
@@ -80,6 +88,7 @@ from .analyze import cmd_analyze
 from .answer import cmd_answer
 from .audit import cmd_audit
 from .backlog import cmd_backlog
+from .expire import cmd_expire
 from .ask import cmd_new
 from .selector import cmd_ask
 from .common import VERSION, Refusal
@@ -188,6 +197,18 @@ def build_parser():
                               "is the repo's name less `agentik-`, or `suite`")
     backlog.add_argument("--json", action="store_true")
 
+    expire = subs.add_parser("expire", parents=[ledger],
+                             help="move closed and old S4 NICE items to history/NICE-overflow.md")
+    expire.add_argument("repos", nargs="*", metavar="REPO",
+                        help="a repo's directory; the default is the git top level")
+    expire.add_argument("--order", metavar="FILE",
+                        help="one HANDOFF.md for every REPO, as backlog takes it")
+    expire.add_argument("--days", type=int, default=14, metavar="N",
+                        help="an open S4 item older than N days expires; the default is 14")
+    expire.add_argument("--write", action="store_true",
+                        help="make the move; without it nothing is written")
+    expire.add_argument("--json", action="store_true")
+
     analyze = subs.add_parser("analyze", parents=[ledger],
                               help="what a repo's history says: churn, from git; writes nothing")
     analyze.add_argument("repos", nargs="*", metavar="[churn] REPO",
@@ -252,6 +273,9 @@ def main(argv=None, out=None, err=None):
         if args.verb == "backlog":
             # `backlog` reads NICE_TO_HAVE.md and HANDOFF.md, never a ledger.
             return cmd_backlog(args, out, err)
+        if args.verb == "expire":
+            # `expire` reads and writes NICE_TO_HAVE.md, never a ledger.
+            return cmd_expire(args, out, err)
         if args.verb == "analyze":
             # `analyze` reads git and NICE_TO_HAVE.md, never a ledger.
             return cmd_analyze(args, out, err)
@@ -271,5 +295,5 @@ def cmd_install_cli(args, out, err):
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "analyze": cmd_analyze, "audit": cmd_audit,
+         "backlog": cmd_backlog, "expire": cmd_expire, "analyze": cmd_analyze, "audit": cmd_audit,
          "install-cli": cmd_install_cli}
