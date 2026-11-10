@@ -367,7 +367,7 @@ class T2(Hermetic):
         self.commit()
 
     def git(self, *argv):
-        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=fixture",
                                "-c", "commit.gpgsign=false"] + list(argv), cwd=self.tmp,
                               check=True, capture_output=True, text=True).stdout
 
