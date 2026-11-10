@@ -12,12 +12,12 @@
 
 ## 1. What the source says: the evidence
 
-Each re-run on de67e4e, scratch. P is the probes directory beside this packet in agentik-hq `history/sessions/PACKET-2026-11-09-decisions-d32-probes/`.
+Each re-run on de67e4e. P is agentik-hq `history/sessions/PACKET-2026-11-09-decisions-d32-probes/`.
 
 - `bash -eu P/repro.sh <checkout>`: the sample ledger rendered into a CLAUDE.md, `block 539 B`; then `answer 8 --pick Both --source S --amends 1 --add "<92 B>"` prints `entry 1 amended`, `tail was:`, `answer: rewrote the block in …/CLAUDE.md`, exit 0, `block 661 B`; `render --lint` prints nothing, exit 0. Of the 122 B, 30 are the tail note `; amended once, see the ledger` (`render.py:42-53`).
 - `answer` renders the block after both files are written (`answer.py:314`, `:320`), into a target with markers only (`:333-344`); its line `:344` names no size, nor `render.py:226`; `--lint` returns at `:195` before a target is named.
 - `analyze <repo> --json`, a repo's keys: `['charters', 'commits', 'head', 'landings', 'lines', 'nice', 'not_measured', 'record_commits', 'repo', 'vendor']` (`analyze.py:286-290`): no block.
-- `sed -n '/BEGIN GENERATED: decisions/,/END GENERATED: decisions/p' <file> | wc -c`: `~/.claude/CLAUDE.md` 4917, agentik-hq 1517, two other hq repos 3048 and 6031; the survey's §1.5 guesses inline text breaks even near 2.7 KB.
+- `sed -n '/BEGIN GENERATED: decisions/,/END GENERATED: decisions/p' <file> | wc -c`: `~/.claude/CLAUDE.md` 4917, agentik-hq 1517, two other hq repos 3048 and 6031.
 
 ## 2. Rulings
 
@@ -36,16 +36,18 @@ Reversible, the cutter's: the flag's name; `--lint`'s line on stdout.
 
 ## 4. Findings that name this row
 
+(This copy: §1 and §4 shortened for doclint's 9,216 B; the whole is agentik-hq's.)
+
 0 of 7 ok on de67e4e, 7 on the scratch prototype under 3.12.7 and 3.9.6 (`P/test_d32.py`, its classes split into the three files).
 
 | T | test (`test_every_turn_`…) | red at de67e4e |
 |---|---|---|
-| 1 | answer: `amends_refuses_growth` (`--add`, a longer `--text`: exit 2, three files byte-identical; `--every-turn`: exit 0, D as refused) | `(0, 'answer: 9, Pin; entry 1 amended …') != (2, '')` |
-| 2 | answer: `area_refuses_growth` (either case of the name; with no CLAUDE.md too; `--area Build` passes, +31 B) | `(0, 'answer: 9, Pin; entry 9 under `### Ev…') != (2, '')` |
-| 3 | answer: `same_or_smaller_passes` (a `--shorter` trim prints a minus; a same-length reword at the third amendment, `+0 B`) | `2 != 0 : usage: … --every-turn` |
-| 4 | answer: `flag_needs_an_entry` | `'--every-turn is valid only …' not found in 'usage: …'` |
-| 5 | render: `render_prints_bytes` (`0 B to 539 B, +539 B`; a longer entry 1; fresh: no ` B to `) | `'render: wrote CLAUDE.md\n' != '… CLAUDE.md: 0 B to 539 B, +539 B; …'` |
-| 6 | render: `lint_prints_size` (beside, `--into`; a lint failure: none) | `Regex didn't match … not found in ''` |
+| 1 | answer: `amends_refuses_growth` (`--add`, a longer `--text`: exit 2, three files byte-identical; `--every-turn`: exit 0, D as refused) | exit 0, not 2 |
+| 2 | answer: `area_refuses_growth` (either case of the name; with no CLAUDE.md too; `--area Build` passes, +31 B) | exit 0, not 2 |
+| 3 | answer: `same_or_smaller_passes` (a `--shorter` trim prints a minus; a same-length reword at the third amendment, `+0 B`) | usage, exit 2 |
+| 4 | answer: `flag_needs_an_entry` | usage |
+| 5 | render: `render_prints_bytes` (`0 B to 539 B, +539 B`; a longer entry 1; fresh: no ` B to `) | no size |
+| 6 | render: `lint_prints_size` (beside, `--into`; a lint failure: none) | no line |
 | 7 | analyze: `analyze_measures_the_block` (JSON both ends, null for a repo without; one text line) | `KeyError: 'block'` |
 
 Today's tests that change, 12, red on the prototype: `test_answer.py`'s seven pass `--every-turn` (`:268`, `:325`, `:372`, `:747`, `:757`, `:772`, the T2 helper `:905`); in `test_render.py` four pin `--lint` silent (`:240`, `:400`, `:455`, `:463`) and read the size line; `test_analyze.py:240` gains `block`. The charter shows the seven red first.
