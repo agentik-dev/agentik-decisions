@@ -506,3 +506,21 @@ class T2(Hermetic):
         if not os.path.exists(self.ledger):
             self.skipTest("a case-sensitive disk")
         self.assert_refused()
+
+    def test_fold_refuses_through_a_tracked_link(self):
+        real = os.path.join(self.tmp, "real")
+        os.mkdir(real)
+        os.rename(self.ledger, os.path.join(real, "DECISIONS.md"))
+        os.symlink(os.path.join("real", "DECISIONS.md"), self.ledger)
+        self.git("add", "-A", "DECISIONS.md")
+        self.git("commit", "-q", "-m", "the link")
+        self.assert_refused()
+
+    def test_fold_refuses_a_ledger_git_is_told_not_to_look_at(self):
+        changed = FIXTURE.replace("one table.", "one table, never a list.")
+        for flag in ("--assume-unchanged", "--skip-worktree"):
+            self.git("update-index", flag, "DECISIONS.md")
+            self.write(changed, self.ledger)
+            self.assert_refused()
+            self.git("update-index", flag.replace("--", "--no-"), "DECISIONS.md")
+            self.git("checkout", "--", "DECISIONS.md")
