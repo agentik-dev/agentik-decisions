@@ -156,7 +156,8 @@ class Legacy(Verb):
         self.assertEqual(self.run_cli("show", "--area", "old rulings")[:2], (0, self.OLD))
         self.assertIn(self.line("3. "), self.run_cli("show", "--area", "build")[1])
         self.assertEqual(self.run_cli("show", "1")[1].splitlines()[-1], self.line("1. "))
-        self.assertEqual(self.run_cli("render", "--lint")[:2], (0, ""))
+        self.assertRegex("%d %s" % self.run_cli("render", "--lint")[:2],  # d32: the size line
+                         r"^0 render: the block for \S+ is \d+ B; it is loaded on every turn\n$")
 
 
 class TheArea(Verb):

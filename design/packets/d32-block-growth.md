@@ -5,7 +5,7 @@
 | from | the owner's ask of 2026-11-09 that the tool stop the block's silent growth; the hq sitting's rulings; hq entries 9 and 17. This repo keeps no ledger: no entry is carried |
 | pin | agentik-decisions main de67e4e, plugin 0.15.1, 435 cases; worktree `.claude/worktrees/d32-block-growth`, branch `d32-block-growth` off that main; line numbers are de67e4e's |
 | wall | this worktree only; no push, `--amend`, rebase, merge, `make install` or `install-cli`; no bare `make`, no `make` outside the gate queue, no `make readme` (it runs `claude`); never build a relay binary, run a `relay` or `agentik relay` verb, or write in the relay's state directory; no write outside the worktree; no test writes under the live home; `render --fold-tails` only in a throwaway repo; python runs with `PYTHONDONTWRITEBYTECODE=1` |
-| may touch | `plugin/lib/decisions/{answer,render,analyze,cli,common}.py` (`common`: `VERSION` only); `tests/test_{answer,render,analyze,plugin}.py`; `plugin/commands/{answer,render,analyze}.md`, `plugin/skills/ask/SKILL.md`; `README.md`, `design/readme/{source.md,rendered.sha256}`; `plugin/.claude-plugin/plugin.json`, `pyproject.toml`; `CLAUDE.md`; `NICE_TO_HAVE.md`; this packet as `design/packets/d32-block-growth.md`; a charter |
+| may touch | `plugin/lib/decisions/{answer,render,analyze,cli,common}.py` (`common`: `VERSION` only); `tests/test_{answer,render,analyze,plugin}.py`; `tests/test_lookup.py:159` (ruled 22:10); `plugin/commands/{answer,render,analyze}.md`, `plugin/skills/ask/SKILL.md`; `README.md`, `design/readme/{source.md,rendered.sha256}`; `plugin/.claude-plugin/plugin.json`, `pyproject.toml`; `CLAUDE.md`; `NICE_TO_HAVE.md`; this packet as `design/packets/d32-block-growth.md`; a charter |
 | acceptance | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=plugin/lib python3 -m unittest -v tests.test_answer tests.test_render tests.test_analyze -k test_every_turn_ 2>&1 \| grep -c ' \.\.\. ok$'` reads 7 (de67e4e: 0); the same under `/usr/bin/python3` (3.9.6); `scripts/plugin-version-check` exits 0; `cmp README.md design/readme/source.md` exits 0 |
 | verify | `agentik session gate run <absolute worktree path> -- /bin/sh -c 'make check > <scratch log> 2>&1'`, then `agentik session gate wait <id>` in one background Bash, last; it exits 0 whatever the job's code: read the code from its line |
 | budget | 80 tool calls or 120k context, `claude-opus-5-5`; one commit per group by explicit path, the packet and the charter first; at either ceiling, a resume line in the charter and stop |
@@ -16,7 +16,7 @@ Each re-run on de67e4e. P is agentik-hq `history/sessions/PACKET-2026-11-09-deci
 
 - `bash -eu P/repro.sh <checkout>`: the sample ledger rendered into a CLAUDE.md, `block 539 B`; then `answer 8 --pick Both --source S --amends 1 --add "<92 B>"` prints `entry 1 amended`, `tail was:`, `answer: rewrote the block in …/CLAUDE.md`, exit 0, `block 661 B`; `render --lint` prints nothing, exit 0. Of the 122 B, 30 are the tail note `; amended once, see the ledger` (`render.py:42-53`).
 - `answer` renders the block after both files are written (`answer.py:314`, `:320`), into a target with markers only (`:333-344`); its line `:344` names no size, nor `render.py:226`; `--lint` returns at `:195` before a target is named.
-- `analyze <repo> --json`, a repo's keys: `['charters', 'commits', 'head', 'landings', 'lines', 'nice', 'not_measured', 'record_commits', 'repo', 'vendor']` (`analyze.py:286-290`): no block.
+- `analyze <repo> --json`, a repo's keys: `charters` … `vendor`, ten (`analyze.py:286-290`): no block.
 - `sed -n '/BEGIN GENERATED: decisions/,/END GENERATED: decisions/p' <file> | wc -c`: `~/.claude/CLAUDE.md` 4917, agentik-hq 1517, two other hq repos 3048 and 6031.
 
 ## 2. Rulings
@@ -36,7 +36,7 @@ Reversible, the cutter's: the flag's name; `--lint`'s line on stdout.
 
 ## 4. Findings that name this row
 
-(This copy: §1 and §4 shortened for doclint's 9,216 B; the whole is agentik-hq's.)
+(Copy: §1, §4 cut for doclint; whole in agentik-hq.)
 
 0 of 7 ok on de67e4e, 7 on the scratch prototype under 3.12.7 and 3.9.6 (`P/test_d32.py`, its classes split into the three files).
 
