@@ -485,3 +485,17 @@ class T2(Hermetic):
         shutil.rmtree(os.path.join(self.tmp, ".git"))
         self.assertEqual(self.run_cli("--fold-tails")[0], 2)
         self.assertEqual(self.read(), changed)
+
+    def assert_refused(self):
+        before = self.read()
+        code, out, err = self.run_cli("--fold-tails")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("HEAD does not hold", err)
+        self.assertEqual(self.read(), before)
+
+    def test_fold_refuses_an_untracked_ledger_git_does_not_list(self):
+        # status.showUntrackedFiles=no empties `git status` for a file HEAD lacks
+        self.git("rm", "-q", "--cached", "DECISIONS.md")
+        self.git("commit", "-q", "-m", "untrack")
+        self.git("config", "status.showUntrackedFiles", "no")
+        self.assert_refused()

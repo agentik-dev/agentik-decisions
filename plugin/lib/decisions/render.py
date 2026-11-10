@@ -90,16 +90,24 @@ def fold_tails(text):
     return "".join(lines), done, left
 
 
-def head_holds(path):
-    """The short sha of git's HEAD when it holds the file at `path` as it stands,
-    tracked and unchanged, else None (d31)."""
-    where, name = os.path.dirname(os.path.abspath(path)), os.path.basename(path)
+def head_holds(path, data):
+    """The short sha of git's HEAD when its blob at the real path of `path` is `data`
+    byte for byte, else None (d31). The claim itself is tested, since git's status is
+    also empty for a file HEAD lacks: an untracked file git is told not to list, a
+    name in another case, a link, an index told not to look."""
+    real = os.path.realpath(path)
+    where, name = os.path.dirname(real), os.path.basename(real)
     try:
-        code, out = bounded(["git", "status", "--porcelain", "--ignored", "--", name],
+        code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
                             GIT_TIMEOUT, cwd=where)
-        if code != 0 or out.strip():
+        sha = out.strip()
+        if code != 0 or not sha:
             return None
-        code, out = bounded(["git", "rev-parse", "--short", "HEAD"], GIT_TIMEOUT, cwd=where)
+        blob = subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, name)],
+                              cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+        if blob.returncode != 0 or blob.stdout != data:
+            return None
+        code, out = bounded(["git", "rev-parse", "--short", sha], GIT_TIMEOUT, cwd=where)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return out.strip() if code == 0 and out.strip() else None
@@ -110,6 +118,11 @@ def cmd_fold(path, out, err):
     name = display(path)
     with held(os.path.join(os.path.dirname(path), LOCK), NEW_WAIT, err):
         old = read_text(path)
+        try:
+            with open(path, "rb") as handle:
+                data = handle.read()
+        except OSError as exc:
+            raise Refusal("%s: unreadable: %s" % (path, exc))
         new, done, left = fold_tails(old)
         for number in left:
             err.write("render: entry %d's latest amendment names no source, so its tail "
@@ -117,7 +130,7 @@ def cmd_fold(path, out, err):
         if not done:
             out.write("render: no tail to fold in %s\n" % name)
             return
-        sha = head_holds(path)
+        sha = head_holds(path, data)
         if sha is None:
             raise Refusal("render: HEAD does not hold %s as it stands; commit it first; "
                           "nothing written" % name)
