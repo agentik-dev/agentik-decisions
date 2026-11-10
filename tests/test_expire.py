@@ -3,13 +3,17 @@ on no open step, leave NICE_TO_HAVE.md for history/NICE-overflow.md, appended by
 byte; a dry view by default; `--write` only once HEAD holds the file. Fixtures are
 small repos built in temp directories, dated against today."""
 
+import builtins
 import datetime
+import importlib
 import io
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+import types
+from collections import Counter
 from unittest import mock
 
 import decisions
@@ -212,8 +216,10 @@ class Expire(Fixture):
     def test_json_names_each_move(self):
         v = self.view()
         self.assertEqual(sorted(v), ["days", "repos", "skipped", "today", "write"])
-        self.assertEqual(sorted(v["repos"][0]), ["archive", "bytes", "expired", "head", "kept",
-                                                "moved", "nice", "repo", "undated"])
+        self.assertEqual(sorted(v["repos"][0]), ["archive", "breaks", "bytes", "expired", "head",
+                                                "kept", "lazy", "moved", "nice", "repo",
+                                                "undated"])
+        self.assertEqual((v["repos"][0]["breaks"], v["repos"][0]["lazy"]), (None, []))
         first = v["repos"][0]["expired"][0]
         self.assertEqual(sorted(first), ["age", "date", "end", "id", "level", "line",
                                          "reason", "title"])
@@ -264,7 +270,8 @@ class ExpireLosesNothing(Fixture):
 
         with mock.patch("decisions.common.os.replace", replace):
             try:
-                return self.run_cli(self.repo, "--write")[0]
+                code, _, self.err = self.run_cli(self.repo, "--write")
+                return code
             except Stopped:
                 return None
 
@@ -282,7 +289,10 @@ class ExpireLosesNothing(Fixture):
         done_nice, done_archive = self.finished()
         self.assertIn(archive, (archive_before, done_archive))
         if isinstance(fault, OSError):
-            self.assertEqual((code, archive), (2, archive_before))
+            # No rollback: a failed first write leaves the archive as it was, a
+            # failed second one leaves the items in both files.
+            self.assertEqual(code, 2)
+            self.assertEqual(archive == archive_before, at == 1)
             leftovers = [n for _, _, names in os.walk(self.repo)
                          for n in names if n.startswith(".decisions-")]
             self.assertEqual(leftovers, [])
@@ -300,7 +310,7 @@ class ExpireLosesNothing(Fixture):
         self.assertEqual((code, snapshot(self.top) == before), (0, True))
         self.assertTrue(out.startswith("== tool  expire: 0 closed, 0 S4"))
 
-    def test_a_failed_replace_puts_both_files_back(self):
+    def test_a_failed_replace_loses_nothing_and_leaves_no_temp(self):
         for at in (1, 2):
             with self.subTest(at=at):
                 self.fresh()
@@ -332,3 +342,248 @@ class ExpireLosesNothing(Fixture):
         gone = {9, 10, 15, 19, 20, 21}
         self.assertEqual(nice, b"".join(x for i, x in enumerate(lines, 1) if i not in gone))
         self.assertTrue(all(lines[n - 1] in archive for n in gone))
+        # The lines the archive writes of its own take the line end of NICE's first.
+        self.assertEqual([x for x in nl_lines(archive) if not x.endswith(b"\r\n")], [])
+
+
+
+def nl_lines(data):
+    """`data` cut at b"\n" alone, each line keeping it."""
+    parts = data.split(b"\n")
+    return [p + b"\n" for p in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+
+
+def structural(line):
+    """A line `expire` writes of its own: blank, a heading, the archive's lead, the
+    NICE header."""
+    return (not line.strip() or line.startswith((b"#", b"| id |", b"|---", b"Items moved")))
+
+
+class Later(datetime.date):
+    """`datetime.date` with today one day on."""
+
+    @classmethod
+    def today(cls):
+        return TODAY + datetime.timedelta(days=1)
+
+
+class ExpireFold(Fixture):
+    """The refuter's reproductions (round 1), each a case: one read under the lock,
+    bytes cut at a newline alone, two replaces with no rollback, a rerun that never
+    appends an item twice, a bullet with a column-0 line kept."""
+
+    read = ExpireLosesNothing.read
+    write_failing = ExpireLosesNothing.write_failing
+
+    def write_bytes(self, path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+    def at_repo(self, nice, archive=None, commit=True):
+        """The fixture repo with `nice` (and `archive`) committed, or the archive left
+        uncommitted when `commit` is false."""
+        self.write_bytes(self.nice, nice)
+        if archive is not None:
+            self.write_bytes(self.archive, archive)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "shape")
+        if archive is not None and not commit:
+            git(self.repo, "rm", "-q", "--cached", os.path.relpath(self.archive, self.repo))
+            git(self.repo, "commit", "-q", "-m", "archive out")
+
+    def whole(self, nice_before, archive_before):
+        """NICE before is NICE now plus the lines the archive gained, line for line, and
+        no line of NICE before is twice in the archive."""
+        nice, archive = self.read(self.nice), self.read(self.archive) or b""
+        before, after, removed, i = nl_lines(nice_before), nl_lines(nice), [], 0
+        for line in before:
+            if i < len(after) and after[i] == line:
+                i += 1
+            else:
+                removed.append(line if line.endswith(b"\n") else line + b"\n")
+        self.assertEqual(i, len(after), "NICE now is not NICE before less some lines")
+        old = archive_before or b""
+        self.assertTrue(archive.startswith(old), "the archive's old bytes moved")
+        gained = Counter(nl_lines(archive[len(old):]))
+        self.assertEqual(Counter(removed) - gained, Counter(), "a moved line is lost")
+        self.assertEqual([x for x in gained - Counter(removed) if not structural(x)], [])
+        held_now, held_then = Counter(nl_lines(archive)), Counter(nl_lines(old))
+        for line in removed:
+            if not structural(line):
+                self.assertEqual(held_now[line], held_then[line] + removed.count(line), line)
+        return removed
+
+    def stopped_then(self, *argv, **patches):
+        """A stop between the two replaces, then `--write` again with `argv`."""
+        nice, archive = self.read(self.nice), self.read(self.archive)
+        self.write_failing(2, Stopped())
+        if patches.get("commit"):
+            git(self.repo, "add", "-A")
+            git(self.repo, "commit", "-q", "-m", "the archive")
+        code, _, err = self.run_cli(self.repo, "--write", *argv)
+        self.assertEqual(code, 0, err)
+        return self.whole(nice, archive)
+
+    def test_f1_a_rerun_after_a_commit_appends_nothing_twice(self):
+        removed = self.stopped_then(commit=True)
+        self.assertEqual(len(removed), 6)
+
+    def test_f1_a_rerun_with_other_days_appends_nothing_twice(self):
+        removed = self.stopped_then("--days", "13")
+        self.assertIn(nl_lines(NICE.encode())[10], removed)
+
+    def test_f1_a_rerun_on_a_later_day_appends_nothing_twice(self):
+        nice, archive = self.read(self.nice), self.read(self.archive)
+        self.write_failing(2, Stopped())
+        with mock.patch("decisions.expire.datetime", types.SimpleNamespace(date=Later)):
+            self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        self.assertIn(nl_lines(NICE.encode())[10], self.whole(nice, archive))
+
+    def test_f1_an_item_held_only_as_the_head_of_another_is_appended(self):
+        struck = nl_lines(NICE.encode())[20]
+        for archive, appended in ((b"# kept\n\n" + struck + b"  with more.\n", 1),
+                                  (b"# kept\n\n" + struck + b"\n  apart, more.\n", 1),
+                                  (b"# kept\n\n" + struck + b"- another note\n", 0)):
+            with self.subTest(archive=archive):
+                self.fresh()
+                self.at_repo(NICE.encode(), archive)
+                self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+                self.assertEqual(self.read(self.archive).count(struck), 1 + appended)
+                self.assertNotIn(struck, self.read(self.nice))
+
+    def test_f2_a_line_break_not_at_a_newline_refuses(self):
+        for char, line, shape in ((" ", 9, NICE.replace("the old lead", "the old lead")),
+                                  ("\x0c", 19, NICE.replace("it says\n", "it\x0csays\n"))):
+            with self.subTest(char=char):
+                self.fresh()
+                self.at_repo(shape.encode())
+                before = snapshot(self.top)
+                code, _, err = self.run_cli(self.repo, "--write")
+                self.assertEqual(code, 2)
+                self.assertIn("NICE_TO_HAVE.md:%d" % line, err)
+                self.assertIn("U+%04X" % ord(char), err)
+                self.assertEqual(snapshot(self.top), before)
+                self.assertEqual(self.view()["repos"][0]["breaks"], line)
+                code, out, _ = self.run_cli(self.repo)
+                self.assertIn("--write refuses this repo: NICE_TO_HAVE.md:%d" % line, out)
+
+    def test_f3_mixed_line_ends_keep_every_byte(self):
+        mixed = NICE.replace("\n", "\r\n", 1).encode()
+        old = b"# kept\r\n\r\n- an older note, 2026-01-01\n- and another\n"
+        self.at_repo(mixed, old, commit=False)
+        self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        self.assertEqual(len(self.whole(mixed, old)), 6)
+        self.assertEqual(self.read(self.nice).count(b"\r\n"), 1)
+
+    def swap(self):
+        """The closed n1 and the fresh n3 trade places, committed."""
+        lines = nl_lines(self.read(self.nice))
+        lines[8], lines[10] = lines[10], lines[8]
+        self.write_bytes(self.nice, b"".join(lines))
+        git(self.repo, "commit", "-q", "-am", "swap")
+
+    def test_f4_a_commit_inside_the_run_moves_no_wrong_line(self):
+        fresh = nl_lines(NICE.encode())[10]
+        for where in ("decisions.backlog.view", "decisions.expire.checked",
+                      "decisions.expire.held"):
+            with self.subTest(where=where):
+                self.fresh()
+                module, name = where.rsplit(".", 1)
+                real = getattr(importlib.import_module(module), name)
+                calls = []
+
+                def hooked(*args, real=real, **kwargs):
+                    """The swap just after the hooked call reads or checks."""
+                    result = real(*args, **kwargs)
+                    if not calls:
+                        calls.append(1)
+                        self.swap()
+                    return result
+
+                with mock.patch(where, hooked):
+                    code, _, err = self.run_cli(self.repo, "--write")
+                self.assertIn(code, (0, 2), err)
+                self.assertNotIn(fresh, self.read(self.archive) or b"")
+                self.assertIn(fresh, self.read(self.nice))
+
+    def test_f5_a_failed_second_write_loses_no_earlier_move(self):
+        old = b"# kept\n\n- an item moved on an earlier day\n"
+        real_open = builtins.open
+
+        def opened(path, mode="r", *args, **kwargs):
+            """A stop at the first in-place write of the archive, once truncated."""
+            handle = real_open(path, mode, *args, **kwargs)
+            if "w" in mode and str(path).endswith("NICE-overflow.md"):
+                handle.close()
+                raise Stopped()
+            return handle
+
+        for fault, inside in ((OSError(28, "No space left on device"), False),
+                              (Stopped(), False), (OSError(28, "No space"), True)):
+            with self.subTest(fault=type(fault).__name__, inside=inside):
+                self.fresh()
+                self.at_repo(NICE.encode(), old, commit=False)
+                with mock.patch("builtins.open", opened if inside else real_open):
+                    code = self.write_failing(2, fault)
+                self.assertIn(code, (2, None) if inside else (
+                    2 if isinstance(fault, OSError) else None,))
+                if code == 2:
+                    self.assertIn("run --write again to finish", self.err)
+                    self.assertNotIn("nothing written", self.err)
+                self.assertEqual(self.read(self.nice), NICE.encode())
+                self.assertTrue(self.read(self.archive).startswith(old))
+                leftovers = [n for _, _, names in os.walk(self.repo)
+                             for n in names if n.startswith(".decisions-")]
+                self.assertEqual(leftovers, [])
+                self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+                self.assertEqual(len(self.whole(NICE.encode(), old)), 6)
+
+    def test_f6_a_bullet_with_a_column_zero_line_is_kept_and_listed(self):
+        lazy = NICE + "- An old note, %s, that wraps\nonto a second line at column 0.\n" % ago(30)
+        self.at_repo(lazy.encode())
+        v = self.view()["repos"][0]
+        self.assertEqual([(e["line"], e["next"]) for e in v["lazy"]], [(23, 24)])
+        self.assertNotIn(23, self.lines(self.view(), "expired"))
+        out = self.run_cli(self.repo)[1]
+        self.assertIn("NICE_TO_HAVE.md:23", out)
+        self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        self.assertIn(b"that wraps\nonto a second line at column 0.\n", self.read(self.nice))
+        self.assertNotIn(b"that wraps", self.read(self.archive))
+        self.whole(lazy.encode(), None)
+
+    def test_f7_a_last_line_with_no_newline_gains_one_in_the_archive(self):
+        tail = "- ~~Another struck note.~~ %s" % ago(2)
+        self.at_repo((NICE + tail).encode())
+        self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        self.assertTrue(self.read(self.archive).endswith(tail.encode() + b"\n"))
+        self.assertEqual(self.read(self.nice), b"".join(
+            x for i, x in enumerate(nl_lines(NICE.encode()), 1) if i not in {9, 10, 15, 19, 20, 21}))
+        self.whole((NICE + tail).encode(), None)
+
+    def test_f7_an_edit_at_the_lock_is_read_there(self):
+        for which in ("nice", "archive", "head"):
+            with self.subTest(which=which):
+                self.fresh()
+                real, path = decisions.expire.held, getattr(self, which, None)
+
+                def hooked(*args, path=path, **kwargs):
+                    if path is None:
+                        git(self.repo, "rm", "-q", "--cached", "NICE_TO_HAVE.md")
+                        git(self.repo, "commit", "-q", "-m", "untracked, the bytes kept")
+                    else:
+                        with open(path, "ab") as handle:
+                            handle.write(b"- edited under the run\n")
+                    return real(*args, **kwargs)
+
+                os.makedirs(os.path.dirname(self.archive), exist_ok=True)
+                with mock.patch("decisions.expire.held", hooked):
+                    code, _, err = self.run_cli(self.repo, "--write")
+                if which != "archive":
+                    self.assertEqual((code, self.read(self.archive)), (2, None))
+                    self.assertIn("changed under the run" if path else "HEAD does not hold",
+                                  err)
+                else:
+                    self.assertEqual(code, 0, err)
+                    self.assertTrue(self.read(self.archive).startswith(
+                        b"- edited under the run\n\n## "))
