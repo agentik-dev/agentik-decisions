@@ -5,14 +5,17 @@
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
 beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there,
 and when clean prints one line, `render: the block for PATH is N B; it is loaded on every
-turn`, N the bytes of the block render would write there (d32). Otherwise the block goes between
+turn`, N the bytes of the block render would write there, CRLF counted when the target
+keeps it (d32); a target whose markers render refuses gets one stderr line and no size, the
+exit unchanged. Otherwise the block goes between
 BEGIN and END in PATH (default: the CLAUDE.md beside the ledger), replacing a
 stale block in place, or appended after one blank line when the markers are
 absent. `--check` writes nothing: it prints the unified diff render would make
 and exits 1 when the block is stale, 0 when it is fresh. A target that is the
 ledger itself, by its path, a link or a hard link, is refused with exit 2. The write keeps
 the target's line end and goes through a link to the file it names, and its line names the
-block's growth, `render: wrote PATH: X B to Y B, +D B; the block is loaded on every turn`,
+block's growth in bytes on disk, `render: wrote PATH: X B to Y B, +D B; the block is loaded
+on every turn`,
 since every turn of every session loads it (d32); no cap is set, the number is the owner's.
 
 The block: one line naming its source and the command that regenerates it;
@@ -32,7 +35,8 @@ import subprocess
 
 from . import questions
 from .ask import LOCK, NEW_WAIT
-from .common import GIT_TIMEOUT, Refusal, bounded, held, read_text, write_text
+from .common import (GIT_TIMEOUT, Refusal, bounded, disk_text, held, keeps_crlf, on_disk,
+                     read_text, write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, amended, display, final_parenthetical,
                      folded, lint, load, parse)
 
@@ -66,21 +70,23 @@ def tail_note(text):
         "once" if count == 1 else "%d times" % count)
 
 
-def block_bytes(text):
+def block_bytes(text, crlf=False):
     """The bytes of the one block between the markers in `text`, both marker lines
-    included, or None when `text` holds no such block (d32)."""
+    included, every line end CRLF when `crlf`, or None when `text` holds no such block
+    (d32). A text read with its line ends kept is measured as it is on disk."""
     lines = text.splitlines(keepends=True)
     begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
     ends = [i for i, line in enumerate(lines) if line.strip() == END]
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         return None
-    return len("".join(lines[begins[0]:ends[0] + 1]).encode())
+    return on_disk("".join(lines[begins[0]:ends[0] + 1]), crlf)
 
 
-def growth(old, new):
+def growth(old, new, crlf=False):
     """`X B to Y B, +D B; the block is loaded on every turn`, the block in `old` then in
-    `new`, a text without one counted 0 B (d32)."""
-    before, after = block_bytes(old) or 0, block_bytes(new) or 0
+    `new`, a text without one counted 0 B (d32). `old` is the target as it is on disk,
+    line ends kept; `new` is written with CRLF when `crlf` (F1)."""
+    before, after = block_bytes(old) or 0, block_bytes(new, crlf) or 0
     return "%d B to %d B, %+d B; the block is loaded on every turn" % (before, after,
                                                                        after - before)
 
@@ -227,14 +233,27 @@ def cmd_render(args, path, out, err):
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if args.lint:
-        # d32: the measure, the bytes of the block render would write there
+        # d32: the measure, the bytes of the block render would write there, CRLF counted
+        # when the target keeps it; a target render refuses gets no size (F4)
+        try:
+            text = read_text(target) if os.path.exists(target) else ""
+        except Refusal:
+            text = ""  # unreadable here, measured as before; render itself refuses it
+        try:
+            apply(text, "", display(target))
+        except Refusal:
+            err.write("render: %s: its GENERATED markers are not one block, so no size\n"
+                      % display(target))
+            return 0
         out.write("render: the block for %s is %d B; it is loaded on every turn\n"
-                  % (display(target), len(block(ledger, path, target).encode())))
+                  % (display(target), on_disk(block(ledger, path, target),
+                                             keeps_crlf(target))))
         return 0
     if is_ledger(target, path):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
+    was = disk_text(target)
     if getattr(args, "fold_tails", False):
         apply(old, "", display(target))  # a target refused is refused before the fold
         cmd_fold(path, out, err)
@@ -257,6 +276,7 @@ def cmd_render(args, path, out, err):
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
         return 0
+    crlf = keeps_crlf(target)
     write_text(target, new)
-    out.write("render: wrote %s: %s\n" % (display(target), growth(old, new)))
+    out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     return 0

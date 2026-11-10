@@ -50,7 +50,8 @@ The block is loaded on every turn (d32), so the rewrite's line names its growth,
 `answer: rewrote the block in PATH: X B to Y B, +D B; the block is loaded on every
 turn`. An answer that touches `Every session`, by `--amends M` with M in force there
 or an `--area` that resolves to it, and makes larger the block render would write at
-the target, markers or none, is refused with exit 2 before anything is written: the
+the target, markers or none, is refused with exit 2 before anything is written, once
+the lint has passed (a result that fails the lint is refused on the lint): the
 refusal names the bytes, and the entry's tail note's share when the note grows. The
 way out is an entry outside `Every session`, which the block lists by title only, or
 `--every-turn`, valid only with `--area` or `--amends`. Same size or smaller passes.
@@ -60,7 +61,8 @@ import os
 import shlex
 
 from . import ask, questions
-from .common import Refusal, commit_texts, held, read_text, write_text
+from .common import (Refusal, commit_texts, disk_text, held, keeps_crlf, on_disk, read_text,
+                     write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
                      bold_title, display, dropped, final_parenthetical, folded, load, parse,
                      repeats,
@@ -311,9 +313,6 @@ def cmd_answer(args, path, out, err):
             heading = found_area.name if found_area else area
             new_ledger = insert_entry(new_ledger, current, heading, line)
             done = "entry %d under `### %s`" % (number, heading)
-        if not getattr(args, "every_turn", False):
-            every_turn(ledger_text, new_ledger, path, target, args.amends,
-                       None if args.no_entry or args.amends is not None else heading)
         new_q = questions.add_answered(questions.remove_block(old_q, found),
                                        "- %d. %s: %s (%s; %s)" % (number, title, label, date,
                                                                    source))
@@ -326,6 +325,10 @@ def cmd_answer(args, path, out, err):
         if problems:
             raise Refusal("answer: the result fails the lint; nothing written:\n" + "\n".join(
                 "%s:%d: %s" % p for p in problems))
+        # d32 fold (F2): the lint first, so a refusal's way out never meets the lint
+        if not getattr(args, "every_turn", False):
+            every_turn(ledger_text, new_ledger, path, target, args.amends,
+                       None if args.no_entry or args.amends is not None else heading)
         commit_texts([(path_q, new_q), (path, new_ledger)])
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
@@ -357,9 +360,9 @@ def every_turn(ledger_text, new_ledger, path, target, amends, heading):
                   and e.section == IN_FORCE and (e.area or "").lower() == every), None)
     if entry is None and (heading is None or heading.lower() != every):
         return
-    new = parse(new_ledger)
-    was = len(block(old, path, target).encode())
-    now = len(block(new, path, target).encode())
+    new, crlf = parse(new_ledger), keeps_crlf(target)
+    was = on_disk(block(old, path, target), crlf)
+    now = on_disk(block(new, path, target), crlf)
     if now <= was:
         return
     note = ""
@@ -385,5 +388,7 @@ def rewrite_block(path, target, out, err):
         return
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:
+        was, crlf = disk_text(target), keeps_crlf(target)
         write_text(target, new)
-        out.write("answer: rewrote the block in %s: %s\n" % (display(target), growth(old, new)))
+        out.write("answer: rewrote the block in %s: %s\n" % (display(target),
+                                                             growth(was, new, crlf)))
