@@ -499,3 +499,10 @@ class T2(Hermetic):
         self.git("commit", "-q", "-m", "untrack")
         self.git("config", "status.showUntrackedFiles", "no")
         self.assert_refused()
+
+    def test_fold_refuses_a_changed_ledger_named_in_another_case(self):
+        self.write(FIXTURE.replace("one table.", "one table, never a list."), self.ledger)
+        self.ledger = os.path.join(self.tmp, "decisions.md")
+        if not os.path.exists(self.ledger):
+            self.skipTest("a case-sensitive disk")
+        self.assert_refused()
