@@ -132,7 +132,7 @@ An empty part, or a title the ledger's lint cannot take, exits 2 and writes noth
 So does an option count outside 2 to 4, a label over five words or holding `(Recommended)`, a choice that does not end in `?`, or a sixth open question.
 The first label holds at most four words, since ` (Recommended)` follows it, and no label is `Other` in any case, since AskUserQuestion adds that option itself.
 
-`ask` skips, with one warning each, a block whose **Your answer:** line is filled in, which `agentik decisions answer N` enters first, and a block the lint refuses.
+`ask` skips, with one warning each, a block whose **Your answer:** line is filled in or has text under it, which `agentik decisions answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
 The render runs in a temp dir as `OPEN-QUESTIONS.md`, beside a copy of the repo's `.claude/respeak/`, and its `claude -p` child runs as a marked session helper.
 It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
