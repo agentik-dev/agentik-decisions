@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from unittest import mock
 
 import decisions
 from tests.hermetic import Hermetic
@@ -82,10 +83,14 @@ def snapshot(top):
     return found
 
 
-class Expire(Hermetic):
+class Fixture(Hermetic):
 
     def setUp(self):
         super().setUp()
+        self.fresh()
+
+    def fresh(self):
+        """A new temp directory holding the repo `tool`, its two files committed."""
         self.top = tempfile.mkdtemp(prefix="decisions-d34-")
         self.addCleanup(shutil.rmtree, self.top, True)
         self.repo = repo_at(os.path.join(self.top, "tool"),
@@ -105,6 +110,9 @@ class Expire(Hermetic):
 
     def lines(self, view, key):
         return [e["line"] for e in view["repos"][0][key]]
+
+
+class Expire(Fixture):
 
     def test_closed_items_expire_whatever_their_date(self):
         v = self.view()
@@ -227,3 +235,100 @@ class Expire(Hermetic):
         self.assertEqual((code, "expire: --order" in err), (2, True))
         self.assertEqual(self.run_cli(self.repo, "--days", "0")[0], 2)
         self.assertEqual(self.run_cli(self.repo, "--days", "x")[0], 2)
+
+
+class Stopped(Exception):
+    """A stop no `except OSError` catches, as a kill leaves the files: no rollback runs."""
+
+
+class ExpireLosesNothing(Fixture):
+    """`--write` stopped or failed at each replace: NICE_TO_HAVE.md and the archive
+    are each whole-old or whole-new, every line is in one of them, and the next run
+    finishes the move without appending an item twice."""
+
+    def read(self, path):
+        if not os.path.exists(path):
+            return None
+        with open(path, "rb") as handle:
+            return handle.read()
+
+    def write_failing(self, at, fault):
+        """`--write` with the at-th `os.replace` raising `fault`."""
+        real, calls = os.replace, []
+
+        def replace(src, dst):
+            calls.append(dst)
+            if len(calls) == at:
+                raise fault
+            return real(src, dst)
+
+        with mock.patch("decisions.common.os.replace", replace):
+            try:
+                return self.run_cli(self.repo, "--write")[0]
+            except Stopped:
+                return None
+
+    def finished(self):
+        """NICE_TO_HAVE.md and the archive after one clean `--write` from this state."""
+        code, _, err = self.run_cli(self.repo, "--write")
+        self.assertEqual(code, 0, err)
+        return self.read(self.nice), self.read(self.archive)
+
+    def check_stop(self, at, fault, archive_before):
+        old_nice = self.read(self.nice)
+        code = self.write_failing(at, fault)
+        nice, archive = self.read(self.nice), self.read(self.archive)
+        self.assertEqual(nice, old_nice)
+        done_nice, done_archive = self.finished()
+        self.assertIn(archive, (archive_before, done_archive))
+        if isinstance(fault, OSError):
+            self.assertEqual((code, archive), (2, archive_before))
+            leftovers = [n for _, _, names in os.walk(self.repo)
+                         for n in names if n.startswith(".decisions-")]
+            self.assertEqual(leftovers, [])
+        lines = old_nice.splitlines(keepends=True)
+        self.assertTrue(all(x in done_nice or x in done_archive for x in lines))
+        self.assertEqual(done_archive.count(lines[9]), 1)
+        before = snapshot(self.top)
+        self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        self.assertEqual(self.read(self.nice), done_nice)
+        self.assertEqual(self.read(self.archive), done_archive)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "expired")
+        before = snapshot(self.top)
+        code, out, _ = self.run_cli(self.repo, "--write")
+        self.assertEqual((code, snapshot(self.top) == before), (0, True))
+        self.assertTrue(out.startswith("== tool  expire: 0 closed, 0 S4"))
+
+    def test_a_failed_replace_puts_both_files_back(self):
+        for at in (1, 2):
+            with self.subTest(at=at):
+                self.fresh()
+                self.check_stop(at, OSError(28, "No space left on device"), None)
+
+    def test_a_stop_at_either_replace_loses_nothing_and_appends_once(self):
+        for at in (1, 2):
+            with self.subTest(at=at):
+                self.fresh()
+                self.check_stop(at, Stopped(), None)
+
+    def test_a_stop_with_an_archive_it_keeps_appends_once(self):
+        os.makedirs(os.path.dirname(self.archive))
+        with open(self.archive, "w", encoding="utf-8") as handle:
+            handle.write("# kept\n\n- an older note, 2026-01-01\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "an archive")
+        self.check_stop(2, Stopped(), self.read(self.archive))
+
+    def test_crlf_lines_move_byte_for_byte(self):
+        crlf = NICE.replace("\n", "\r\n")
+        root = repo_at(os.path.join(self.top, "crlf"), {"NICE_TO_HAVE.md": crlf,
+                                                         "HANDOFF.md": HANDOFF})
+        code, _, err = self.run_cli(root, "--write")
+        self.assertEqual(code, 0, err)
+        lines = crlf.encode().splitlines(keepends=True)
+        nice = self.read(os.path.join(root, "NICE_TO_HAVE.md"))
+        archive = self.read(os.path.join(root, "history", "NICE-overflow.md"))
+        gone = {9, 10, 15, 19, 20, 21}
+        self.assertEqual(nice, b"".join(x for i, x in enumerate(lines, 1) if i not in gone))
+        self.assertTrue(all(lines[n - 1] in archive for n in gone))
