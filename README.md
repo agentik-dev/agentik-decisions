@@ -84,7 +84,7 @@ make doctor
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
-| `--version` | `agentik-decisions 0.12.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.12.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -266,7 +266,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.12.0`, rendered `2026-11-01`, `391` unittest cases.
+Status: version `0.12.1`, rendered `2026-11-01`, `391` unittest cases.
 
 | Surface | State |
 |---|---|
