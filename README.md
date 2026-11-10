@@ -266,7 +266,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.12.0`, rendered `2026-11-01`, `389` unittest cases.
+Status: version `0.12.0`, rendered `2026-11-01`, `391` unittest cases.
 
 | Surface | State |
 |---|---|
