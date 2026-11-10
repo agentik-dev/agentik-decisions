@@ -85,7 +85,7 @@ OTHERS = ("### The work\n\n"
           + entry(9, "Gone path", "The tool reads `docs/gone.md` and `docs/here.md`.",
                   "2026-10-01; the owner")
           + entry(10, "Gone verb", "Run `agentik decisions frobnicate` after "
-                  "`agentik decisions render` and `decisions show N`.", "2026-10-01; the owner")
+                  "`agentik decisions render` and `agentik decisions show N`.", "2026-10-01; the owner")
           + entry(11, "Placeholder path", "A charter is `history/sittings/<date>-<n>.md`.",
                   "2026-10-01; the owner")
           + entry(12, "The session budget ceiling", "The tool counts turns.",
