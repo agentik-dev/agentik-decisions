@@ -14,7 +14,10 @@ NICE_TO_HAVE.md's snapshots. R1, records' share of lines; R2, record commits a
 landing (a merge on HEAD's first-parent line); R3, commits a charter
 (`history/sittings/*.md`) and the charter-only ones; R4, the backlog at `until`
 and every 7 days before it. A value it cannot measure prints `-` and a
-`not measured:` line, never a guess.
+`not measured:` line, never a guess. Beside them, `block`: the bytes of the
+CLAUDE.md block, loaded on every turn, at the first-parent commit at or before
+`since` and `until`, null without a commit, a CLAUDE.md or a block; its text line,
+`block  X B to Y B, +D B`, `-` for a null end, is left out when both are (d32).
 
 It runs only `git rev-parse`, `log`, `rev-list` and `show`, each bounded at
 `common.GIT_TIMEOUT`; it writes no file, takes no lock and ignores `--ledger`.
@@ -34,8 +37,9 @@ import subprocess
 from . import common
 from .backlog import NICE, ROW_CELL, nice_items
 from .common import Refusal
+from .render import TARGET, block_bytes
 
-__all__ = ["cmd_analyze", "ANALYSES", "path_class", "percent", "churn"]
+__all__ = ["cmd_analyze", "ANALYSES", "path_class", "percent", "churn", "block_at"]
 
 RECORD = ("charter", "history", "packets", "design", "handoff", "nice", "other")
 BUILD = ("test", "product")
@@ -237,6 +241,18 @@ def backlog(top, head, start, end):
     return nice, why
 
 
+def block_at(top, head, at):
+    """The bytes of the CLAUDE.md block at the first-parent commit at or before `at`, both
+    marker lines included, or None: no commit, no CLAUDE.md or no block (d32)."""
+    code, out = git(top, "rev-list", "-1", "--first-parent", "--before=" + at.strftime(STAMP),
+                    head)
+    sha = out.strip() if code == 0 else ""
+    if not sha:
+        return None
+    code, text = git(top, "show", "%s:%s" % (sha, TARGET))
+    return block_bytes(text) if code == 0 else None
+
+
 def measure(top, start, end):
     """One repo's churn, or a {repo, why} when it has no commit."""
     since, until = start.strftime(STAMP), end.strftime(STAMP)
@@ -287,7 +303,9 @@ def measure(top, start, end):
             "charters": {"count": len(charters), "median": touched_median, "max": touched_max,
                          "alone": {"commits": alone_commits, "median": alone_median,
                                    "max": alone_max}},
-            "nice": nice, "not_measured": not_measured}
+            "nice": nice, "block": {"start": block_at(top, head, start),
+                                    "end": block_at(top, head, end)},
+            "not_measured": not_measured}
 
 
 def read_repo(path, start, end):
@@ -360,6 +378,11 @@ def churn_text(value, start, end):
               % (ch["count"], shown(ch["median"]), shown(ch["alone"]["median"]))
               if ch["count"] else "charters -")
         lines.append("== %s  %s  %s  %s" % (name, counts_text(r), r3, nice_text(r["nice"])))
+        was, now = r["block"]["start"], r["block"]["end"]
+        if was is not None or now is not None:
+            lines.append("block  %s to %s%s" % tuple(
+                ["-" if v is None else "%d B" % v for v in (was, now)]
+                + ["" if None in (was, now) else ", %+d B" % (now - was)]))
         lines.extend("not measured: " + why for why in r["not_measured"])
     if value["all"] is not None:
         lines.append("== all %d  %s" % (len(value["repos"]), counts_text(value["all"])))

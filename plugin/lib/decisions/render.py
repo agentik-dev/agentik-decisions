@@ -3,13 +3,17 @@
     render [--into PATH] [--check | --lint | --fold-tails]
 
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
-beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there. Otherwise the block goes between
+beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there,
+and when clean prints one line, `render: the block for PATH is N B; it is loaded on every
+turn`, N the bytes of the block render would write there (d32). Otherwise the block goes between
 BEGIN and END in PATH (default: the CLAUDE.md beside the ledger), replacing a
 stale block in place, or appended after one blank line when the markers are
 absent. `--check` writes nothing: it prints the unified diff render would make
 and exits 1 when the block is stale, 0 when it is fresh. A target that is the
 ledger itself, by its path, a link or a hard link, is refused with exit 2. The write keeps
-the target's line end and goes through a link to the file it names.
+the target's line end and goes through a link to the file it names, and its line names the
+block's growth, `render: wrote PATH: X B to Y B, +D B; the block is loaded on every turn`,
+since every turn of every session loads it (d32); no cap is set, the number is the owner's.
 
 The block: one line naming its source and the command that regenerates it;
 the `Every session` entries, each number, title and paragraph word for word and
@@ -32,7 +36,8 @@ from .common import GIT_TIMEOUT, Refusal, bounded, held, read_text, write_text
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, amended, display, final_parenthetical,
                      folded, lint, load, parse)
 
-__all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "BEGIN", "END", "TARGET"]
+__all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
+           "tail_note", "BEGIN", "END", "TARGET"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -47,10 +52,37 @@ def short_tail(text):
     first = DATE.match(tail.lstrip()) if tail is not None else None
     if first is None:
         return text
+    return "%s (%s%s)" % (text[:-(len(tail) + 2)].rstrip(), first.group(0), tail_note(text))
+
+
+def tail_note(text):
+    """The note the block's short tail carries for the line `text`, `; amended once, see
+    the ledger` or `; amended N times, see the ledger`, else "" (d32)."""
+    tail = final_parenthetical(text.rstrip())
+    if tail is None or DATE.match(tail.lstrip()) is None:
+        return ""
     count = amended(tail)
-    note = "" if count == 0 else "; amended %s, see the ledger" % (
+    return "" if count == 0 else "; amended %s, see the ledger" % (
         "once" if count == 1 else "%d times" % count)
-    return "%s (%s%s)" % (text[:-(len(tail) + 2)].rstrip(), first.group(0), note)
+
+
+def block_bytes(text):
+    """The bytes of the one block between the markers in `text`, both marker lines
+    included, or None when `text` holds no such block (d32)."""
+    lines = text.splitlines(keepends=True)
+    begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
+    ends = [i for i, line in enumerate(lines) if line.strip() == END]
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        return None
+    return len("".join(lines[begins[0]:ends[0] + 1]).encode())
+
+
+def growth(old, new):
+    """`X B to Y B, +D B; the block is loaded on every turn`, the block in `old` then in
+    `new`, a text without one counted 0 B (d32)."""
+    before, after = block_bytes(old) or 0, block_bytes(new) or 0
+    return "%d B to %d B, %+d B; the block is loaded on every turn" % (before, after,
+                                                                       after - before)
 
 
 def tilde(path):
@@ -192,10 +224,13 @@ def cmd_render(args, path, out, err):
         for name, line, message in problems:
             out.write("%s:%d: %s\n" % (name, line, message))
         return 1
-    if args.lint:
-        return 0
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
+    if args.lint:
+        # d32: the measure, the bytes of the block render would write there
+        out.write("render: the block for %s is %d B; it is loaded on every turn\n"
+                  % (display(target), len(block(ledger, path, target).encode())))
+        return 0
     if is_ledger(target, path):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
@@ -223,5 +258,5 @@ def cmd_render(args, path, out, err):
         out.write("render: %s is fresh\n" % display(target))
         return 0
     write_text(target, new)
-    out.write("render: wrote %s\n" % display(target))
+    out.write("render: wrote %s: %s\n" % (display(target), growth(old, new)))
     return 0

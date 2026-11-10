@@ -14,6 +14,15 @@ import decisions
 from decisions.render import BEGIN, END
 from tests.hermetic import SAMPLE, Hermetic
 
+SIZED = re.compile(r"^render: the block for \S+ is \d+ B; it is loaded on every turn\n$")
+
+
+def sized(result):
+    """d32: a clean `--lint` prints the block's size: (code, out, err) with that one line
+    read and taken out, so a test that pinned the lint silent pins nothing else."""
+    code, out, err = result
+    return code, ("" if SIZED.match(out) else out + "(no size line)"), err
+
 
 def sha(path):
     with open(path, "rb") as handle:
@@ -238,7 +247,7 @@ class LintFirst(Base):
 
     def test_lint_alone_on_a_clean_ledger(self):
         shutil.copy(SAMPLE, self.ledger)
-        self.assertEqual(self.run_cli("--lint")[:2], (0, ""))
+        self.assertEqual(sized(self.run_cli("--lint"))[:2], (0, ""))
         self.assertEqual(sha(self.target), self.before)
 
 
@@ -398,7 +407,7 @@ class T2(Hermetic):
 
     def test_t2_lint_reads_the_form(self):
         self.write(FOLDED, self.ledger)
-        self.assertEqual(self.run_cli("--lint"), (0, "", ""))
+        self.assertEqual(sized(self.run_cli("--lint")), (0, "", ""))
 
     def test_t2_fold_is_lossless(self):
         code, out, err = self.run_cli("--fold-tails")
@@ -453,7 +462,7 @@ class T2(Hermetic):
                               "stays as it stands\n")
         for entry in decisions.ledger.parse(self.read()).entries:
             self.assertFalse(decisions.ledger.unclosed(entry.body), entry.number)
-        self.assertEqual(self.run_cli("--lint"), (0, "", ""))
+        self.assertEqual(sized(self.run_cli("--lint")), (0, "", ""))
 
     def test_t2_fold_then_check_passes(self):
         self.write("# Contract\n\n%s\nold\n%s\n" % (BEGIN, END))
@@ -461,7 +470,7 @@ class T2(Hermetic):
         code, out, err = self.run_cli("--fold-tails")
         self.assertEqual(code, 0, err)
         self.assertEqual(self.run_cli("--check")[:2], (0, ""))
-        self.assertEqual(self.run_cli("--lint"), (0, "", ""))
+        self.assertEqual(sized(self.run_cli("--lint")), (0, "", ""))
 
     def test_t2_block_keeps_its_count(self):
         short, whole = self.blocks()

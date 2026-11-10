@@ -265,7 +265,7 @@ class Answer(Base):
                    "and `<!-- END GENERATED: decisions -->`.\n")
         self.write(claude, mention)
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text",
-                                     "Hold it.", "--area", "Every session")
+                                     "Hold it.", "--area", "Every session", "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("CLAUDE.md holds no GENERATED markers", err)
         self.assertNotIn("rewrote the block", out)
@@ -322,7 +322,8 @@ class Answer(Base):
 
         with mock.patch("os.replace", flaky):
             code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text",
-                                         "Pin it.", "--area", "Every session")
+                                         "Pin it.", "--area", "Every session",
+                                         "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("answer: 9, Pin; entry 9 under `### Every session`", out)
         self.assertIn("9. **Pin the interpreter.** Pin it.", self.read(self.ledger))
@@ -369,7 +370,7 @@ class Answer(Base):
         claude = os.path.join(self.tmp, "CLAUDE.md")
         self.write(claude, "# Notes\n")
         code, _, err = self.answer("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
-                                   "--area", "Every session")
+                                   "--area", "Every session", "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("CLAUDE.md holds no GENERATED markers", err)
         self.assertEqual(self.read(claude), "# Notes\n")
@@ -379,14 +380,16 @@ class Answer(Base):
         shutil.copy(claude, other)
         self.new("Keep the lock")
         code, out, err = self.answer("10", "--pick", "pin", "--source", "s", "--text",
-                                     "Hold the lock.", "--area", "Every session")
+                                     "Hold the lock.", "--area", "Every session",
+                                     "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("rewrote the block", out)
         self.assertIn("Keep the lock", self.read(claude))
         self.assertNotIn("Keep the lock", self.read(other))
         self.new("Name the gate")
         code, out, err = self.answer("11", "--pick", "pin", "--source", "s", "--text", "Gate.",
-                                     "--area", "Every session", "--into", other)
+                                     "--area", "Every session", "--into", other,
+                                     "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("Name the gate", self.read(other))
         self.assertNotIn("Name the gate", self.read(claude))
@@ -744,7 +747,7 @@ class Answer(Base):
             self.assertEqual((sha(self.ledger), sha(self.questions), sha(self.claude)), before)
         whole = "%s  %s\n%s" % (self.SECOND, self.NEW1, first)
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                                     "--text", whole)
+                                     "--text", whole, "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("replaced: %s %s\n" % (first, self.SECOND), out)
         for path in (self.ledger, self.claude):
@@ -754,7 +757,7 @@ class Answer(Base):
     def test_kept_add_appends(self):
         first = self.two()
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                                     "--add", " %s " % self.NEW1)
+                                     "--add", " %s " % self.NEW1, "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertNotIn("replaced:", out)
         line = ("1. **Plain words.** %s %s %s (2026-09-01; amended 2026-09-28, the owner's "
@@ -769,7 +772,7 @@ class Answer(Base):
         """d29 act 4: the block cuts the amended tail to its first date and a count."""
         first = self.two()
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
-                                     "--add", self.NEW1)
+                                     "--add", self.NEW1, "--every-turn")
         self.assertEqual(code, 0, err)
         self.assertIn("1. **Plain words.** %s %s %s (2026-09-01; amended once, see the ledger)\n"
                       % (first, self.SECOND, self.NEW1), self.read(self.claude))
@@ -902,7 +905,7 @@ class T2Answer(Base):
         number = self.ask(title)
         code = decisions.main(["answer", number, "--pick", "PIN (Recommended)", "--source",
                                "the sitting", "--amends", entry, "--add", sentence,
-                               "--ledger", self.ledger], out=out, err=err)
+                               "--every-turn", "--ledger", self.ledger], out=out, err=err)
         self.assertEqual(code, 0, err.getvalue())
         return number, out.getvalue()
 

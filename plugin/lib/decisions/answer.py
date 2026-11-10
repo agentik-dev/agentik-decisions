@@ -57,7 +57,7 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      repeats,
                      sentences, unclosed)
 from .lookup import pick_area
-from .render import BEGIN, END, TARGET, apply, block, is_ledger
+from .render import BEGIN, END, TARGET, apply, block, growth, is_ledger, tail_note
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line"]
 
@@ -242,6 +242,9 @@ def cmd_answer(args, path, out, err):
         raise Refusal("answer: --text is required unless --no-entry; nothing written")
     if args.shorter and args.amends is None:
         raise Refusal("answer: --shorter is valid only with --amends; nothing written")
+    if getattr(args, "every_turn", False) and args.no_entry:
+        raise Refusal("answer: --every-turn is valid only with --area or --amends; nothing "
+                      "written")
     flag, text = ("--add", add) if add is not None else ("--text", text)
     if unclosed(text):
         raise Refusal("answer: %s holds a `(` that opens with a date and never closes, a piece "
@@ -299,6 +302,9 @@ def cmd_answer(args, path, out, err):
             heading = found_area.name if found_area else area
             new_ledger = insert_entry(new_ledger, current, heading, line)
             done = "entry %d under `### %s`" % (number, heading)
+        if not getattr(args, "every_turn", False):
+            every_turn(ledger_text, new_ledger, path, target, args.amends,
+                       None if args.no_entry or args.amends is not None else heading)
         new_q = questions.add_answered(questions.remove_block(old_q, found),
                                        "- %d. %s: %s (%s; %s)" % (number, title, label, date,
                                                                    source))
@@ -330,6 +336,36 @@ def cmd_answer(args, path, out, err):
     return 0
 
 
+def every_turn(ledger_text, new_ledger, path, target, amends, heading):
+    """d32: refuse an answer that makes the block larger when it touches `Every session`,
+    by `--amends M` with M in force there or an `--area` that resolves to it (`heading`).
+    The block is the one `render` would write at `target`, markers or none: the relay puts
+    the same block in each child's prompt. The growth is the whole block's, the entry's
+    tail note included, and the refusal names the note's share when it grows."""
+    every = EVERY_SESSION.lower()
+    old = parse(ledger_text)
+    entry = next((e for e in old.entries if amends is not None and e.number == amends
+                  and e.section == IN_FORCE and (e.area or "").lower() == every), None)
+    if entry is None and (heading is None or heading.lower() != every):
+        return
+    new = parse(new_ledger)
+    was = len(block(old, path, target).encode())
+    now = len(block(new, path, target).encode())
+    if now <= was:
+        return
+    note = ""
+    if entry is not None:
+        after = next((e for e in new.entries if e.number == amends and e.section == IN_FORCE),
+                     None)
+        grown = (len(tail_note(after.text).encode()) - len(tail_note(entry.text).encode())
+                 if after is not None else 0)
+        note = "; %d B of it is the entry's tail note" % grown if grown > 0 else ""
+    raise Refusal("answer: this answer adds %d B to the block, %d B to %d B, which is loaded "
+                  "on every turn; put it in an entry outside `Every session`, which the block "
+                  "lists by title only, or pass --every-turn%s; nothing written"
+                  % (now - was, was, now, note))
+
+
 def rewrite_block(path, target, out, err):
     """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has markers."""
     old = read_text(target) if os.path.exists(target) else ""
@@ -341,4 +377,4 @@ def rewrite_block(path, target, out, err):
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:
         write_text(target, new)
-        out.write("answer: rewrote the block in %s\n" % display(target))
+        out.write("answer: rewrote the block in %s: %s\n" % (display(target), growth(old, new)))

@@ -240,7 +240,7 @@ class Analyze(Hermetic):
         repo = churn["repos"][0]
         self.assertEqual(sorted(repo), sorted(
             ["repo", "head", "commits", "landings", "lines", "vendor", "record_commits",
-             "charters", "nice", "not_measured"]))
+             "charters", "nice", "block", "not_measured"]))
         self.assertEqual(sorted(repo["charters"]), ["alone", "count", "max", "median"])
         self.assertEqual(sorted(repo["charters"]["alone"]), ["commits", "max", "median"])
         self.assertEqual(sorted(repo["nice"]), ["closed", "filed", "moved", "rising",
