@@ -120,18 +120,25 @@ def drop_line(text, index):
     return "".join(lines[:start] + lines[index + 1:])
 
 
-def named(block, typed):
-    """The option label `typed` names, or None: equal ignoring case once `*` and
-    backticks at either end, a trailing ` (Recommended)` and a period before or after
-    it are dropped (d28 ruling)."""
+def normal(text):
+    """`text` lowercased, with `*` and backticks at either end, a trailing ` (Recommended)`
+    and a period before or after it dropped until none is left (d28 ruling)."""
     marker, last = questions.RECOMMENDED.strip().lower(), None
-    text = typed.lower()
+    text = text.lower()
     while text != last:
         last = text
         text = text.strip("*` ").rstrip(".").rstrip()
         text = text[:-len(marker)] if text.endswith(marker) else text
-    labels = {label.lower().rstrip("."): label for label, _marked, _effect in block.options}
-    return labels.get(text)
+    return text
+
+
+def named(block, typed):
+    """The option labels `typed` names: the one it equals ignoring case, else each whose
+    normal form is its normal form, so two labels one normal form apart are both named
+    (d28 ruling; review r1 F1, F2)."""
+    labels = [label for label, _marked, _effect in block.options]
+    exact = [label for label in labels if label.lower() == typed.lower()]
+    return exact or [label for label in labels if normal(label) == normal(typed)]
 
 
 def pick(block, args):
@@ -140,15 +147,21 @@ def pick(block, args):
     it; any other T refuses `--pick` and stays in `--other`'s label. An unknown
     `--pick` keeps its own refusal."""
     typed = block.answer or ""
-    option = named(block, typed) if typed else None
+    options = named(block, typed) if typed else []
+    option = options[0] if len(options) == 1 else None
     names = ("answer: question %d's %s line names the option `%s`; pass --pick with it; "
              "nothing written" % (block.number, questions.ANSWER, option))
+    twins = ("answer: question %d's %s line could name any of %s; ask the owner to type one "
+             "label as it stands; nothing written"
+             % (block.number, questions.ANSWER, ", ".join("`%s`" % o for o in options)))
     if args.other is None:
         label = pick_label(block, args.pick)
         if label is None:
             raise Refusal("answer: question %d has no option %r; its options are %s; nothing "
                           "written" % (block.number, args.pick,
                                        ", ".join(l for l, _m, _e in block.options)))
+        if len(options) > 1:
+            raise Refusal(twins)
         if typed and option is None:
             raise Refusal("answer: question %d's %s line says more than a label; pass "
                           "--other, which keeps the line; nothing written:\n%s"
@@ -159,6 +172,8 @@ def pick(block, args):
     other = ask.clean(args.other)
     if not other:
         raise Refusal("answer: empty --other; nothing written")
+    if len(options) > 1:
+        raise Refusal(twins)
     if option is not None:
         raise Refusal(names)
     if typed and other.lower() != typed.lower():
