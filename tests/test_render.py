@@ -53,7 +53,11 @@ class Base(Hermetic):
                 "each; `decisions show N` reads one.\n\n- 3 One interpreter (Build)\n"
                 "- 4 Tests first (Build)\n- 5 Make is the gate (Build tools)\n"
                 "- 7 Releases follow the manifest (Release)\n%s\n"
-                % (BEGIN, self.line("1. "), self.line("2. "), END))
+                % (BEGIN, self.short("1. "), self.short("2. "), END))
+
+    def short(self, prefix):
+        """d29 act 4: the block cuts an Every session tail to its first date."""
+        return self.line(prefix).replace("; the sample)", ")")
 
 
 class Render(Base):
@@ -234,3 +238,69 @@ class LintFirst(Base):
         shutil.copy(SAMPLE, self.ledger)
         self.assertEqual(self.run_cli("--lint")[:2], (0, ""))
         self.assertEqual(sha(self.target), self.before)
+
+
+# d29 act 4 (audit d2): design/d29-churn.md section 6's three tails.
+TAILS = """# Decisions
+
+## In force
+
+### Every session
+
+1. **The gate runs every check.** Every landing runs the full check through the gate queue. (2026-09-21; the owner; amended 2026-10-01, answer 3; amended 2026-10-05, answer 4)
+2. **Records are tables.** A record is one table. (2026-10-02; the owner)
+4. **A builder never pushes.** The coordinator pushes after a green check. (2026-10-03 and 2026-10-04; the owner; amended 2026-10-06, answer 5)
+
+### The tool
+
+3. **One verb reads git.** The churn view reads git and writes nothing. (2026-11-09; the owner)
+"""
+SHORT = ("1. **The gate runs every check.** Every landing runs the full check through the gate "
+         "queue. (2026-09-21; amended 2 times, see the ledger)\n"
+         "2. **Records are tables.** A record is one table. (2026-10-02)\n"
+         "4. **A builder never pushes.** The coordinator pushes after a green check. "
+         "(2026-10-03; amended once, see the ledger)\n")
+
+
+class Tails(Base):
+
+    def setUp(self):
+        super().setUp()
+        self.write(TAILS, self.ledger)
+        self.led = decisions.ledger.load(self.ledger)
+
+    def blocks(self):
+        return (decisions.render.block(self.led, self.ledger, self.target),
+                decisions.render.block(self.led, self.ledger, self.target, tails=True))
+
+    def test_tails_short_in_the_block(self):
+        short, whole = self.blocks()
+        self.assertIn(SHORT, short)
+        self.assertIn("\n- 3 One verb reads git (The tool)\n", short)
+        self.assertEqual(len(whole.encode()) - len(short.encode()), 75)
+        for line in TAILS.splitlines()[5:8]:
+            self.assertIn(line, whole)
+
+    def test_tails_whole_form_checks_fresh(self):
+        self.write("# Notes\n\n" + self.blocks()[1])
+        before = sha(self.target)
+        code, out, err = self.run_cli("--check")
+        self.assertEqual((code, out), (0, ""), err)
+        self.assertEqual(err, "render: CLAUDE.md carries the entries' whole tails, 75 B more; "
+                              "run render to shorten it\n")
+        self.assertEqual(sha(self.target), before)
+
+    def test_tails_stale_still_exits_1(self):
+        self.write("# Notes\n\n" + self.blocks()[1])
+        self.write(TAILS.replace("one table.", "one table, never a list."), self.ledger)
+        code, out, _ = self.run_cli("--check")
+        self.assertEqual(code, 1)
+        self.assertIn("never a list", out)
+
+    def test_tails_render_rewrites_then_fresh(self):
+        self.write("# Notes\n\n" + self.blocks()[1])
+        code, out, err = self.run_cli()
+        self.assertEqual(code, 0, err)
+        self.assertIn("render: wrote", out)
+        self.assertIn(SHORT, self.read())
+        self.assertEqual(self.run_cli("--check"), (0, "", ""))

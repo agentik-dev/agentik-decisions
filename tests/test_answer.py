@@ -757,6 +757,19 @@ class Answer(Base):
         self.assertIn(line, self.read(self.claude))
         self.lint()
 
+    def test_tails_after_amends(self):
+        """d29 act 4: the block cuts the amended tail to its first date and a count."""
+        first = self.two()
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--add", self.NEW1)
+        self.assertEqual(code, 0, err)
+        self.assertIn("1. **Plain words.** %s %s %s (2026-09-01; amended once, see the ledger)\n"
+                      % (first, self.SECOND, self.NEW1), self.read(self.claude))
+        self.assertIn("(2026-09-01; the sample; amended 2026-09-28, the owner's answer to "
+                      "decision 9, s)\n", self.read(self.ledger))
+        self.assertEqual(decisions.main(["render", "--check", "--ledger", self.ledger],
+                                        out=io.StringIO(), err=io.StringIO()), 0)
+
     def test_kept_add_refusals(self):
         self.two()
         before = (sha(self.ledger), sha(self.questions), sha(self.claude))
