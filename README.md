@@ -141,6 +141,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it, and other text refuses `--pick` and stays in the Answered line, as `Other: X; the owner's line: T`, never in the ledger.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
@@ -281,8 +282,6 @@ Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a war
 Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
 Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
 Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
-Version `0.4.0` drops `new --answers`: `new` takes two to four `--option` flags instead, and `ask` and `answer` carry a question from the file to the owner and the answer into the ledger.
-Version `0.3.0` broke `0.2.0` on purpose: the per-file format and its verbs are gone, and a repository moves its entries into one ledger by hand.
 
 ## Layout
 

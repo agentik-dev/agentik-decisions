@@ -4,7 +4,13 @@
            (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
-`--other` carries the owner's free text, restated. With `--area A` entry N is
+`--other` carries the owner's free text, restated. The owner's typed text T, the
+rest of the block's **Your answer:** line and every non-blank line under it, holds
+both (d28): T that names an option (its label once `*` and backticks at either end,
+case, a trailing ` (Recommended)` and a period are dropped) refuses `--other` and a
+`--pick` of another option; any other T refuses `--pick` and prints T, and under
+`--other X` the label is `Other: X; the owner's line: T` (`Other: X` when X is T,
+ignoring case). T never enters the ledger: `--text` stays the caller's. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
