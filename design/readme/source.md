@@ -79,12 +79,12 @@ make doctor
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
-| `answer N (--pick L \| --other T) --source S [--text P] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
+| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
 | `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
-| `--version` | `agentik-decisions 0.12.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `--version` | `agentik-decisions 0.13.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
 
@@ -147,7 +147,9 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
 `--amends M` replaces entry M's paragraph, keeps its tail whole and appends one amendment to it, and exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
-With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a paragraph under half the old one's length is refused unless `--shorter`.
+With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
+At 25 entries in force, `--area` exits 2 first and names the ways out: a line under `## Superseded`, `--amends M` or `--no-entry`.
+A line no part of its block takes, such as text typed off the **Your answer:** line, refuses `--pick`, and `--other` keeps it in the Answered line.
 Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
 A `--into` target that is the ledger itself exits 2 before anything is written.
 Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
@@ -266,7 +268,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.12.1`, rendered `2026-11-01`, `391` unittest cases.
+Status: version `0.13.0`, rendered `2026-11-01`, `399` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -279,9 +281,6 @@ Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry wh
 
 Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
 Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the interpreter `install-cli` sets up, at 3.12 or later, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0 and wrote into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
-Version `0.5.2` makes `answer --text` the body only: `answer` refuses a `--text` that opens with a bold title or ends in a dated tail, and the lint names an entry whose title or tail is doubled.
-Version `0.5.1` ships respeak's include file, `plugin/respeak-include.md`, which `CLAUDE.md` imports; respeak stays optional.
-Version `0.5.0` adds `backlog`, and `doctor` reports respeak, which stays optional.
 
 ## Layout
 

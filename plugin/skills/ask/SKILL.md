@@ -26,7 +26,7 @@ the owner, or at close.
 2. Pass each call to AskUserQuestion as it stands, back to back in one turn.
    Never reword a question, a label or a description.
 3. For each answer, run
-   `agentik-decisions answer N (--pick LABEL | --other TEXT) --source S [--text P] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]`.
+   `agentik-decisions answer N (--pick LABEL | --other TEXT) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]`.
    `--pick` takes the label chosen. For "Other", `--other` carries the owner's
    text, restated in plain words. `--source` carries the tail's source: the
    owner's word, where it was given, and the file that records it, such as
@@ -45,8 +45,11 @@ the owner, or at close.
    `--amends M`, `--text` is the whole paragraph in force after the answer:
    every sentence of M that stays, with the change made, never the change
    alone; M's title and tail stay as they are. The run prints `replaced:`
-   with M's old paragraph; a paragraph under half the old one's length is
-   refused unless `--shorter`. When the
+   with M's old paragraph; a `--text` that drops a sentence of M is refused
+   unless `--shorter`. `--add S` in place of `--text` appends S to M's
+   paragraph as it stands. A line no part of its block takes, such as text
+   typed off the **Your answer:** line, refuses `--pick`: it is the owner's,
+   so run `--other`, which keeps it in the Answered line. When the
    ledger's block lives in a CLAUDE.md that is not beside it, pass the same
    `--into` that `agentik-decisions render` uses: the cross-repo ledger's block is in
    the user-level CLAUDE.md, `--into ~/.claude/CLAUDE.md`.

@@ -1,6 +1,6 @@
 ---
 description: Enter the owner's answer to open question N in the ledger
-argument-hint: "N (--pick L | --other T) --source S [--text P] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]"
+argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]"
 allowed-tools: Bash(agentik-decisions *)
 ---
 
@@ -12,7 +12,9 @@ text only `--other`, whose Answered line keeps the owner's words. `--text` is th
 or its `(date; source)` tail, which `answer` writes; a `--text` holding either
 is refused. It is needed except with `--no-entry`; with `--amends M` it is the
 whole paragraph in force after the answer, every sentence that stays with the
-change made, and `--shorter` lets through one under half the old one's length.
+change made: one that drops a sentence is refused unless `--shorter`, and
+`--add S` in its place appends S to the paragraph as it stands. A line no part of its
+block takes refuses `--pick`; `--other` keeps it in the Answered line.
 One of `--area`, `--amends` and `--no-entry` is required. `--area A` resolves
 as `agentik-decisions show --area A` does, a unique prefix included, but among the
 headings above the legacy marker only, and `Every session` only by its whole

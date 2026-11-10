@@ -1,6 +1,6 @@
 """`answer`: the owner's answer to question N, recorded (design d18 section 1.2).
 
-    answer N (--pick L | --other T) --source S [--text P]
+    answer N (--pick L | --other T) --source S [--text P | --add S]
            (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
@@ -10,7 +10,12 @@ both (d28): T that names an option (its label once `*` and backticks at either e
 case, a trailing ` (Recommended)` and a period are dropped) refuses `--other` and a
 `--pick` of another option; any other T refuses `--pick` and prints T, and under
 `--other X` the label is `Other: X; the owner's line: T` (`Other: X` when X is T,
-ignoring case). T never enters the ledger: `--text` stays the caller's. With `--area A` entry N is
+ignoring case). T never enters the ledger: `--text` stays the caller's. A line no
+part of its block takes (d30: a part is a label's or the **Report.** bold line and
+the lines under it to a blank, an option line under the third label, or the
+**Your answer:** line and all under it) refuses `--pick`, after an unknown one, and
+`--other X` takes it whatever T names, as `Other: X; the owner's line: W`, W those
+lines then T. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
@@ -18,15 +23,19 @@ A is stripped of spaces and leading `#`s, a newline in it and two prefix matches
 are refused,
 a name no heading matches is a new `### A`, last under `## In force`, and the
 success line names the heading. The title takes a period unless it ends in `?`
-or `!`. `--amends M` replaces entry M's paragraph with `--text`, the whole
-paragraph in force after the answer, adds to its tail an amendment and prints
-`replaced:` with the old paragraph; an entry whose tail is missing or does not
-open with a date is refused, and a paragraph under half the old one's length
-is refused unless `--shorter`, which is valid only with `--amends`; `--no-entry`
-writes no entry. One of the three is required: argparse refuses with exit 2.
+or `!`. At 25 entries in force `--area` is refused first, naming the ways out: a
+line under `## Superseded`, `--amends M` or `--no-entry`. `--amends M` replaces
+entry M's paragraph with `--text`, the whole paragraph in force after the answer,
+adds to its tail an amendment and prints `replaced:` with the old paragraph; an
+entry whose tail is missing or does not open with a date is refused, and a
+`--text` that drops a sentence of it, one not held whole, is refused and listed
+unless `--shorter`, which is valid only with `--amends`. `--add S` in place of
+`--text`, under `--amends M` alone, appends S to the paragraph as it stands and
+prints no `replaced:`. `--no-entry` writes no entry. One of the three is required: argparse refuses with exit 2.
 `--text` is the body only, in both modes (D22): `answer` writes the bold title
 and the `(DATE; source)` tail, and `--amends` keeps M's own, so a `--text` that
-opens with a bold title or ends in a dated tail is refused. Every run removes
+opens with a bold title or ends in a dated tail is refused, as is a `--text` or
+`--add` holding a `(` that opens with a date and never closes. Every run removes
 question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`. The
 run holds `.new.lock`, lints both texts (an open count over the cap, which the
 answer lowers, is no refusal), and writes both files or neither;
@@ -43,8 +52,9 @@ import shlex
 
 from . import ask, questions
 from .common import Refusal, commit_texts, held, read_text, write_text
-from .ledger import (DATE, EVERY_SESSION, IN_FORCE, LEGACY, PROPOSED, TITLED, bold_title, display,
-                     final_parenthetical, load, parse, repeats)
+from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
+                     bold_title, display, dropped, final_parenthetical, load, parse, repeats,
+                     sentences, unclosed)
 from .lookup import pick_area
 from .render import BEGIN, END, TARGET, apply, block, is_ledger
 
@@ -81,12 +91,13 @@ def insert_entry(text, ledger, area, line):
     return "".join(gapped(lines, last, ["### %s\n" % area, "\n", line + "\n"]))
 
 
-def amend_entry(text, ledger, number, paragraph, amendment, shorter=False):
+def amend_entry(text, ledger, number, paragraph, amendment, shorter=False, add=None):
     """(`text` with entry `number`'s paragraph replaced, the old paragraph); its tail
     gains `amendment` after what it holds, so an earlier amendment is never dropped.
     An entry whose tail is missing or does not open with a date is refused, and a
-    `paragraph` under half the old one's length, both after `ask.clean`, is refused
-    unless `shorter`."""
+    `paragraph` that does not hold each sentence of the old one whole is refused
+    unless `shorter` (d30 ruling 1). With `add`, the paragraph is the old one, a
+    space and `add`, and the old paragraph returned is None (d30 ruling 2)."""
     entry = next((e for e in ledger.entries if e.section == IN_FORCE and e.number == number),
                  None)
     if entry is None:
@@ -101,16 +112,20 @@ def amend_entry(text, ledger, number, paragraph, amendment, shorter=False):
                       "can follow it; nothing written" % number)
     old = (titled.group(3) or "").rstrip()
     old = old[:-(len(tail) + 2)].rstrip()
-    new_len, old_len = len(ask.clean(paragraph)), len(ask.clean(old))
-    if 2 * new_len < old_len and not shorter:
-        raise Refusal("answer: the new paragraph of entry %d is %d characters, under half the "
-                      "old one's %d; --text is the whole paragraph in force after the answer; "
-                      "the old paragraph follows; pass --shorter to cut it; nothing written:\n%s"
-                      % (number, new_len, old_len, old))
+    if add is not None:
+        paragraph, replaced = ("%s %s" % (old, add)).strip(), None
+    else:
+        lost, replaced = dropped(ask.clean(old), paragraph), old
+        if lost and not shorter:
+            raise Refusal("answer: the new paragraph of entry %d drops %d of its %d sentences; "
+                          "--text is the whole paragraph in force after the answer; pass --add "
+                          "with the new sentences alone to keep the paragraph and append them, "
+                          "or --shorter to let these go; nothing written:\n%s"
+                          % (number, len(lost), len(sentences(ask.clean(old))), "\n".join(lost)))
     lines = text.splitlines(keepends=True)
     lines[entry.line - 1] = "%d. **%s** %s (%s; amended %s)\n" % (
         number, titled.group(1), paragraph, tail, amendment)
-    return "".join(lines), old
+    return "".join(lines), replaced
 
 
 def drop_line(text, index):
@@ -145,9 +160,10 @@ def pick(block, args):
     """The label of the answer, `--pick`'s option or `Other: X`, held to the owner's
     typed text T, `block.answer` (d28): T that names an option takes only `--pick` of
     it; any other T refuses `--pick` and stays in `--other`'s label. An unknown
-    `--pick` keeps its own refusal."""
-    typed = block.answer or ""
-    options = named(block, typed) if typed else []
+    `--pick` keeps its own refusal. A block with stray lines, text no part of it takes,
+    refuses `--pick` and puts them before T in `--other`'s label (d30 ruling 5)."""
+    typed, stray = block.answer or "", list(block.stray)
+    options = named(block, typed) if typed and not stray else []
     option = options[0] if len(options) == 1 else None
     names = ("answer: question %d's %s line names the option `%s`; pass --pick with it; "
              "nothing written" % (block.number, questions.ANSWER, option))
@@ -160,6 +176,10 @@ def pick(block, args):
             raise Refusal("answer: question %d has no option %r; its options are %s; nothing "
                           "written" % (block.number, args.pick,
                                        ", ".join(l for l, _m, _e in block.options)))
+        if stray:
+            raise Refusal("answer: question %d holds text no part of its block takes; pass "
+                          "--other, which keeps it in the Answered line, or join it to its "
+                          "part; nothing written:\n%s" % (block.number, "\n".join(stray)))
         if len(options) > 1:
             raise Refusal(twins)
         if typed and option is None:
@@ -176,6 +196,7 @@ def pick(block, args):
         raise Refusal(twins)
     if option is not None:
         raise Refusal(names)
+    typed = " ".join(stray + ([typed] if typed else []))
     if typed and other.lower() != typed.lower():
         return "Other: %s; the owner's line: %s" % (other, typed)
     return "Other: " + other
@@ -202,16 +223,35 @@ def cmd_answer(args, path, out, err):
         raise Refusal("answer: empty --area; nothing written")
     if not (area or args.amends is not None or args.no_entry):
         raise Refusal("answer: name --area A, --amends M or --no-entry; nothing written")
-    if not args.no_entry and not text:
+    if area is not None and os.path.exists(path):
+        count = len([e for e in parse(read_text(path)).entries if e.section == IN_FORCE])
+        if count >= IN_FORCE_CAP:
+            # d30 ruling 4: the cap refuses before the --text test, and names the ways out.
+            raise Refusal("answer: %d entries are in force, the cap, so entry %d cannot join "
+                          "them; the ways out: retire one (move its line under `## Superseded` "
+                          "with a date and `replaced by`, `merged into` or `lapsed with`), fold "
+                          "the answer into one with --amends M, or pass --no-entry; nothing "
+                          "written" % (count, number))
+    add = ask.clean(args.add) if args.add is not None else None
+    if add is not None and (args.amends is None or args.text is not None or args.shorter
+                            or not add):
+        raise Refusal("answer: --add takes the place of --text under --amends, never with "
+                      "--shorter, and is never empty; nothing written")
+    if not args.no_entry and not text and add is None:
         raise Refusal("answer: --text is required unless --no-entry; nothing written")
     if args.shorter and args.amends is None:
         raise Refusal("answer: --shorter is valid only with --amends; nothing written")
+    flag, text = ("--add", add) if add is not None else ("--text", text)
+    if unclosed(text):
+        raise Refusal("answer: %s holds a `(` that opens with a date and never closes, a piece "
+                      "of a (date; source) tail; pass the text without it; nothing written"
+                      % flag)
     repeated = [] if args.no_entry else repeats(text)
     if repeated:
-        raise Refusal("answer: --text %s; --text is the body only: answer writes the bold "
+        raise Refusal("answer: %s %s; %s is the body only: answer writes the bold "
                       "title and the (date; source) tail, and --amends keeps the entry's own; "
                       "pass the text between them; nothing written"
-                      % " and ".join(REFUSED[part] for part in repeated))
+                      % (flag, " and ".join(REFUSED[part] for part in repeated), flag))
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if is_ledger(target, path):
@@ -238,7 +278,7 @@ def cmd_answer(args, path, out, err):
             done = "no entry"
         elif args.amends is not None:
             new_ledger, replaced = amend_entry(new_ledger, parse(new_ledger), args.amends, text,
-                                               "%s, %s" % (date, cause), args.shorter)
+                                               "%s, %s" % (date, cause), args.shorter, add)
             done = "entry %d amended" % args.amends
         else:
             line = "%d. %s %s (%s; %s)" % (number, bold_title(title), text, date, cause)

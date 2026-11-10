@@ -12,7 +12,7 @@ Verbs
                                   line in the ledger
     ask [N...]                    the open questions, rendered once through respeak
                                   and written back, as AskUserQuestion calls (JSON)
-    answer N (--pick L | --other T) --source S [--text P]
+    answer N (--pick L | --other T) --source S [--text P | --add S]
         (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
                                   the owner's answer: entry N, an amendment or
                                   none; the question leaves, an Answered line stays;
@@ -122,6 +122,9 @@ def build_parser():
                         help="the entry's body only, without its bold title or its (date; "
                         "source) tail, which answer writes; with --amends, the whole body in "
                         "force after the answer")
+    answer.add_argument("--add", default=None, metavar="S",
+                        help="with --amends, in place of --text: sentences appended to the "
+                        "paragraph as it stands")
     lands = answer.add_mutually_exclusive_group(required=True)
     lands.add_argument("--area", default=None, metavar="A",
                        help="entry N last under ### A: an exact name, else a unique prefix, a "
@@ -130,8 +133,8 @@ def build_parser():
                        help="replace entry M's paragraph")
     lands.add_argument("--no-entry", action="store_true", help="an answer that sets no entry")
     answer.add_argument("--shorter", action="store_true",
-                        help="with --amends: let through a paragraph under half the old "
-                        "one's length")
+                        help="with --amends: let through a --text that drops a sentence of "
+                        "the old paragraph")
     answer.add_argument("--into", default=None,
                         help="the CLAUDE.md block's target; the default is beside the ledger")
 
