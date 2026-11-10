@@ -10,9 +10,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGIN = os.path.join(ROOT, "plugin")
 SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
-COMMANDS = ("analyze.md", "answer.md", "audit.md", "backlog.md", "find.md", "new.md",
-            "render.md", "show.md")
-VERSION = "0.17.1"
+COMMANDS = ("analyze.md", "answer.md", "audit.md", "backlog.md", "expire.md", "find.md",
+            "new.md", "render.md", "show.md")
+VERSION = "0.18.2"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
@@ -179,8 +179,8 @@ class StructureTest(unittest.TestCase):
     def test_descriptions_name_six_verbs_plus_doctor(self):
         """F8: entry 4 of the cross-repo ledger names six verbs, the five commands and
         the ask skill; `doctor` stands beside them, never among them."""
-        served = sorted([name[:-3] for name in COMMANDS
-                         if name not in ("analyze.md", "audit.md", "backlog.md")] + ["ask"])
+        views = ("analyze.md", "audit.md", "backlog.md", "expire.md")
+        served = sorted([name[:-3] for name in COMMANDS if name not in views] + ["ask"])
         self.assertEqual(served, ["answer", "ask", "find", "new", "render", "show"])
         for rel in DESCRIBED:
             text = read(os.path.join(ROOT, rel))

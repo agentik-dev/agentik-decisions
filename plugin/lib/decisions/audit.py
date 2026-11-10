@@ -22,10 +22,12 @@ those git grep finds holding the word `entry`, `entries` or an alias, so a citat
 wrapped across a line counts; a file that is not UTF-8 is read with replacement; `N to
 M` and `N-M` name every number from N to M.
 
-The Every session entries print first, then the other entries in force, each with
-the bytes its line costs in the block `render` writes into the CLAUDE.md beside the
-ledger, read from `render.block`'s output with its line end, CRLF when that file
-keeps it. The text ends naming the owner's way to act: `new`, `ask` and `answer`.
+Every Every session entry prints first, marked or not (d34; ` none` only when there
+is none), then the other entries in force that carry a mark, each with the bytes its
+line costs in the block `render` writes into the CLAUDE.md beside the ledger, read
+from `render.block`'s output with its line end, CRLF when that file keeps it.
+`--json` lists the first as `every_session_entries`, `marks` `[]` when none, and keeps
+`candidates`, the marked entries, as d33 had it. The text ends naming the owner's way to act: `new`, `ask` and `answer`.
 
 It parses the ledger tolerantly, as `show` does, and runs only `git rev-parse` and
 `git --no-optional-locks grep`, each bounded at `common.GIT_TIMEOUT`; it writes no
@@ -249,7 +251,7 @@ def audit(path, repos, missing, verbs):
     cited, unread = citations(in_force, real, top, repos)
     any_read = len(unread) < len(repos)
     roots = [top] + [r for r in repos if r != top] + [os.path.dirname(top)]
-    candidates = []
+    candidates, every_rows = [], []
     for entry in in_force:
         is_every = entry.number in every
         paragraph, tail = paragraph_and_tail(entry)
@@ -269,12 +271,14 @@ def audit(path, repos, missing, verbs):
         lost = gone(entry, roots, verbs)
         if lost:
             marks.append(("P6", "gone: " + ", ".join(lost)))
+        row = {"number": entry.number, "title": entry.title, "area": entry.area,
+               "every_session": is_every, "bytes": costs.get((is_every, entry.number), 0),
+               "marks": [{"mark": m, "lead": False, "evidence": e} for m, e in marks]}
+        if is_every:
+            # d34: every Every session entry prints with its bytes, marked or not.
+            every_rows.append(row)
         if marks:
-            candidates.append({"number": entry.number, "title": entry.title,
-                               "area": entry.area, "every_session": is_every,
-                               "bytes": costs.get((is_every, entry.number), 0),
-                               "marks": [{"mark": m, "lead": False, "evidence": e}
-                                         for m, e in marks]})
+            candidates.append(row)
     candidates.sort(key=lambda c: not c["every_session"])
     leads = []
     words = [(e, title_words(e.title)) for e in in_force]
@@ -286,7 +290,7 @@ def audit(path, repos, missing, verbs):
                               "titles": [a.title, b.title], "shared": sorted(shared)})
     return {"ledger": path, "in_force": len(in_force), "cap": IN_FORCE_CAP,
             "at_cap": len(in_force) >= IN_FORCE_CAP, "every_session": len(every),
-            "every_session_cap": EVERY_SESSION_CAP,
+            "every_session_cap": EVERY_SESSION_CAP, "every_session_entries": every_rows,
             "block_bytes": render.block_bytes(generated, crlf) or 0,
             "candidates": candidates, "leads": leads,
             "not_detected": ["P7"] if any_read else ["P5", "P7"],
@@ -304,11 +308,13 @@ def as_text(v, names=None):
                  v["every_session_cap"], "{:,}".format(v["block_bytes"]))]
     for title, every in (("Every session, paid every turn:", True),
                          ("Other entries in force:", False)):
-        rows = [c for c in v["candidates"] if c["every_session"] == every]
+        rows = (v["every_session_entries"] if every else
+                [c for c in v["candidates"] if not c["every_session"]])
         lines.append(title + ("" if rows else " none"))
         for c in rows:
-            lines.append("%d %s  %d B  %s" % (c["number"], c["title"], c["bytes"], "; ".join(
-                "%s %s" % (m["mark"], m["evidence"]) for m in c["marks"])))
+            lines.append("%d %s  %d B" % (c["number"], c["title"], c["bytes"]) + (
+                "  " + "; ".join("%s %s" % (m["mark"], m["evidence"]) for m in c["marks"])
+                if c["marks"] else ""))
     lines.append("Leads, for a reader to confirm:" + ("" if v["leads"] else " none"))
     for lead in v["leads"]:
         lines.append("P8 %d %s / %d %s: share %s" % (
