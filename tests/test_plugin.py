@@ -12,7 +12,7 @@ SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
 COMMANDS = ("analyze.md", "answer.md", "backlog.md", "find.md", "new.md", "render.md",
             "show.md")
-VERSION = "0.15.0"
+VERSION = "0.15.1"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
