@@ -536,3 +536,117 @@ class Answer(Base):
         self.assertEqual(code, 0, err)
         self.assertEqual(self.read(self.questions).count("\n**Your answer:**"), 5)
         self.lint()
+
+    # d28 (hq audit row d1, S1): `answer` reads the owner's typed text T, the rest of the
+    # **Your answer:** line and every non-blank line under it, before any write.
+    LINE = "Stay in hq, and never move the S1 rows out of the audit file"
+
+    def typed(self, number, on_line, under=""):
+        """Question `number`'s **Your answer:** line with `on_line` after it and `under`
+        after that line."""
+        text = self.read(self.questions)
+        mark = text.index("**Your answer:**", text.index("## %d. " % number)) + 16
+        end = text.find("\n", mark)
+        end = len(text) if end < 0 else end
+        self.write(self.questions, text[:mark] + on_line + under + text[end:])
+
+    def refused(self, argv, words):
+        before = (sha(self.ledger), sha(self.questions))
+        code, out, err = self.answer("9", *argv)
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn(words, err)
+        self.assertEqual((sha(self.ledger), sha(self.questions)), before)
+        return err
+
+    def test_typed_empty_picks(self):
+        for n, (on_line, under) in enumerate((("   ", ""), ("", "\n\n   \n"))):
+            with self.subTest(on_line=on_line, under=under):
+                number = 9 + n
+                if n:
+                    self.new("Pin it again")
+                self.typed(number, on_line, under)
+                code, out, err = self.answer(str(number), "--pick", "Pin", "--source", "s",
+                                             "--no-entry")
+                self.assertEqual(code, 0, err)
+                self.assertIn("answer: %d, Pin; no entry" % number, out)
+                self.assertIn(": Pin (2026-09-28; s)\n", self.read(self.questions))
+        self.lint()
+
+    def test_typed_label_picks(self):
+        for n, on_line in enumerate((" **pin (Recommended).**", " `Pin`.", " PIN. (Recommended)")):
+            with self.subTest(on_line=on_line):
+                if n:
+                    self.new("Pin it %d" % n)
+                self.typed(9 + n, on_line)
+                code, out, err = self.answer(str(9 + n), "--pick", "Pin", "--source", "s",
+                                             "--no-entry")
+                self.assertEqual(code, 0, err)
+                self.assertIn("answer: %d, Pin; no entry" % (9 + n), out)
+        self.lint()
+
+    def test_typed_other_label_refuses_pick(self):
+        self.typed(9, " `Follow`")
+        self.refused(["--pick", "Pin", "--source", "s", "--no-entry"],
+                     "answer: question 9's **Your answer:** line names the option `Follow`; "
+                     "pass --pick with it; nothing written")
+        code, out, err = self.answer("9", "--pick", "follow", "--source", "s", "--no-entry")
+        self.assertEqual(code, 0, err)
+        self.assertIn("answer: 9, Follow; no entry", out)
+
+    def test_typed_condition_refuses_pick(self):
+        self.typed(9, " Pin, once 3.13 ships")
+        for mode in (["--area", "Build", "--text", "Pin 3.12."],
+                     ["--amends", "3", "--text", ONLY_312], ["--no-entry"]):
+            with self.subTest(mode=mode):
+                err = self.refused(["--pick", "Pin", "--source", "s"] + mode,
+                                   "answer: question 9's **Your answer:** line says more than a "
+                                   "label; pass --other, which keeps the line; nothing written:\n"
+                                   "Pin, once 3.13 ships\n")
+                self.assertNotIn("Traceback", err)
+        self.refused(["--pick", "Wait", "--source", "s", "--no-entry"], "has no option 'Wait'")
+
+    def test_typed_label_refuses_other(self):
+        self.typed(9, " **pin (Recommended).**")
+        for mode in (["--area", "Build", "--text", "Pin 3.12."], ["--no-entry"]):
+            with self.subTest(mode=mode):
+                self.refused(["--other", "Pin it", "--source", "s"] + mode,
+                             "answer: question 9's **Your answer:** line names the option `Pin`; "
+                             "pass --pick with it; nothing written")
+
+    def test_typed_line_kept_under_other(self):
+        self.typed(9, " " + self.LINE)
+        code, out, err = self.answer("9", "--other", "Stay in hq", "--source", "s", "--text",
+                                     "The NICE stays in hq.", "--area", "Build")
+        self.assertEqual(code, 0, err)
+        label = "Other: Stay in hq; the owner's line: " + self.LINE
+        self.assertIn("answer: 9, %s; entry 9 under `### Build`" % label, out)
+        self.assertIn("- 9. Pin the interpreter: %s (2026-09-28; s)\n" % label,
+                      self.read(self.questions))
+        self.assertNotIn("never move the S1 rows", self.read(self.ledger))
+        self.assertIn("9. **Pin the interpreter.** The NICE stays in hq. (2026-09-28;",
+                      self.read(self.ledger))
+        self.new("Name the gate")
+        self.typed(10, " " + self.LINE)
+        code, out, err = self.answer("10", "--other", self.LINE.upper(), "--source", "s",
+                                     "--no-entry")
+        self.assertEqual(code, 0, err)
+        self.assertIn("- 10. Name the gate: Other: %s (2026-09-28; s)\n" % self.LINE.upper(),
+                      self.read(self.questions))
+        self.assertNotIn("never move the S1 rows", self.read(self.ledger))
+        self.lint()
+
+    def test_typed_under_the_line_is_the_answer(self):
+        self.typed(9, "", "\n\nPin, once\n3.13 ships.\n")
+        block = [b for b in decisions.questions.parse(self.read(self.questions)).blocks
+                 if b.number == 9][0]
+        self.assertEqual(block.answer, "Pin, once 3.13 ships.")
+        self.refused(["--pick", "Pin", "--source", "s", "--no-entry"],
+                     "says more than a label; pass --other, which keeps the line; nothing "
+                     "written:\nPin, once 3.13 ships.\n")
+        code, out, err = self.answer("9", "--other", "Pin until 3.13 ships", "--source", "s",
+                                     "--amends", "3", "--text", ONLY_312)
+        self.assertEqual(code, 0, err)
+        self.assertIn("- 9. Pin the interpreter: Other: Pin until 3.13 ships; the owner's line: "
+                      "Pin, once 3.13 ships. (2026-09-28; s)\n", self.read(self.questions))
+        self.assertNotIn("3.13 ships", self.read(self.ledger))
+        self.lint()
