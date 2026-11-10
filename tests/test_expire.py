@@ -587,3 +587,111 @@ class ExpireFold(Fixture):
                     self.assertEqual(code, 0, err)
                     self.assertTrue(self.read(self.archive).startswith(
                         b"- edited under the run\n\n## "))
+
+
+class ExpireFoldTwo(Fixture):
+    """The refuter's reproductions (round 2), each a case: an archive whose real path
+    lies outside the repo is refused before any write; a repo named twice is taken
+    once; a broken line in any repo given refuses every repo; the mode of each file is
+    kept; an archive line holding a lone CR holds no item."""
+
+    read = ExpireLosesNothing.read
+    write_bytes = ExpireFold.write_bytes
+    at_repo = ExpireFold.at_repo
+    struck = nl_lines(NICE.encode())[20]
+
+    def other(self, name, nice=NICE):
+        return repo_at(os.path.join(self.top, name), {"NICE_TO_HAVE.md": nice, "HANDOFF.md": HANDOFF})
+
+    def linked(self, repo, target):
+        os.makedirs(os.path.join(repo, "history"), exist_ok=True)
+        os.symlink(target, os.path.join(repo, "history", "NICE-overflow.md"))
+
+    def test_r2_f1_an_archive_outside_the_repo_is_refused_before_any_write(self):
+        shared = os.path.join(self.top, "shared.md")
+        self.write_bytes(shared, b"# NICE_TO_HAVE.md overflow\n")
+        other, clean = self.other("other"), self.other("clean")
+        self.linked(self.repo, shared)
+        self.linked(other, shared)
+        before = snapshot(self.top)
+        for argv in ((self.repo,), (other,), (self.repo, other), (clean, other)):
+            with self.subTest(argv=argv):
+                code, _, err = self.run_cli(*argv + ("--write",))
+                self.assertEqual(code, 2)
+                self.assertIn("lies outside", err)
+                self.assertIn("nothing written", err)
+                self.assertEqual(snapshot(self.top), before)
+        code, _, err = self.run_cli(self.repo, "--write")
+        self.assertEqual(err.strip(), "decisions: expire: %s: its real path %s lies outside %s; "
+                         "nothing written" % (os.path.realpath(self.repo) + "/history/NICE-overflow.md",
+                                              os.path.realpath(shared), os.path.realpath(self.repo)))
+        self.fresh()
+        outside = os.path.join(self.top, "elsewhere")
+        os.makedirs(outside)
+        os.symlink(outside, os.path.join(self.repo, "history"))
+        before = snapshot(self.top)
+        code, _, err = self.run_cli(self.repo, "--write")
+        self.assertEqual((code, snapshot(self.top)), (2, before))
+        self.assertIn("lies outside", err)
+
+    def test_r2_f1_a_link_inside_the_repo_keeps_working(self):
+        os.makedirs(os.path.join(self.repo, "notes"))
+        self.write_bytes(os.path.join(self.repo, "notes", "overflow.md"), b"# kept\n")
+        self.linked(self.repo, os.path.join("..", "notes", "overflow.md"))
+        code, _, err = self.run_cli(self.repo, "--write")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(os.path.islink(self.archive))
+        self.assertIn(self.struck, self.read(os.path.join(self.repo, "notes", "overflow.md")))
+        self.assertNotIn(self.struck, self.read(self.nice))
+
+    def test_r2_f2_a_repo_named_twice_is_taken_once(self):
+        for spelling in ("same", "slash", "link"):
+            with self.subTest(spelling=spelling):
+                self.fresh()
+                second = {"same": self.repo, "slash": self.repo + "/",
+                          "link": os.path.join(self.top, "alias")}[spelling]
+                if spelling == "link":
+                    os.symlink(self.repo, second)
+                code, out, err = self.run_cli(self.repo, second, "--write")
+                self.assertEqual(code, 0, err)
+                self.assertEqual(out.count("== tool "), 1)
+                self.assertEqual(out.count("expire: moved "), 1)
+                self.assertEqual(self.read(self.archive).count(self.struck), 1)
+                self.assertNotIn(self.struck, self.read(self.nice))
+        self.fresh()
+        code, out, err = self.run_cli(self.repo, self.repo + "/", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual([r["moved"] for r in json.loads(out)["repos"]], [True])
+
+    def test_r2_f3_a_break_in_a_repo_with_nothing_to_move_refuses_every_repo(self):
+        quiet = self.other("quiet", "# N\n\n- A fresh note,\x0c %s.\n" % ago(1))
+        self.assertEqual(self.view(quiet)["repos"][0]["expired"], [])
+        before = snapshot(self.top)
+        code, _, err = self.run_cli(self.repo, quiet, "--write")
+        self.assertEqual((code, snapshot(self.top)), (2, before))
+        self.assertIn("%s: NICE_TO_HAVE.md:3 breaks at U+000C" % os.path.realpath(quiet), err)
+        self.assertIn("nothing written", err)
+
+    def test_r2_f9_the_mode_of_each_file_is_kept(self):
+        umask = os.umask(0)
+        os.umask(umask)
+        for old in (None, b"# kept\n"):
+            with self.subTest(archive=old):
+                self.fresh()
+                os.chmod(self.nice, 0o640)
+                if old is not None:
+                    self.write_bytes(self.archive, old)
+                    os.chmod(self.archive, 0o604)
+                self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+                mode = lambda p: os.stat(p).st_mode & 0o7777
+                self.assertEqual(mode(self.nice), 0o640)
+                self.assertEqual(mode(self.archive), 0o666 & ~umask if old is None else 0o604)
+
+    def test_r2_f9_an_archive_line_with_a_lone_cr_holds_no_item(self):
+        old = b"# kept\n\nan older note\r" + self.struck
+        self.at_repo(NICE.encode(), old)
+        self.assertEqual(self.run_cli(self.repo, "--write")[0], 0)
+        archive = self.read(self.archive)
+        self.assertTrue(archive.startswith(old))
+        self.assertEqual(archive.count(self.struck), 2)
+        self.assertNotIn(self.struck, self.read(self.nice))
