@@ -76,11 +76,11 @@ class Answer(Base):
         """D19: `--amends` keeps the whole tail and appends its clause, so the clause
         an earlier answer left stays, and the two read in order."""
         code, _, err = self.answer("9", "--pick", "pin", "--source", "s1", "--text",
-                                   ONLY_312, "--amends", "3")
+                                   ONLY_312, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         self.new("Move on")
         code, _, err = self.answer("10", "--pick", "follow", "--source", "s2", "--text",
-                                   WHOLE_313, "--amends", "3")
+                                   WHOLE_313, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         lines = [l for l in self.read(self.ledger).splitlines() if l.startswith("3. ")]
         self.assertEqual(lines, ["3. **One interpreter.** %s (2026-09-03; the sample" % WHOLE_313 +
@@ -98,7 +98,7 @@ class Answer(Base):
         self.write(self.ledger, self.read(self.ledger).replace(
             "(2026-09-03; the sample, amended 2026-09-10 (twice))", "(%s)" % tail))
         code, _, err = self.answer("9", "--pick", "pin", "--source", "s1", "--text",
-                                   ONLY_312, "--amends", "3")
+                                   ONLY_312, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         lines = [l for l in self.read(self.ledger).splitlines() if l.startswith("3. ")]
         self.assertEqual(lines, ["3. **One interpreter.** %s (%s; amended 2026-09-28, the owner's "
@@ -106,29 +106,9 @@ class Answer(Base):
         self.assertEqual(lines[0].count("("), lines[0].count(")"))
         self.lint()
 
-    def test_amends_refuses_a_paragraph_cut_by_half(self):
-        """D21: a paragraph under half the old one's length is refused, exit 2, and
-        both files stay byte-identical; the refusal names both lengths, the old
-        paragraph on its own line and `--shorter`. Half exactly passes."""
-        before = (sha(self.ledger), sha(self.questions))
-        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text",
-                                     "Runs  under 3.13.", "--amends", "3")
-        self.assertEqual((code, out), (2, ""), err)
-        for part in ("16", "64", "\n%s\n" % OLD3, "--shorter", "nothing written"):
-            self.assertIn(part, err)
-        self.assertEqual((sha(self.ledger), sha(self.questions)), before)
-        self.assertFalse(os.path.exists(os.path.join(self.tmp, ".new.lock")))
-        half = "The tool runs under Python 3.13."
-        self.assertEqual(len(half) * 2, len(OLD3))
-        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text", half,
-                                     "--amends", "3")
-        self.assertEqual(code, 0, err)
-        self.assertIn("3. **One interpreter.** %s (2026-09-03;" % half, self.read(self.ledger))
-        self.lint()
-
     def test_amends_shorter_writes_and_prints_replaced(self):
-        """D21: `--shorter` lets the cut paragraph through, and the run still prints
-        `replaced:` with the old paragraph after its done line."""
+        """D21, d30: `--shorter` lets a paragraph that drops a sentence through, and the
+        run still prints `replaced:` with the old paragraph after its done line."""
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text",
                                      "Runs under 3.13.", "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
@@ -141,10 +121,11 @@ class Answer(Base):
         self.lint()
 
     def test_amends_whole_paragraph_prints_replaced(self):
-        """D21: a whole paragraph is written, and the run prints `replaced:` with the
-        old body, between the bold title and the tail, as it stood."""
+        """D21: a whole paragraph is written (d30: with `--shorter`, as it swaps entry 3's
+        one sentence), and the run prints `replaced:` with the old body, between the
+        bold title and the tail, as it stood."""
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text",
-                                     WHOLE_313, "--amends", "3")
+                                     WHOLE_313, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         lines = out.splitlines()
         self.assertTrue(lines[0].startswith("answer: 9, Pin; entry 3 amended in "), out)
@@ -475,7 +456,7 @@ class Answer(Base):
             if i:
                 self.new("Pin it again %d" % i)
             code, _, err = self.answer(str(number), "--pick", "Pin", "--source", source,
-                                       "--text", paragraph, "--amends", "3")
+                                       "--text", paragraph, "--amends", "3", "--shorter")
             self.assertEqual(code, 0, err)
             self.lint()
         entry = next(l for l in self.read(self.ledger).splitlines() if l.startswith("3. "))
@@ -644,7 +625,7 @@ class Answer(Base):
                      "says more than a label; pass --other, which keeps the line; nothing "
                      "written:\nPin, once 3.13 ships.\n")
         code, out, err = self.answer("9", "--other", "Pin until 3.13 ships", "--source", "s",
-                                     "--amends", "3", "--text", ONLY_312)
+                                     "--amends", "3", "--text", ONLY_312, "--shorter")
         self.assertEqual(code, 0, err)
         self.assertIn("- 9. Pin the interpreter: Other: Pin until 3.13 ships; the owner's line: "
                       "Pin, once 3.13 ships. (2026-09-28; s)\n", self.read(self.questions))

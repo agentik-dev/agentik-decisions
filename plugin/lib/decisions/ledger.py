@@ -30,7 +30,8 @@ from .common import Refusal, git_top, read_text
 from . import questions
 
 __all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "display", "check_entry",
-           "lint", "repeats", "final_parenthetical", "bold_title", "NAME", "IN_FORCE",
+           "lint", "repeats", "sentences", "dropped", "unclosed", "final_parenthetical",
+           "bold_title", "NAME", "IN_FORCE",
            "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "IN_FORCE_CAP", "EVERY_SESSION_CAP", "LEGACY"]
 
 NAME = "DECISIONS.md"
@@ -105,6 +106,40 @@ def repeats(body):
     if tail is not None and questions.TAIL.match(tail.lstrip()):
         found.append("tail")
     return found
+
+
+def sentences(paragraph):
+    """`paragraph`'s sentences, in order, its whitespace runs one space: each is cut
+    after a word that ends in `.`, `?` or `!`, and the words after the last cut are
+    one more (d30 ruling 1)."""
+    found, current = [], []
+    for word in paragraph.split():
+        current.append(word)
+        if word.endswith(ENDS):
+            found.append(" ".join(current))
+            current = []
+    if current:
+        found.append(" ".join(current))
+    return found
+
+
+def dropped(old, new):
+    """The sentences of `old` that `new` does not hold whole, between spaces or its
+    ends, whitespace runs aside, in order (d30 ruling 1)."""
+    held = " %s " % " ".join(new.split())
+    return [s for s in sentences(old) if " %s " % s not in held]
+
+
+def unclosed(body):
+    """True when `body` holds a `(` followed at once by a date that no `)` closes, a
+    `)` closing the nearest open `(` (d30 ruling 3)."""
+    opened = []
+    for i, char in enumerate(body):
+        if char == "(":
+            opened.append(i)
+        elif char == ")" and opened:
+            opened.pop()
+    return any(DATE.match(body, i + 1) for i in opened)
 
 
 def section_of(name):

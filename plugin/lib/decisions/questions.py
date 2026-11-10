@@ -35,6 +35,9 @@ ANSWER = "**Your answer:**"
 LABELS = ("Where things stand.", "The choice.", "What each answer sets in motion.",
           "Recommendation.")
 RECOMMENDED = " (Recommended)"
+# The optional fifth bold paragraph, the one `new --report` writes: a part of the
+# block, in no `parts` (d30 ruling 5).
+REPORT = "Report."
 # AskUserQuestion takes 2 to 4 options (design d18 section 1.1); entry 1 of the
 # cross-repo ledger asks once per session in one batch, so at most five are open.
 OPTIONS_MIN, OPTIONS_MAX, OPEN_CAP = 2, 4, 5
@@ -60,9 +63,13 @@ FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # labels: the bold labels in the order found; options: (label, marked, effect);
 # parts: each label's paragraph on one line; answer: the owner's typed text, the rest
 # of the **Your answer:** line and every non-blank line after it to the block's end,
-# joined by one space (d28), or None when the line is absent.
+# joined by one space (d28), or None when the line is absent; stray: every other
+# non-blank line above that line, in order, which no part takes: a part is a label's
+# or the **Report.** bold line and the lines under it to a blank, or an option line
+# under the third label (d30 ruling 5).
 Block = collections.namedtuple("Block",
-                               "number title start stop text labels options parts answer")
+                               "number title start stop text labels options parts answer "
+                               "stray")
 # decided, answered: (1-based line, text) per non-blank line; problems: (line, message).
 Questions = collections.namedtuple("Questions", "blocks decided answered problems")
 
@@ -122,18 +129,19 @@ def make_block(number, title, start, stop, lines):
     body = [i for i in range(start + 1, stop) if lines[i].strip()]
     end = body[-1] + 1 if body else start + 1
     labels, options, parts, answer, current, third = [], [], {}, None, None, False
-    typed = []
+    typed, stray, report = [], [], False
     for i in range(start + 1, stop):
         line = lines[i].rstrip()
         if not line.strip():
-            current = None
+            current, report = None, False
             continue
-        if answer is not None:
+        loose = answer is None
+        if not loose:
             typed.append(line.strip())
         label = next((l for l in LABELS if line.startswith("**%s**" % l)), None)
         if label:
             labels.append(label)
-            third, current = label == LABELS[2], label
+            third, current, report = label == LABELS[2], label, False
             parts[label] = line[len(label) + 4:].strip()
             continue
         if line.startswith(ANSWER) and answer is None:
@@ -142,6 +150,9 @@ def make_block(number, title, start, stop, lines):
             continue
         if line.startswith("**"):
             third, current = False, None
+            report = line.startswith("**%s**" % REPORT)
+            if loose and not report:
+                stray.append(line.strip())
             continue
         option = OPTION.match(line)
         if third and option:
@@ -150,10 +161,12 @@ def make_block(number, title, start, stop, lines):
             current = None
         elif current:
             parts[current] = (parts[current] + " " + line.strip()).strip()
+        elif loose and not report:
+            stray.append(line.strip())
     if answer is not None:
         answer = " ".join(" ".join(typed).split())
     return Block(number, title, start, stop, "\n".join(l.rstrip() for l in lines[start:end]),
-                 labels, options, parts, answer)
+                 labels, options, parts, answer, tuple(stray))
 
 
 def check_list(rows, name, problems, tail):
