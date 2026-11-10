@@ -136,6 +136,24 @@ class StructureTest(unittest.TestCase):
         self.assertIn("`answer` reads the question's **Your answer:** line and the text under "
                       "it", page)
 
+    def test_kept_ask_skill_says_what_answer_keeps(self):
+        """d30 (hq reply b1, d28 review F3): the skill, the command page and answer.py's
+        docstring say `--add`, the dropped-sentence refusal and the stray-line one, and
+        no longer the half-length test."""
+        from decisions import answer
+        _, body = split_frontmatter(read(ASK))
+        self.assertLess(len(body), 60)
+        raw = read(os.path.join(PLUGIN, "commands", "answer.md"))
+        self.assertLess(len(raw.splitlines()), 31)
+        usage = "[--text P | --add S]"
+        texts = {"skill": " ".join("\n".join(body).split()), "page": " ".join(raw.split()),
+                 "docstring": " ".join(answer.__doc__.split())}
+        for name, text in texts.items():
+            for needed in (usage, "`--add S`", "drops a sentence", "`--shorter`",
+                           "no part of its block takes", "`--other`"):
+                self.assertIn(needed, text, (name, needed))
+            self.assertNotIn("under half", text, name)
+
     def test_answer_pages_carry_into(self):
         """Round 2 F1: the cross-repo ledger's block lives in the user-level CLAUDE.md, so
         both pages that run `answer` name `--into` and the skill says when to pass it."""

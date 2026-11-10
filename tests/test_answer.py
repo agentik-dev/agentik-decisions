@@ -726,3 +726,156 @@ class Answer(Base):
                 self.assertEqual(code, 0, err)
                 self.assertIn("answer: %d, %s; no entry" % (number, exact), out)
         self.lint()
+
+    # d30 (the reply's b1, b2, b4; d28's review F3): what `answer` keeps.
+    SECOND = "It imports nothing else."
+    NEW1 = "A release is cut from the pinned interpreter and no other one."
+
+    def two(self):
+        """Entry 1 with a second sentence, and a CLAUDE.md holding the rendered block."""
+        self.write(self.ledger, self.read(self.ledger).replace(
+            "plain present-tense English.", "plain present-tense English. " + self.SECOND))
+        self.claude = os.path.join(self.tmp, "CLAUDE.md")
+        self.write(self.claude, "# Sample\n\n<!-- BEGIN GENERATED: decisions -->\n"
+                                "<!-- END GENERATED: decisions -->\n")
+        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
+                                        err=io.StringIO()), 0)
+        return "Every entry reads as plain present-tense English."
+
+    def test_kept_amends_refuses_a_dropped_sentence(self):
+        first = self.two()
+        before = (sha(self.ledger), sha(self.questions), sha(self.claude))
+        for text, lost in ((self.NEW1, [first, self.SECOND]),
+                           ("%s %s" % (first, self.NEW1), [self.SECOND])):
+            code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                         "--text", text)
+            self.assertEqual((code, out), (2, ""), err)
+            self.assertIn("drops %d of its 2 sentences" % len(lost), err)
+            self.assertTrue(err.rstrip().endswith("nothing written:\n" + "\n".join(lost)), err)
+            for part in ("--add", "--shorter"):
+                self.assertIn(part, err)
+            self.assertEqual((sha(self.ledger), sha(self.questions), sha(self.claude)), before)
+        whole = "%s  %s\n%s" % (self.SECOND, self.NEW1, first)
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--text", whole)
+        self.assertEqual(code, 0, err)
+        self.assertIn("replaced: %s %s\n" % (first, self.SECOND), out)
+        for path in (self.ledger, self.claude):
+            self.assertEqual(self.read(path).count(self.SECOND), 1, path)
+        self.lint()
+
+    def test_kept_add_appends(self):
+        first = self.two()
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                     "--add", " %s " % self.NEW1)
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("replaced:", out)
+        line = ("1. **Plain words.** %s %s %s (2026-09-01; the sample; amended 2026-09-28, the "
+                "owner's answer to decision 9, s)\n" % (first, self.SECOND, self.NEW1))
+        self.assertIn(line, self.read(self.ledger))
+        self.assertIn(line, self.read(self.claude))
+        self.lint()
+
+    def test_kept_add_refusals(self):
+        self.two()
+        before = (sha(self.ledger), sha(self.questions), sha(self.claude))
+        for argv in (["--amends", "1", "--add", self.NEW1, "--text", self.NEW1],
+                     ["--amends", "1", "--add", self.NEW1, "--shorter"],
+                     ["--amends", "1", "--add", "  "],
+                     ["--area", "Build", "--add", self.NEW1],
+                     ["--no-entry", "--add", self.NEW1]):
+            code, out, err = self.answer("9", "--pick", "pin", "--source", "s", *argv)
+            self.assertEqual((code, out), (2, ""), err)
+            self.assertIn("--add takes the place of --text under --amends", err)
+            self.assertEqual((sha(self.ledger), sha(self.questions), sha(self.claude)), before)
+        for add, words in (("**A title.** " + self.NEW1, "--add opens with a bold title"),
+                           (self.NEW1 + " (2026-09-28; s)", "--add ends in a (date; source)")):
+            code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "1",
+                                         "--add", add)
+            self.assertEqual((code, out), (2, ""), err)
+            self.assertIn(words, err)
+            self.assertEqual((sha(self.ledger), sha(self.questions), sha(self.claude)), before)
+
+    def test_kept_text_with_an_unclosed_dated_bracket_refuses(self):
+        before = (sha(self.ledger), sha(self.questions))
+        cut = OLD3 + " (2026-09-03; the sample " + self.NEW1
+        for argv in (["--amends", "3", "--text", cut], ["--amends", "3", "--add", cut],
+                     ["--area", "Build", "--text", cut]):
+            code, out, err = self.answer("9", "--pick", "pin", "--source", "s", *argv)
+            self.assertEqual((code, out), (2, ""), err)
+            self.assertIn("%s holds a `(` that opens with a date and never closes" % argv[2], err)
+            self.assertEqual((sha(self.ledger), sha(self.questions)), before)
+        closed = OLD3 + " It held 3.11 (2026-09-03; the sample) before. :)"
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "3",
+                                     "--text", closed)
+        self.assertEqual(code, 0, err)
+        self.lint()
+
+    def test_kept_cap_refusal_comes_first_and_names_the_ways_out(self):
+        more = "".join("\n%d. **Rule %d.** The thing does %d. (2026-09-09; the sample)\n"
+                       % (n, n, n) for n in range(20, 39))
+        self.write(self.ledger, self.read(self.ledger).replace("\n## Proposed", more[1:] +
+                                                               "\n## Proposed"))
+        self.lint()
+        before = (sha(self.ledger), sha(self.questions))
+        for text in ([], ["--text", "Pin 3.12."]):
+            code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--area", "Build",
+                                         *text)
+            self.assertEqual((code, out), (2, ""), err)
+            for part in ("25 entries are in force, the cap", "`## Superseded`", "--amends M",
+                         "--no-entry", "nothing written"):
+                self.assertIn(part, err)
+            for part in ("--text is required", "fails the lint"):
+                self.assertNotIn(part, err)
+            self.assertEqual((sha(self.ledger), sha(self.questions)), before)
+        code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--amends", "3",
+                                     "--add", self.NEW1)
+        self.assertEqual(code, 0, err)
+        self.lint()
+
+    STRAYS = (("leading space", "**Your answer:**", " **Your answer:** %s"),
+              ("inside the bold", "**Your answer:**", "**Your answer: %s**"),
+              ("colon outside the bold", "**Your answer:**", "**Your answer**: %s"),
+              ("a paragraph above the line", "**Your answer:**", "%s\n\n**Your answer:**"),
+              ("a line under an option", "- **Follow.** Tracks releases.\n",
+               "- **Follow.** Tracks releases.\n  %s\n"))
+
+    def stray(self, old, new):
+        text = self.read(self.questions)
+        at = text.index(old, text.index("## 9. "))
+        self.write(self.questions, text[:at] + new % self.LINE + text[at + len(old):])
+
+    def test_kept_stray_line_refuses_pick(self):
+        pristine = self.read(self.questions)
+        for name, old, new in self.STRAYS:
+            for lands in (["--no-entry"], ["--area", "Build", "--text", "Pin 3.12."],
+                          ["--amends", "3", "--add", self.NEW1]):
+                with self.subTest(name=name, lands=lands[0]):
+                    self.write(self.questions, pristine)
+                    self.stray(old, new)
+                    err = self.refused(["--pick", "Pin", "--source", "s"] + lands,
+                                       "holds text no part of its block takes; pass --other")
+                    self.assertIn(self.LINE, err.split("nothing written:\n")[1])
+
+    def test_kept_stray_line_stays_under_other(self):
+        self.stray("**Your answer:**", "%s\n\n**Your answer:** and keep the audit file")
+        code, out, err = self.answer("9", "--other", "Stay, with two conditions", "--source", "s",
+                                     "--no-entry")
+        self.assertEqual(code, 0, err)
+        self.assertIn("- 9. Pin the interpreter: Other: Stay, with two conditions; the owner's "
+                      "line: %s and keep the audit file (2026-09-28; s)\n" % self.LINE,
+                      self.read(self.questions))
+        self.assertNotIn("never move", self.read(self.ledger))
+        self.lint()
+
+    def test_kept_report_line_is_a_part(self):
+        self.new("Pin it again")
+        text = self.read(self.questions)
+        at = text.index("**Your answer:**", text.index("## 10. "))
+        self.write(self.questions, text[:at] + "**Report.** design/pin.md\nsection 2\n\n"
+                   + text[at:])
+        block = [b for b in decisions.questions.parse(self.read(self.questions)).blocks
+                 if b.number == 10][0]
+        self.assertEqual(block.stray, ())
+        code, out, err = self.answer("10", "--pick", "Pin", "--source", "s", "--no-entry")
+        self.assertEqual(code, 0, err)
