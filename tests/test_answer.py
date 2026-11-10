@@ -74,8 +74,8 @@ class Answer(Base):
         self.lint()
 
     def test_amends_keeps_earlier_amendments(self):
-        """D19: `--amends` keeps the whole tail and appends its clause, so the clause
-        an earlier answer left stays, and the two read in order."""
+        """D19, d31: `--amends` writes the tail in form T2, so an earlier amendment
+        stays as a count and the range of its dates, and the latest reads whole."""
         code, _, err = self.answer("9", "--pick", "pin", "--source", "s1", "--text",
                                    ONLY_312, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
@@ -84,17 +84,17 @@ class Answer(Base):
                                    WHOLE_313, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         lines = [l for l in self.read(self.ledger).splitlines() if l.startswith("3. ")]
-        self.assertEqual(lines, ["3. **One interpreter.** %s (2026-09-03; the sample" % WHOLE_313 +
-                                 ", amended 2026-09-10 (twice); amended 2026-09-28, the owner's "
-                                 "answer to decision 9, s1; amended 2026-09-28, the owner's "
-                                 "answer to decision 10, s2)"])
+        self.assertEqual(lines, ["3. **One interpreter.** %s (2026-09-03; amended 2 times, "
+                                 "2026-09-10 to 2026-09-28; amended 2026-09-28, the owner's "
+                                 "answer to decision 10, s2)" % WHOLE_313])
         self.assertEqual(self.answer("11", "--pick", "pin", "--source", "s", "--text", "t",
                                      "--amends", "3")[0], 2)
         self.lint()
 
     def test_amends_keeps_nested_parenthetical_balanced(self):
-        """D19, closing round 2a F6: a tail with `(twice); amended` inside a nested
-        parenthetical is kept whole, so the entry's parentheses stay balanced."""
+        """D19, closing round 2a F6, d31: a tail with `(twice); amended` inside a nested
+        parenthetical holds no dated amendment, so form T2 keeps its date alone and the
+        entry's parentheses stay balanced."""
         tail = "2026-09-03; the sample (moved (twice); amended in place)"
         self.write(self.ledger, self.read(self.ledger).replace(
             "(2026-09-03; the sample, amended 2026-09-10 (twice))", "(%s)" % tail))
@@ -102,8 +102,8 @@ class Answer(Base):
                                    ONLY_312, "--amends", "3", "--shorter")
         self.assertEqual(code, 0, err)
         lines = [l for l in self.read(self.ledger).splitlines() if l.startswith("3. ")]
-        self.assertEqual(lines, ["3. **One interpreter.** %s (%s; amended 2026-09-28, the owner's "
-                                 "answer to decision 9, s1)" % (ONLY_312, tail)])
+        self.assertEqual(lines, ["3. **One interpreter.** %s (2026-09-03; amended 2026-09-28, "
+                                 "the owner's answer to decision 9, s1)" % ONLY_312])
         self.assertEqual(lines[0].count("("), lines[0].count(")"))
         self.lint()
 
@@ -116,9 +116,11 @@ class Answer(Base):
         lines = out.splitlines()
         self.assertTrue(lines[0].startswith("answer: 9, Pin; entry 3 amended in "), out)
         self.assertEqual(lines[1], "replaced: " + OLD3)
-        self.assertIn("3. **One interpreter.** Runs under 3.13. (2026-09-03; the sample, "
-                      "amended 2026-09-10 (twice); amended 2026-09-28, the owner's answer to "
-                      "decision 9, s)\n", self.read(self.ledger))
+        self.assertIn("3. **One interpreter.** Runs under 3.13. (2026-09-03; amended once, "
+                      "2026-09-10; amended 2026-09-28, the owner's answer to decision 9, s)\n",
+                      self.read(self.ledger))
+        self.assertEqual(lines[2], "tail was: (2026-09-03; the sample, amended 2026-09-10 "
+                                   "(twice))")  # d31
         self.lint()
 
     def test_amends_whole_paragraph_prints_replaced(self):
@@ -461,11 +463,13 @@ class Answer(Base):
             self.assertEqual(code, 0, err)
             self.lint()
         entry = next(l for l in self.read(self.ledger).splitlines() if l.startswith("3. "))
-        self.assertTrue(entry.startswith("3. **One interpreter.** %s (2026-09-03; the sample, "
-                                         "amended 2026-09-10 (twice); amended 2026-09-28, "
-                                         % OLD3), entry)
-        for number, source in zip((9, 10, 11), sources):
-            self.assertIn("the owner's answer to decision %d, %s" % (number, source), entry)
+        # d31: form T2 keeps the count and the latest whole; each source stays in its
+        # Answered line
+        self.assertEqual(entry, "3. **One interpreter.** %s (2026-09-03; amended 3 times, "
+                                "2026-09-10 to 2026-09-28; amended 2026-09-28, the owner's "
+                                "answer to decision 11, the sitting)" % OLD3)
+        for source in sources:
+            self.assertIn("(2026-09-28; %s)\n" % source, self.read(self.questions))
         self.new("Pin it a fourth time")
         before = (sha(self.ledger), sha(self.questions))
         code, _, err = self.answer("12", "--pick", "Pin", "--source", "an unbalanced )",
@@ -752,8 +756,8 @@ class Answer(Base):
                                      "--add", " %s " % self.NEW1)
         self.assertEqual(code, 0, err)
         self.assertNotIn("replaced:", out)
-        line = ("1. **Plain words.** %s %s %s (2026-09-01; the sample; amended 2026-09-28, the "
-                "owner's answer to decision 9, s)\n" % (first, self.SECOND, self.NEW1))
+        line = ("1. **Plain words.** %s %s %s (2026-09-01; amended 2026-09-28, the owner's "
+                "answer to decision 9, s)\n" % (first, self.SECOND, self.NEW1))  # d31: T2
         self.assertIn(line, self.read(self.ledger))
         # d29 act 4: the block cuts the tail to its first date and a count
         self.assertIn(line.split(" (2026-09-01;")[0] + " (2026-09-01; amended once, see the "
@@ -768,8 +772,8 @@ class Answer(Base):
         self.assertEqual(code, 0, err)
         self.assertIn("1. **Plain words.** %s %s %s (2026-09-01; amended once, see the ledger)\n"
                       % (first, self.SECOND, self.NEW1), self.read(self.claude))
-        self.assertIn("(2026-09-01; the sample; amended 2026-09-28, the owner's answer to "
-                      "decision 9, s)\n", self.read(self.ledger))
+        self.assertIn("(2026-09-01; amended 2026-09-28, the owner's answer to decision 9, "
+                      "s)\n", self.read(self.ledger))  # d31: the ledger's tail in form T2
         self.assertEqual(decisions.main(["render", "--check", "--ledger", self.ledger],
                                         out=io.StringIO(), err=io.StringIO()), 0)
 

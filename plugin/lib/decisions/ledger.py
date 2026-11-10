@@ -142,6 +142,67 @@ def unclosed(body):
     return any(DATE.match(body, i + 1) for i in opened)
 
 
+# d31: an amendment opens `; amended DATE` (a `,` is read too) outside every nested
+# parenthetical; form T2's combined clause stands for the older ones.
+AMENDMENT = re.compile(r"[;,]\s*(?i:amended)\s+(\d{4}-\d{2}-\d{2})")
+COMBINED = re.compile(r";\s*(?i:amended)\s+(?:once|(\d+)\s+times),\s*(\d{4}-\d{2}-\d{2})"
+                      r"(?:\s+to\s+(\d{4}-\d{2}-\d{2}))?\s*(?=;|$)")
+
+
+def amendments(tail):
+    """(older, dated) of `tail`, read outside its nested parentheticals: `older` is
+    (count, first date, last date) of a combined clause that sits before every dated
+    amendment, else (0, None, None); `dated` is [(index of its separator, date)] of
+    each `amended DATE`, in order (d31)."""
+    older, dated, depth = (0, None, None), [], 0
+    for i, char in enumerate(tail):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(depth - 1, 0)
+        elif char in ";," and depth == 0:
+            combined = COMBINED.match(tail, i) if not dated and not older[0] else None
+            found = AMENDMENT.match(tail, i)
+            if combined:
+                older = (int(combined.group(1) or 1), combined.group(2),
+                         combined.group(3) or combined.group(2))
+            elif found:
+                dated.append((i, found.group(1)))
+    return older, dated
+
+
+def amended(tail):
+    """How many amendments `tail` names: its combined clause's count and each
+    `amended DATE` (d31)."""
+    older, dated = amendments(tail)
+    return older[0] + len(dated)
+
+
+def folded(tail, amendment=None):
+    """`tail` in form T2 (d31): its first date; one clause for the older amendments,
+    `amended once, DATE` or `amended K times, DATE to DATE`; then the latest whole, to
+    the tail's end. With `amendment`, a `DATE, source`, every amendment `tail` holds
+    is older and `amendment` is the latest. A tail that opens with no date, or holds
+    no `amended DATE` when no `amendment` is given, comes back as it is."""
+    first = DATE.match(tail.lstrip())
+    older, dated = amendments(tail)
+    if first is None or not (dated or amendment):
+        return tail
+    if amendment:
+        latest, before = "amended %s" % amendment, dated
+    else:
+        latest, before = tail[dated[-1][0] + 1:].strip(), dated[:-1]
+    count = older[0] + len(before)
+    start = older[1] or (before[0][1] if before else None)
+    end = before[-1][1] if before else older[2]
+    parts = [first.group(0)]
+    if count == 1:
+        parts.append("amended once, %s" % start)
+    elif count > 1:
+        parts.append("amended %d times, %s to %s" % (count, start, end))
+    return "; ".join(parts + [latest])
+
+
 def section_of(name):
     """The canonical section a `##` heading names, or None."""
     for section in SECTIONS:

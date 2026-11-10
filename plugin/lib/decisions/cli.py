@@ -18,9 +18,11 @@ Verbs
                                   the owner's answer: entry N, an amendment or
                                   none; the question leaves, an Answered line stays;
                                   A resolves as `show --area` does, or is new
-    render [--into PATH] [--check | --lint]
+    render [--into PATH] [--check | --lint | --fold-tails]
                                   the lint, then the generated block in the
-                                  CLAUDE.md beside the ledger, or in PATH
+                                  CLAUDE.md beside the ledger, or in PATH;
+                                  --fold-tails first writes each tail in force
+                                  in form T2, once HEAD holds the ledger
     doctor [--json]               the interpreter, the tool, the plugin, the
                                   provider, the ledger and respeak
     install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
@@ -157,6 +159,8 @@ def build_parser():
     mode.add_argument("--check", action="store_true",
                       help="write nothing; print the diff, exit 1 when stale")
     mode.add_argument("--lint", action="store_true", help="the lint alone")
+    mode.add_argument("--fold-tails", action="store_true",
+                      help="rewrite each tail in force in form T2, then the block")
 
     doctor = subs.add_parser("doctor", parents=[ledger],
                              help="check this machine and this repo")

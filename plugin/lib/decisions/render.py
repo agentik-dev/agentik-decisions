@@ -1,6 +1,6 @@
 """`render`: the lint, then the generated block in a CLAUDE.md.
 
-    render [--into PATH] [--check | --lint]
+    render [--into PATH] [--check | --lint | --fold-tails]
 
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
 beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there. Otherwise the block goes between
@@ -24,17 +24,19 @@ stays fresh until `render` shortens it.
 
 import difflib
 import os
-import re
+import subprocess
 
-from .common import Refusal, read_text, write_text
-from .ledger import DATE, EVERY_SESSION, IN_FORCE, display, final_parenthetical, lint
+from . import questions
+from .ask import LOCK, NEW_WAIT
+from .common import GIT_TIMEOUT, Refusal, bounded, held, read_text, write_text
+from .ledger import (DATE, EVERY_SESSION, IN_FORCE, amended, display, final_parenthetical,
+                     folded, lint, load, parse)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "BEGIN", "END", "TARGET"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
 TARGET = "CLAUDE.md"
-AMENDED = re.compile(r"(?i)\bamended\s+\d{4}-\d{2}-\d{2}")
 
 
 def short_tail(text):
@@ -45,7 +47,7 @@ def short_tail(text):
     first = DATE.match(tail.lstrip()) if tail is not None else None
     if first is None:
         return text
-    count = len(AMENDED.findall(tail))
+    count = amended(tail)
     note = "" if count == 0 else "; amended %s, see the ledger" % (
         "once" if count == 1 else "%d times" % count)
     return "%s (%s%s)" % (text[:-(len(tail) + 2)].rstrip(), first.group(0), note)
@@ -66,6 +68,66 @@ def is_ledger(target, ledger):
         except OSError:
             return False
     return os.path.realpath(target) == os.path.realpath(ledger)
+
+
+def fold_tails(text):
+    """(`text` with the tail of each entry in force in form T2, the numbers folded,
+    the numbers left because the latest amendment names no source) (d31)."""
+    lines = text.splitlines(keepends=True)
+    done, left = [], []
+    for entry in parse(text).entries:
+        tail = final_parenthetical(entry.body) if entry.section == IN_FORCE else None
+        new = folded(tail) if tail is not None else None
+        if new is None or new == tail:
+            continue
+        if not questions.TAIL.match(new):
+            left.append(entry.number)
+            continue
+        line = lines[entry.line - 1]
+        body = line.rstrip()
+        lines[entry.line - 1] = "%s(%s)%s" % (body[:-(len(tail) + 2)], new, line[len(body):])
+        done.append(entry.number)
+    return "".join(lines), done, left
+
+
+def head_holds(path):
+    """The short sha of git's HEAD when it holds the file at `path` as it stands,
+    tracked and unchanged, else None (d31)."""
+    where, name = os.path.dirname(os.path.abspath(path)), os.path.basename(path)
+    try:
+        code, out = bounded(["git", "status", "--porcelain", "--ignored", "--", name],
+                            GIT_TIMEOUT, cwd=where)
+        if code != 0 or out.strip():
+            return None
+        code, out = bounded(["git", "rev-parse", "--short", "HEAD"], GIT_TIMEOUT, cwd=where)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.strip() if code == 0 and out.strip() else None
+
+
+def cmd_fold(path, out, err):
+    """`render --fold-tails`, after the lint and before the block (d31)."""
+    name = display(path)
+    with held(os.path.join(os.path.dirname(path), LOCK), NEW_WAIT, err):
+        old = read_text(path)
+        new, done, left = fold_tails(old)
+        for number in left:
+            err.write("render: entry %d's latest amendment names no source, so its tail "
+                      "stays as it stands\n" % number)
+        if not done:
+            out.write("render: no tail to fold in %s\n" % name)
+            return
+        sha = head_holds(path)
+        if sha is None:
+            raise Refusal("render: HEAD does not hold %s as it stands; commit it first; "
+                          "nothing written" % name)
+        problems = parse(new).problems
+        if problems:
+            raise Refusal("render: the folded ledger fails the lint; nothing written:\n"
+                          + "\n".join("%s:%d: %s" % (name, n, m) for n, m in problems))
+        write_text(path, new)
+    out.write("render: folded the tails of %d entries in %s, %d B to %d B; %s holds them "
+              "whole\n" % (len(done), name, len(old.encode()), len(new.encode()), sha))
 
 
 def block(ledger, path, target, tails=False):
@@ -119,6 +181,9 @@ def cmd_render(args, path, out, err):
         return 1
     if args.lint:
         return 0
+    if getattr(args, "fold_tails", False):
+        cmd_fold(path, out, err)
+        ledger = load(path)
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if is_ledger(target, path):
