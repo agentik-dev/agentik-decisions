@@ -1,6 +1,6 @@
 ---
 description: Enter the owner's answer to open question N in the ledger
-argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]"
+argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH] [--every-turn]"
 allowed-tools: Bash(agentik-decisions *)
 ---
 
@@ -24,4 +24,6 @@ name; the output names the heading it matched, and a name no heading matches
 makes a new area.
 `--into` names the CLAUDE.md that holds the ledger's block when
 it is not the one beside the ledger; pass the same `--into` that
-`agentik-decisions render` uses.
+`agentik-decisions render` uses. The block is loaded on every turn: its line
+names its growth, and growth under `Every session` is refused, exit 2, unless
+`--every-turn`, passed only on the owner's word.

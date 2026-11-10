@@ -26,7 +26,8 @@ the owner, or at close.
 2. Pass each call to AskUserQuestion as it stands, back to back in one turn.
    Never reword a question, a label or a description.
 3. For each answer, run
-   `agentik-decisions answer N (--pick LABEL | --other TEXT) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]`.
+   `agentik-decisions answer N (--pick LABEL | --other TEXT) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH]`,
+   and `--every-turn` after it only on the owner's word.
    `--pick` takes the label chosen. For "Other", `--other` carries the owner's
    text, restated in plain words. `--source` carries the tail's source: the
    owner's word, where it was given, and the file that records it, such as
@@ -49,7 +50,9 @@ the owner, or at close.
    cut). The run prints `replaced:`
    with M's old paragraph; a `--text` that drops a sentence of M is refused
    unless `--shorter`. `--add S` in place of `--text` appends S to M's
-   paragraph as it stands. A line no part of its block takes, such as text
+   paragraph as it stands. An answer that makes the block larger under
+   `Every session` is refused, since every turn loads it: pass `--every-turn`
+   only on the owner's word. A line no part of its block takes, such as text
    typed off the **Your answer:** line, refuses `--pick`: it is the owner's,
    so run `--other`, which keeps it in the Answered line. When the
    ledger's block lives in a CLAUDE.md that is not beside it, pass the same

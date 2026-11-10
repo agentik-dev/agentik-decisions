@@ -15,9 +15,11 @@ Verbs
                                   and written back, as AskUserQuestion calls (JSON)
     answer N (--pick L | --other T) --source S [--text P | --add S]
         (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
-                                  the owner's answer: entry N, an amendment or
+        [--every-turn]            the owner's answer: entry N, an amendment or
                                   none; the question leaves, an Answered line stays;
-                                  A resolves as `show --area` does, or is new
+                                  A resolves as `show --area` does, or is new;
+                                  --every-turn lets it grow the block under
+                                  Every session
     render [--into PATH] [--check | --lint | --fold-tails]
                                   the lint, then the generated block in the
                                   CLAUDE.md beside the ledger, or in PATH;
@@ -148,6 +150,9 @@ def build_parser():
     answer.add_argument("--shorter", action="store_true",
                         help="with --amends: let through a --text that drops a sentence of "
                         "the old paragraph")
+    answer.add_argument("--every-turn", action="store_true",
+                        help="let through an answer that makes the block, loaded on every "
+                        "turn, larger under Every session")
     answer.add_argument("--into", default=None,
                         help="the CLAUDE.md block's target; the default is beside the ledger")
 

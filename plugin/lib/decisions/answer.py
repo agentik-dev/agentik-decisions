@@ -1,7 +1,7 @@
 """`answer`: the owner's answer to question N, recorded (design d18 section 1.2).
 
     answer N (--pick L | --other T) --source S [--text P | --add S]
-           (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
+           (--area A | --amends M [--shorter] | --no-entry) [--into PATH] [--every-turn]
 
 `--pick` matches an option's label, ignoring case and ` (Recommended)`;
 `--other` carries the owner's free text, restated. The owner's typed text T, the
@@ -45,19 +45,30 @@ refused with exit 2 before anything is written. Once both files are written the 
 stands: a block that cannot be rewritten is a warning on stderr naming the
 `agentik decisions render` command, with the `--ledger` and `--into` the answer used,
 and the exit stays 0.
+
+The block is loaded on every turn (d32), so the rewrite's line names its growth,
+`answer: rewrote the block in PATH: X B to Y B, +D B; the block is loaded on every
+turn`. An answer that touches `Every session`, by `--amends M` with M in force there
+or an `--area` that resolves to it, and makes larger the block render would write at
+the target, markers or none, is refused with exit 2 before anything is written, once
+the lint has passed (a result that fails the lint is refused on the lint): the
+refusal names the bytes, and the entry's tail note's share when the note grows. The
+way out is an entry outside `Every session`, which the block lists by title only, or
+`--every-turn`, valid only with `--area` or `--amends`. Same size or smaller passes.
 """
 
 import os
 import shlex
 
 from . import ask, questions
-from .common import Refusal, commit_texts, held, read_text, write_text
+from .common import (Refusal, commit_texts, disk_text, held, keeps_crlf, on_disk, read_text,
+                     write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
                      bold_title, display, dropped, final_parenthetical, folded, load, parse,
                      repeats,
                      sentences, unclosed)
 from .lookup import pick_area
-from .render import BEGIN, END, TARGET, apply, block, is_ledger
+from .render import BEGIN, END, TARGET, apply, block, growth, is_ledger, tail_note
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line"]
 
@@ -242,6 +253,9 @@ def cmd_answer(args, path, out, err):
         raise Refusal("answer: --text is required unless --no-entry; nothing written")
     if args.shorter and args.amends is None:
         raise Refusal("answer: --shorter is valid only with --amends; nothing written")
+    if getattr(args, "every_turn", False) and args.no_entry:
+        raise Refusal("answer: --every-turn is valid only with --area or --amends; nothing "
+                      "written")
     flag, text = ("--add", add) if add is not None else ("--text", text)
     if unclosed(text):
         raise Refusal("answer: %s holds a `(` that opens with a date and never closes, a piece "
@@ -311,6 +325,10 @@ def cmd_answer(args, path, out, err):
         if problems:
             raise Refusal("answer: the result fails the lint; nothing written:\n" + "\n".join(
                 "%s:%d: %s" % p for p in problems))
+        # d32 fold (F2): the lint first, so a refusal's way out never meets the lint
+        if not getattr(args, "every_turn", False):
+            every_turn(ledger_text, new_ledger, path, target, args.amends,
+                       None if args.no_entry or args.amends is not None else heading)
         commit_texts([(path_q, new_q), (path, new_ledger)])
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
@@ -330,6 +348,36 @@ def cmd_answer(args, path, out, err):
     return 0
 
 
+def every_turn(ledger_text, new_ledger, path, target, amends, heading):
+    """d32: refuse an answer that makes the block larger when it touches `Every session`,
+    by `--amends M` with M in force there or an `--area` that resolves to it (`heading`).
+    The block is the one `render` would write at `target`, markers or none: the relay puts
+    the same block in each child's prompt. The growth is the whole block's, the entry's
+    tail note included, and the refusal names the note's share when it grows."""
+    every = EVERY_SESSION.lower()
+    old = parse(ledger_text)
+    entry = next((e for e in old.entries if amends is not None and e.number == amends
+                  and e.section == IN_FORCE and (e.area or "").lower() == every), None)
+    if entry is None and (heading is None or heading.lower() != every):
+        return
+    new, crlf = parse(new_ledger), keeps_crlf(target)
+    was = on_disk(block(old, path, target), crlf)
+    now = on_disk(block(new, path, target), crlf)
+    if now <= was:
+        return
+    note = ""
+    if entry is not None:
+        after = next((e for e in new.entries if e.number == amends and e.section == IN_FORCE),
+                     None)
+        grown = (len(tail_note(after.text).encode()) - len(tail_note(entry.text).encode())
+                 if after is not None else 0)
+        note = "; %d B of it is the entry's tail note" % grown if grown > 0 else ""
+    raise Refusal("answer: this answer adds %d B to the block, %d B to %d B, which is loaded "
+                  "on every turn; put it in an entry outside `Every session`, which the block "
+                  "lists by title only, or pass --every-turn%s; nothing written"
+                  % (now - was, was, now, note))
+
+
 def rewrite_block(path, target, out, err):
     """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has markers."""
     old = read_text(target) if os.path.exists(target) else ""
@@ -340,5 +388,7 @@ def rewrite_block(path, target, out, err):
         return
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:
+        was, crlf = disk_text(target), keeps_crlf(target)
         write_text(target, new)
-        out.write("answer: rewrote the block in %s\n" % display(target))
+        out.write("answer: rewrote the block in %s: %s\n" % (display(target),
+                                                             growth(was, new, crlf)))

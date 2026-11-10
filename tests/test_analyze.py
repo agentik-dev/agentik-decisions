@@ -14,6 +14,7 @@ from unittest import mock
 
 import decisions
 from decisions import common
+from decisions.render import BEGIN, END
 from tests.hermetic import Hermetic
 from tests.test_backlog import snapshot
 
@@ -239,7 +240,7 @@ class Analyze(Hermetic):
         repo = churn["repos"][0]
         self.assertEqual(sorted(repo), sorted(
             ["repo", "head", "commits", "landings", "lines", "vendor", "record_commits",
-             "charters", "nice", "not_measured"]))
+             "charters", "nice", "block", "not_measured"]))
         self.assertEqual(sorted(repo["charters"]), ["alone", "count", "max", "median"])
         self.assertEqual(sorted(repo["charters"]["alone"]), ["commits", "max", "median"])
         self.assertEqual(sorted(repo["nice"]), ["closed", "filed", "moved", "rising",
@@ -390,3 +391,38 @@ class Analyze(Hermetic):
         self.assertEqual(code, 0, err)
         self.assertEqual(len(json.loads(out)["churn"]["repos"]), 4)
         self.assertEqual({name: snapshot(self.repo(name)) for name in "ABCD"}, before)
+
+
+class TurnAnalyze(Hermetic):
+    """d32: analyze measures the CLAUDE.md block at both ends of the window."""
+
+    def setUp(self):
+        super().setUp()
+        self.top = tempfile.mkdtemp(prefix="decisions-d32-")
+        self.addCleanup(shutil.rmtree, self.top, True)
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["analyze"] + list(argv) + WINDOW, out=out, err=err)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_every_turn_analyze_measures_the_block(self):
+        small = "%s\nGenerated.\n\n1. **One.** One. (2026-09-01)\n%s\n" % (BEGIN, END)
+        large = small.replace("One. (", "One. Two more words. (")
+        f = Fixture(os.path.join(self.top, "F"))
+        f.commit("2026-10-20", {"CLAUDE.md": "# F\n\n" + small})
+        f.commit("2026-11-05", {"CLAUDE.md": "# F\n\n" + large + "tail\n"})
+        g = Fixture(os.path.join(self.top, "G"))
+        g.commit("2026-10-20", {"src/app.py": "x\n"})
+        code, out, err = self.run_cli(f.root, g.root, "--json")
+        self.assertEqual(code, 0, err)
+        repos = json.loads(out)["churn"]["repos"]
+        a, b = len(small.encode()), len(large.encode())
+        self.assertEqual(repos[0]["block"], {"start": a, "end": b})
+        self.assertEqual(repos[1]["block"], {"start": None, "end": None})
+        code, out, err = self.run_cli(f.root, g.root)
+        self.assertEqual(code, 0, err)
+        lines = out.splitlines()
+        at = next(i for i, line in enumerate(lines) if line.startswith("== F "))
+        self.assertEqual(lines[at + 1], "block  %d B to %d B, +%d B" % (a, b, b - a))
+        self.assertEqual(len([line for line in lines if line.startswith("block ")]), 1)

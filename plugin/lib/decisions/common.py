@@ -11,11 +11,12 @@ import tempfile
 import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
+           "keeps_crlf", "disk_text", "on_disk",
            "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
-VERSION = "0.15.1"
+VERSION = "0.16.1"
 
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
@@ -87,6 +88,32 @@ def line_end(raw):
     """The line end of the bytes `raw`: its first line's, CRLF or LF; LF when it has none."""
     index = raw.find(b"\n")
     return "\r\n" if index > 0 and raw[index - 1:index] == b"\r" else "\n"
+
+
+def keeps_crlf(path):
+    """True when a write to `path` keeps CRLF: the file it names exists and its first line
+    ends in CRLF, the rule `commit_texts` applies (d32 fold, F1)."""
+    try:
+        with open(os.path.realpath(path), "rb") as handle:
+            return line_end(handle.read()) == "\r\n"
+    except OSError:
+        return False
+
+
+def disk_text(path):
+    """The text of `path` with its line ends as they are on disk, "" when it is absent."""
+    if not os.path.exists(path):
+        return ""
+    try:
+        with open(path, encoding="utf-8", newline="") as handle:
+            return handle.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Refusal("%s: unreadable: %s" % (path, exc))
+
+
+def on_disk(text, crlf):
+    """The bytes `text` takes once written: UTF-8, every line end CRLF when `crlf`."""
+    return len((re.sub(r"\r?\n", "\r\n", text) if crlf else text).encode())
 
 
 def commit_texts(texts):
