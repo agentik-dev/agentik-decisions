@@ -641,5 +641,93 @@ class Shipped(unittest.TestCase):
             self.assertIn("@" + INCLUDE, handle.read().splitlines())
 
 
+# d31 (b3): the reply's probe file, byte for byte: ten lines, one open.
+B2 = """# scratch: what a review left open
+
+## From a review (0 S1, 0 S2, 0 S3, 4 S4)
+- S4, F0: an open line, the only open one here.
+- **Closed 2026-10-28 by branch `sec-s4` (a8b5bef).** S4, F1: a closed line with a bold Closed lead.
+- ~~S4, F2: a closed line struck through.~~
+- [x] S4, F3: a closed line with a ticked box.
+- S4, F4 (closed 2026-10-28, a8b5bef): a closed line whose lead says closed.
+
+## No tally in this heading
+- **Closed 2026-10-28 by branch `x` (a8b5bef).** S1, F5: closed, its own level S1 after the bold lead.
+- S1, F6: DONE at a8b5bef, landed.
+- ~~S1, F7: struck through.~~
+
+## Open findings
+
+| id | level | area | finding | evidence | from |
+|---|---|---|---|---|---|
+| n1 | S1 | `a.py` | Closed 2026-11-01 at abc1234: a closed row left in the table | `a.py:1` | 2026-11-01 |
+| ~~n2~~ | ~~S1~~ | `a.py` | ~~a struck row~~ | `a.py:2` | 2026-11-01 |
+"""
+
+TALLY = """# scratch
+
+## From a review (0 S1, 0 S2, 0 S3, 2 S4)
+- an open line with no level of its own
+
+## S2: the gate (1 S2)
+- a line under a level and its tally
+
+## 10 S4 left
+- a line under a count alone
+
+## S3 and S4
+- a line under two levels
+"""
+
+OPEN = """# scratch
+
+## Open
+- Closed captions lag the video: an open line that opens with the word.
+- **Closedown is slow.** An open line, bold.
+- S3, a plain one.
+"""
+
+
+class Closed(Hermetic):
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.repo = os.path.join(self.tmp, "b2")
+        os.mkdir(self.repo)
+
+    def backlog(self, text, *argv):
+        with open(os.path.join(self.repo, "NICE_TO_HAVE.md"), "w", encoding="utf-8") as handle:
+            handle.write(text)
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["backlog", self.repo] + list(argv), out=out, err=err)
+        self.assertEqual(code, 0, err.getvalue())
+        return out.getvalue()
+
+    def test_closed_tally_is_no_level(self):
+        items = decisions.backlog.nice_items(TALLY)
+        self.assertEqual([(i["level"], i["level_from"]) for i in items],
+                         [(None, None), ("S2", "heading"), (None, None), ("S3", "heading")])
+
+    def test_closed_leads_go_to_one_line(self):
+        self.assertEqual(self.backlog(B2).splitlines(), [
+            "== b2  build order: none (no HANDOFF.md)",
+            "1 S1  NICE_TO_HAVE.md:12  S1, F6",
+            "2 S4  NICE_TO_HAVE.md:4  S4, F0",
+            "3 S4  NICE_TO_HAVE.md:8  S4, F4 (closed 2026-10-28, a8b5bef)",
+            "0 of 3 items carry no level (placed as S4)",
+            "7 closed, not placed"])
+
+    def test_closed_lines_in_json_and_none_without_one(self):
+        repo = json.loads(self.backlog(B2, "--json"))["repos"][0]
+        self.assertEqual(repo["closed"], [5, 6, 7, 11, 13, 19, 20])
+        self.assertEqual([i["line"] for i in repo["items"]], [12, 4, 8])
+        self.assertEqual(json.loads(self.backlog(OPEN, "--json"))["repos"][0]["closed"], [])
+        text = self.backlog(OPEN).splitlines()
+        self.assertEqual(text[-1], "2 of 3 items carry no level (placed as S4)")
+        self.assertEqual(len(text), 5)
+
+
 if __name__ == "__main__":
     unittest.main()

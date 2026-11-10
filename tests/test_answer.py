@@ -4,6 +4,7 @@ line stays, and both files are written or neither."""
 
 import io
 import os
+import re
 import shutil
 from unittest import mock
 
@@ -875,3 +876,50 @@ class Answer(Base):
         self.assertEqual(block.stray, ())
         code, out, err = self.answer("10", "--pick", "Pin", "--source", "s", "--no-entry")
         self.assertEqual(code, 0, err)
+
+
+class T2Answer(Base):
+    """d31: `--amends` writes the tail in form T2 and prints the tail it cut."""
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy(SAMPLE_QUESTIONS, self.questions)
+
+    def ask(self, title):
+        argv = list(PARTS)
+        argv[argv.index("--title") + 1] = title
+        code, _, err = self.run_cli(*argv)
+        self.assertEqual(code, 0, err)
+        return re.findall(r"^## (\d+)\. %s$" % title, self.read(self.questions), re.M)[0]
+
+    def amend(self, title, entry, sentence):
+        out, err = io.StringIO(), io.StringIO()
+        number = self.ask(title)
+        code = decisions.main(["answer", number, "--pick", "PIN (Recommended)", "--source",
+                               "the sitting", "--amends", entry, "--add", sentence,
+                               "--ledger", self.ledger], out=out, err=err)
+        self.assertEqual(code, 0, err.getvalue())
+        return number, out.getvalue()
+
+    def test_t2_amends_writes_the_form(self):
+        was = ("(2026-09-04; the sample; amended 2026-09-10, answer 3 (see design/04 "
+               "(2026-09-09)); amended 2026-09-12, the owner's word)")
+        self.write(self.ledger, self.read(self.ledger).replace("(2026-09-04; the sample)", was))
+        n, out = self.amend("Pin the interpreter", "4", "A red test stops the landing.")
+        self.assertIn("4. **Tests first.** Every verb has its own tests. A red test stops the "
+                      "landing. (2026-09-04; amended 2 times, 2026-09-10 to 2026-09-12; amended "
+                      "2026-09-28, the owner's answer to decision %s, the sitting)\n" % n,
+                      self.read(self.ledger))
+        self.assertIn("tail was: %s\n" % was, out)
+        # again, on a tail in the form: the count grows and the range's end moves
+        n, out = self.amend("Pin the linter", "4", "It names the test.")
+        self.assertIn("It names the test. (2026-09-04; amended 3 times, 2026-09-10 to "
+                      "2026-09-28; amended 2026-09-28, the owner's answer to decision %s, the "
+                      "sitting)\n" % n, self.read(self.ledger))
+        # an entry never amended: its first date, then the amendment whole
+        n, out = self.amend("Pin the formatter", "2", "The lint counts them.")
+        self.assertIn("The lint counts them. (2026-09-02; amended 2026-09-28, the owner's "
+                      "answer to decision %s, the sitting)\n" % n, self.read(self.ledger))
+        self.assertIn("tail was: (2026-09-02; the sample)\n", out)
+        self.assertEqual(decisions.main(["render", "--lint", "--ledger", self.ledger],
+                                        out=io.StringIO(), err=io.StringIO()), 0)
