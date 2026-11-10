@@ -12,22 +12,43 @@ ledger itself, by its path, a link or a hard link, is refused with exit 2. The w
 the target's line end and goes through a link to the file it names.
 
 The block: one line naming its source and the command that regenerates it;
-the `Every session` entries verbatim; then `- N Title (area)` for each other
-entry in force, under a sentence saying `decisions show N` reads one.
-Proposed and Superseded entries stay out.
+the `Every session` entries, each number, title and paragraph word for word and
+its tail cut to the first date and a count of its amendments, `(2026-09-21;
+amended 2 times, see the ledger)` (d29 act 4; a tail that opens with no date is
+written whole); then `- N Title (area)` for each other entry in force, under a
+sentence saying `decisions show N` reads one. Proposed and Superseded entries
+stay out. `--check` also passes a block that carries the whole tails, with one
+stderr line saying how many bytes more, so a CLAUDE.md rendered before 0.14.0
+stays fresh until `render` shortens it.
 """
 
 import difflib
 import os
+import re
 
 from .common import Refusal, read_text, write_text
-from .ledger import EVERY_SESSION, IN_FORCE, display, lint
+from .ledger import DATE, EVERY_SESSION, IN_FORCE, display, final_parenthetical, lint
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "BEGIN", "END", "TARGET"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
 TARGET = "CLAUDE.md"
+AMENDED = re.compile(r"(?i)\bamended\s+\d{4}-\d{2}-\d{2}")
+
+
+def short_tail(text):
+    """An Every session line with its tail cut to its first date and the count of
+    `amended <date>` in it; a line whose tail opens with no date stays whole."""
+    text = text.rstrip()
+    tail = final_parenthetical(text)
+    first = DATE.match(tail.lstrip()) if tail is not None else None
+    if first is None:
+        return text
+    count = len(AMENDED.findall(tail))
+    note = "" if count == 0 else "; amended %s, see the ledger" % (
+        "once" if count == 1 else "%d times" % count)
+    return "%s (%s%s)" % (text[:-(len(tail) + 2)].rstrip(), first.group(0), note)
 
 
 def tilde(path):
@@ -47,8 +68,9 @@ def is_ledger(target, ledger):
     return os.path.realpath(target) == os.path.realpath(ledger)
 
 
-def block(ledger, path, target):
-    """The block, markers included, for the ledger at `path` rendered into `target`.
+def block(ledger, path, target, tails=False):
+    """The block, markers included, for the ledger at `path` rendered into `target`;
+    `tails` keeps each Every session entry's whole tail, the form before 0.14.0.
 
     Beside its ledger the block names both by their basenames; elsewhere, as
     `~/.claude/CLAUDE.md` for a portfolio ledger, it names both whole, and the
@@ -65,7 +87,8 @@ def block(ledger, path, target):
     pieces = ["Generated from `%s` by `%s`; edit the ledger and rerun it, never this block."
               % (source, command)]
     in_force = [e for e in ledger.entries if e.section == IN_FORCE]
-    every = [e.text for e in in_force if (e.area or "").lower() == EVERY_SESSION.lower()]
+    every = [e.text if tails else short_tail(e.text) for e in in_force
+             if (e.area or "").lower() == EVERY_SESSION.lower()]
     others = ["- %d %s (%s)" % (e.number, e.title, e.area) for e in in_force
               if (e.area or "").lower() != EVERY_SESSION.lower()]
     if every:
@@ -105,6 +128,12 @@ def cmd_render(args, path, out, err):
     new = apply(old, block(ledger, path, target), display(target))
     if args.check:
         if new == old:
+            return 0
+        whole = block(ledger, path, target, tails=True)
+        if apply(old, whole, display(target)) == old:
+            more = len(whole.encode()) - len(block(ledger, path, target).encode())
+            err.write("render: %s carries the entries' whole tails, %d B more; run render to "
+                      "shorten it\n" % (os.path.basename(target), more))
             return 0
         name = display(target)
         out.writelines(difflib.unified_diff(old.splitlines(keepends=True),

@@ -754,7 +754,9 @@ class Answer(Base):
         line = ("1. **Plain words.** %s %s %s (2026-09-01; the sample; amended 2026-09-28, the "
                 "owner's answer to decision 9, s)\n" % (first, self.SECOND, self.NEW1))
         self.assertIn(line, self.read(self.ledger))
-        self.assertIn(line, self.read(self.claude))
+        # d29 act 4: the block cuts the tail to its first date and a count
+        self.assertIn(line.split(" (2026-09-01;")[0] + " (2026-09-01; amended once, see the "
+                      "ledger)\n", self.read(self.claude))
         self.lint()
 
     def test_tails_after_amends(self):
