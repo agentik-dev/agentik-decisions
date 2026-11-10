@@ -394,7 +394,9 @@ class Backlog(Hermetic):
         data = self.view(fixture("numbered"))
         self.assertEqual(set(data), {"repos", "skipped"})
         repo = data["repos"][0]
-        self.assertEqual(set(repo), {"repo", "nice", "handoff", "order", "steps", "items"})
+        self.assertEqual(set(repo), {"repo", "nice", "handoff", "order", "steps", "items",
+                                     "closed"})
+        self.assertEqual(repo["closed"], [])  # d31
         self.assertEqual(repo["repo"], os.path.realpath(fixture("numbered")))
         self.assertEqual(repo["nice"], os.path.join(repo["repo"], NICE))
         self.assertEqual(repo["handoff"], os.path.join(repo["repo"], "HANDOFF.md"))
