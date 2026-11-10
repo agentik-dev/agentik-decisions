@@ -3,7 +3,7 @@
 <img src="assets/icon.svg" alt="" width="56" align="left">
 
 agentik-decisions is a Claude Code plugin, `decisions@agentik`, plus a stdlib Python tool, `agentik-decisions`, for the decisions a repository has settled.
-A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor` and `backlog`.
+A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog` and `analyze`.
 
 ## Why it exists
 
@@ -84,6 +84,7 @@ make doctor
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; writes nothing |
+| `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed; `not measured:` where it cannot; writes nothing |
 | `--version` | `agentik-decisions 0.13.0`, the version `doctor` compares with the `agentik-decisions` on PATH |
 
 One example per verb:
@@ -102,6 +103,7 @@ agentik decisions render --lint         # exit 1 and one line per problem
 agentik decisions render --into ~/.claude/CLAUDE.md
 agentik decisions doctor --json
 agentik decisions backlog               # this repository's backlog against its build order
+agentik decisions analyze churn --since 7d  # what the last week's commits wrote
 ```
 
 `new` appends `## N. T` to the `OPEN-QUESTIONS.md` beside the ledger, before `## Decided without asking` when that heading exists, with or without text after it:
@@ -162,7 +164,7 @@ Lines under `## Decided without asking` are `- ` bullets after an optional parag
 Each problem prints `file:line: message`, and the exit is 1.
 Otherwise it writes the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->`, replacing a stale block in place, or appends it after one blank line when the markers are absent.
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
-The block holds one line naming its source and the command that regenerates it, the `Every session` entries verbatim, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
+The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
 Proposed and Superseded entries stay out.
 Rendered into a file that sits beside no ledger, such as `~/.claude/CLAUDE.md`, the block names the ledger whole, and its commands carry `--ledger`.
 A target that is the ledger itself, by its path, a link, a hard link or its name in another case on a case-insensitive disk, exits 2 and writes nothing.
@@ -172,9 +174,9 @@ Exit codes:
 
 | code | meaning |
 |---|---|
-| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `answer` whose block write failed after both files were written, with its warning |
+| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` whenever its view printed; `answer` whose block write failed after both files were written, with its warning |
 | 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8; a `warn` never changes the exit |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (a `--ledger` that names an absent file among them), or a `backlog` directory that is missing or a file it cannot read as UTF-8, or an `analyze` window it cannot read or argument that is neither an analysis nor a directory; a `warn` never changes the exit |
 
 ## The plugin
 
@@ -190,6 +192,7 @@ The plugin carries manners and no data; a repository owns its ledger.
 | command | `/decisions:answer N --pick L --source S --text P --area A` | the owner's answer, entered in the ledger |
 | command | `/decisions:render [--check]` | the lint, then the block in `CLAUDE.md` |
 | command | `/decisions:backlog [REPO...]` | the backlog, placed against the build order; the skill runs it before S4 work |
+| command | `/decisions:analyze [churn] [REPO...]` | churn from git, read only |
 
 One example each:
 
@@ -200,6 +203,7 @@ One example each:
 /decisions:ask
 /decisions:render --check
 /decisions:backlog
+/decisions:analyze churn
 ```
 
 Or say it: "which decisions cover the relay?" reaches the skill.
@@ -212,6 +216,7 @@ The session plugin is an optional provider and never a requirement: `doctor` rep
 ## Design
 
 - The portfolio's ledger decides where decisions live and names the six verbs; this version follows it.
+- `design/d29-churn.md`: `analyze`, and the block's short tails.
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
 - `design/d18-one-flow.md`: the design of the flow, one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
 - `design/d17-four-verbs.md`: the packet that built version `0.3.0`.
@@ -230,11 +235,12 @@ Each file runs alone in seconds:
 | `tests/test_answer.py` | `answer`: a pick, an amendment, no entry, both files or neither, the block |
 | `tests/test_ask.py` | `ask` under a stub renderer: the calls, the fields, one render in a temp dir, the write-back, the skipped blocks, the helper marks, no respeak |
 | `tests/test_render.py` | `render`, `--check` and `--lint`, with the file's hash before and after |
-| `tests/test_cli.py` | the six verbs, `doctor` and `backlog`, the dropped ones, and where the ledger is found |
+| `tests/test_cli.py` | the six verbs, `doctor`, `backlog` and `analyze`, the dropped ones, and where the ledger is found |
 | `tests/test_common.py` | the bounded child, the git top and the one-rename write |
 | `tests/test_doctor.py` | `doctor` under a fake `pyenv` and a temp home |
 | `tests/test_backlog.py` | `backlog` over fixtures trimmed from real files: the levels, the build order, the placement, the exits, no write and no render |
-| `tests/test_plugin.py` | the plugin subtree: six commands, the two skills, one version |
+| `tests/test_analyze.py` | `analyze` over five fixture repos: the classes, the four ratios, the exits, the bound, no write |
+| `tests/test_plugin.py` | the plugin subtree: seven commands, the two skills, one version |
 | `tests/test_makefile.py` | the harness `make test` runs, and the `decisions` step |
 | `tests/test_hermetic.py` | the suite reads no live state |
 | `tests/test_gates.py` | a skip is a gate that did not run, never a pass |
@@ -272,15 +278,14 @@ Status: version `0.13.0`, rendered `2026-11-01`, `399` unittest cases.
 
 | Surface | State |
 |---|---|
-| Verbs `show`, `find`, `new`, `ask`, `answer`, `render`, `doctor`, `backlog` | Working |
+| Verbs `show`, `find`, `new`, `ask`, `answer`, `render`, `doctor`, `backlog`, `analyze` | Working |
 | The lint: section shape, entry shape, the tail, the fate, unique numbers, both caps, the questions file, the legacy line | Working |
-| The plugin: two skills, six commands and respeak's include file | Working |
+| The plugin: two skills, seven commands and respeak's include file | Working |
 | The session provider in `doctor` | Working |
 
 Version `0.8.0` tightens the lint and `answer`. The lint now refuses an entry whose tail does not open with its date or names only `amended DATE`, an entry in force that is only its tail, and a Proposed line whose tail omits `OPEN-QUESTIONS.md`; it takes fate phrases in any case, and a title that ends in `?` or `!`. In `OPEN-QUESTIONS.md` it skips front matter and fenced `## ` lines, and flags a repeated question number and two labels equal ignoring case. `answer` requires one of `--area`, `--amends` and `--no-entry` in its usage, resolves `--area` by prefix and prints the heading matched, and refuses to amend an entry whose tail does not open with a date. `new` and `answer` write no period after a title ending in `?` or `!`, and `find` prints `N Title (area or section)`.
 
 Version `0.7.0` tightens `new` and `ask`. `new` refuses an option named `Other` and a first label over four words, and a new question's number passes the entries below the legacy marker. `ask` skips an answered block and a block the lint refuses, and keeps the text beside a directory it cannot write, where it stopped with a traceback. It keeps a block whose render emptied a part or added prose, runs the render in a temp dir as a marked session helper, and states a restated effect once in the recommended option's description.
-Version `0.6.0` changes five exits that callers see. `answer` exits 0 with a warning naming the `render` command when the block write fails after both files are written, where it exited 2. `doctor --ledger` naming an absent file fails and exits 2, where it warned and exited 0. Under the interpreter `install-cli` sets up, at 3.12 or later, `doctor` no longer fails its python row and exits 0, where it exited 2. `render` and `answer` exit 2 and write nothing for a target that is the ledger itself, by its path, a link, a hard link or its name in another case; both exited 0 and wrote into the ledger. A target that is a link into a missing directory exits 2, where `0.5.2` replaced the link with a file and exited 0. `doctor` also warns when the `decisions` on PATH names another version, `decisions --version` prints the version, and every write keeps a CRLF file's line ends and a link.
 
 ## Layout
 
@@ -293,7 +298,7 @@ assets/icon.svg            the project icon
 plugin/                    the plugin, self-contained: what an install copies
 plugin/skills/decisions/   the skill that consults and drafts
 plugin/skills/ask/         the skill that asks the owner: /decisions:ask
-plugin/commands/           show, find, new, answer, render, backlog
+plugin/commands/           show, find, new, answer, render, backlog, analyze
 plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md imports it
 src/decisions.py           the runner
 plugin/lib/decisions/     the package, each module under a thousand lines

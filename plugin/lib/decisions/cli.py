@@ -1,4 +1,5 @@
-"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor and backlog.
+"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog
+and analyze.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -29,9 +30,15 @@ Verbs
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
                                   repo or `suite`; writes nothing
+    analyze [churn] [REPO...] [--since Nd|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
+                                  churn from each repo's git history over the
+                                  window (14 days to now by default): the share
+                                  of lines in records, record commits a landing,
+                                  commits a charter, NICE_TO_HAVE.md's rows;
+                                  writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog` reads no ledger and ignores it. `--version` prints
+working directory; `backlog` and `analyze` read no ledger and ignore it. `--version` prints
 the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -40,14 +47,17 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
-       read; `answer` whose block write failed after both files were written (a
-       warning on stderr names `agentik decisions render`)
+       read; `analyze` whenever its view printed; `answer` whose block write failed
+       after both files were written (a warning on stderr names `agentik decisions
+       render`)
     1  `render`: a lint problem, or with --check a stale block
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
        changes the exit; a `--ledger` naming an absent file fails), or a `backlog`
-       REPO that is not a directory or a file it cannot read as UTF-8
+       REPO that is not a directory or a file it cannot read as UTF-8, or an
+       `analyze` window it cannot read or argument that is neither an analysis
+       nor a directory
 """
 
 import argparse
