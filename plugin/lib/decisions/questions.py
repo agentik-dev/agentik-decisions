@@ -58,8 +58,9 @@ FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # number, title; start: the heading's index, 0-based; stop: the next `## `
 # heading's index or the line count; text: the block without trailing blanks;
 # labels: the bold labels in the order found; options: (label, marked, effect);
-# parts: each label's paragraph on one line; answer: the text after
-# **Your answer:**, or None when the line is absent.
+# parts: each label's paragraph on one line; answer: the owner's typed text, the rest
+# of the **Your answer:** line and every non-blank line after it to the block's end,
+# joined by one space (d28), or None when the line is absent.
 Block = collections.namedtuple("Block",
                                "number title start stop text labels options parts answer")
 # decided, answered: (1-based line, text) per non-blank line; problems: (line, message).
@@ -121,19 +122,23 @@ def make_block(number, title, start, stop, lines):
     body = [i for i in range(start + 1, stop) if lines[i].strip()]
     end = body[-1] + 1 if body else start + 1
     labels, options, parts, answer, current, third = [], [], {}, None, None, False
+    typed = []
     for i in range(start + 1, stop):
         line = lines[i].rstrip()
         if not line.strip():
             current = None
             continue
+        if answer is not None:
+            typed.append(line.strip())
         label = next((l for l in LABELS if line.startswith("**%s**" % l)), None)
         if label:
             labels.append(label)
             third, current = label == LABELS[2], label
             parts[label] = line[len(label) + 4:].strip()
             continue
-        if line.startswith(ANSWER):
+        if line.startswith(ANSWER) and answer is None:
             answer, third, current = line[len(ANSWER):].strip(), False, None
+            typed.append(answer)
             continue
         if line.startswith("**"):
             third, current = False, None
@@ -145,6 +150,8 @@ def make_block(number, title, start, stop, lines):
             current = None
         elif current:
             parts[current] = (parts[current] + " " + line.strip()).strip()
+    if answer is not None:
+        answer = " ".join(" ".join(typed).split())
     return Block(number, title, start, stop, "\n".join(l.rstrip() for l in lines[start:end]),
                  labels, options, parts, answer)
 
