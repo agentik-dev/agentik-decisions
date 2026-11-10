@@ -65,6 +65,11 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
   under `## Decided without asking` in OPEN-QUESTIONS.md.
 - Before taking S4 work, run `agentik-decisions backlog`, which places each item of
   NICE_TO_HAVE.md against the build order in HANDOFF.md.
+- Close a NICE_TO_HAVE.md item by opening its `finding`, or its bullet, with
+  `Closed YYYY-MM-DD <sha, history file or void>: ` and then its lead, shortened so the
+  row fits. `agentik-decisions expire` then lists it, with the open S4 items
+  older than 14 days on no open step; it is dry, and `expire --write`, in a commit of
+  its own, moves them to history/NICE-overflow.md.
 - Write an entry in plain present-tense English. Its first sentence states the
   decision whole, and its closing parenthetical names the date and the source.
 

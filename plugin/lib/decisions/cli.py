@@ -38,7 +38,8 @@ Verbs
                                   the closed NICE items and the S4 ones older
                                   than N days (14) on no open step; --write
                                   appends them to history/NICE-overflow.md
-                                  and takes them out, once HEAD holds the file
+                                  and takes them out, once HEAD holds the file;
+                                  dry without it
     analyze [churn] [REPO...] [--since Nd|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
                                   churn from each repo's git history over the
                                   window (14 days to now by default): the share
@@ -73,10 +74,10 @@ Exit codes
        changes the exit; a `--ledger` naming an absent file fails), or a `backlog`
        REPO that is not a directory or a file it cannot read as UTF-8, or an
        `analyze` window it cannot read or argument that is neither an analysis
-       nor a directory, an `expire` REPO not a directory, --days under 1, or a
-       --write whose NICE_TO_HAVE.md HEAD does not hold, or an `audit` REPO that
-       is not a directory or `--tree`
-       FILE it cannot read
+       nor a directory, or an `expire` REPO not a directory, `--order` FILE it
+       cannot read, --days under 1, or a --write whose NICE_TO_HAVE.md HEAD does
+       not hold, whose files changed under it, or that failed, or an `audit`
+       REPO that is not a directory or `--tree` FILE it cannot read
 """
 
 import argparse

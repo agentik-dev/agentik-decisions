@@ -5,7 +5,7 @@ NICE_TO_HAVE.md into `history/NICE-overflow.md`, appended byte for byte (d34).
 
 It reads NICE_TO_HAVE.md as `backlog` does and places it against HANDOFF.md, or
 `--order FILE`, the same way. An item expires when it is closed (a lead `backlog`
-reads as closed: the one form to write is `Closed YYYY-MM-DD <sha, record or void>: `
+reads as closed: the one form to write is `Closed YYYY-MM-DD <sha, history file or void>: `
 opening the `finding` cell or the bullet, then the finding's lead), or when it is
 open, placed as S4 (S4 or no level), follows no open step, and its date is more than
 N days old (14 by default). Its date is the first valid YYYY-MM-DD of a row's `from`

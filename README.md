@@ -3,12 +3,12 @@
 <img src="assets/icon.svg" alt="" width="56" align="left">
 
 agentik-decisions is a Claude Code plugin, `decisions@agentik`, plus a stdlib Python tool, `agentik-decisions`, for the decisions a repository has settled.
-A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `analyze` and `audit`.
+A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `expire`, `analyze` and `audit`.
 
 ## Why it exists
 
 One owner runs several Claude Code plugins in unattended relay runs, where one session hands its work to the next.
-The decisions that shape that work have to reach every session, and no session should read a long file whole to find them.
+The decisions that shape that work must reach every session, and no session should read a long file whole to find them.
 So the ledger groups its entries by area and caps its size, and `render` copies the few entries every session needs into a generated block in `CLAUDE.md`.
 An agent reads the rest by number or by area, and a packet carries the entries it touches verbatim.
 Agents draft questions; only the owner moves an entry into force.
@@ -16,7 +16,7 @@ Agents draft questions; only the owner moves an entry into force.
 ## The ledger
 
 `DECISIONS.md` sits at the repository root.
-Front matter, a title and prose may come first; then come three sections, in this order:
+Front matter, a title and prose may come first; then three sections, in this order:
 
 ```
 ## In force
@@ -63,11 +63,6 @@ claude plugin install decisions@agentik
 
 Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, the first line of `.python-version`; `make venv` creates it, and `make doctor` checks the machine and the repository.
 
-```
-make venv
-make doctor
-```
-
 ## The tool
 
 `agentik decisions [--ledger PATH] <verb>` (`decisions` is an alias until 2026-12-31); the ledger is `--ledger PATH`, before or after the verb, else `DECISIONS.md` at the git top level of the working directory.
@@ -85,9 +80,10 @@ make doctor
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
+| `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; older S1 to S3, or on one, listed to lift; undated kept; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md`. Close with `Closed YYYY-MM-DD <sha, history file or void>: ` and the lead, cut to fit |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
-| `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, `Every session` first with each line's block bytes; writes nothing |
-| `--version` | `agentik-decisions 0.17.1`, the version `doctor` compares with the `agentik-decisions` on PATH |
+| `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
+| `--version` | `agentik-decisions 0.18.0`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -149,7 +145,7 @@ A sitting without AskUserQuestion runs `ask` for the render alone; the owner ans
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
-`--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`: the first date, a count of the older amendments, then its own whole; the tail it cut prints as `tail was:`, and `git log -p -S'amended A' -- DECISIONS.md` finds an older amendment whole on a `-` line. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
+`--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`; the tail it cut prints as `tail was:`, and `git log -p -S'amended A' -- DECISIONS.md` finds an older amendment whole on a `-` line. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
 The block is loaded on every turn: `answer` and `render` name its growth, `X B to Y B, +D B`, and an answer that makes it larger under `Every session` exits 2 and writes nothing, naming the tail note's share when that grows; an entry outside `Every session`, listed by title only, or `--every-turn` lets it through.
@@ -177,9 +173,9 @@ Exit codes:
 
 | code | meaning |
 |---|---|
-| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze` and `audit` whenever a view printed; `answer` whose block write failed after both files were written, with its warning |
+| 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze`, `audit` and `expire` whenever a view printed or a move was made; `answer` whose block write failed after both files were written, with its warning |
 | 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new` or `answer` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (an absent `--ledger` file among them), or a missing `backlog` directory or a file it cannot read as UTF-8, an `analyze` window it cannot read or argument neither an analysis nor a directory, an `audit` REPO that is not a directory or `--tree` FILE it cannot read, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new`, `answer` or `expire` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (an absent `--ledger` file among them), a `backlog`, `expire` or `audit` REPO not a directory or a file it cannot read as UTF-8 (`--order`, `--tree` too), an `analyze` window it cannot read or argument neither an analysis nor a directory, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
 
 ## The plugin
 
@@ -188,7 +184,7 @@ The plugin carries manners and no data; a repository owns its ledger.
 | part | name | what it does |
 |---|---|---|
 | skill | `decisions` | consult, cite and draft entries before touching a decided area |
-| skill | `/decisions:ask` | ask the open questions once, in one batch, through AskUserQuestion, then enter each answer |
+| skill | `/decisions:ask` | ask the open questions in one batch through AskUserQuestion, then enter each answer |
 | command | `/decisions:show <n>...` | entries by number, or one area with `--area <name>` |
 | command | `/decisions:find <word>` | the title line of each entry that holds the word |
 | command | `/decisions:new --title T --stands S --choice C --option "L: E" ... --recommend R` | the four-part question and its Proposed line |
@@ -196,6 +192,7 @@ The plugin carries manners and no data; a repository owns its ledger.
 | command | `/decisions:render [--check]` | the lint, then the block in `CLAUDE.md` |
 | command | `/decisions:backlog [REPO...]` | the backlog, placed against the build order; the skill runs it before S4 work |
 | command | `/decisions:analyze [churn] [REPO...]` | churn from git, read only |
+| command | `/decisions:expire [REPO...]` | closed and old S4 items, dry |
 | command | `/decisions:audit [REPO...]` | retire and rewrite candidates, read only |
 
 One example each:
@@ -208,6 +205,7 @@ One example each:
 /decisions:render --check
 /decisions:backlog
 /decisions:analyze churn
+/decisions:expire
 /decisions:audit
 ```
 
@@ -216,14 +214,14 @@ Or say it: "which decisions cover the relay?" reaches the skill.
 ## Configuration
 
 The tool reads no configuration file: the ledger is `--ledger` or `DECISIONS.md` at the git top level.
-The session plugin is an optional provider and never a requirement: `doctor` reports whether the session's resolved file is absent, in range, out of range or unparsable, and the tool runs the same either way.
+The session plugin is an optional provider: `doctor` reports whether the session's resolved file is absent, in range, out of range or unparsable, and the tool runs the same either way.
 
 ## Design
 
-- The portfolio's ledger decides where decisions live and names the six verbs; this version follows it.
+- The portfolio's ledger decides where decisions live and names the six verbs.
 - `design/d29-churn.md`: `analyze`, and the block's short tails.
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
-- `design/d18-one-flow.md`: the design of the flow, one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
+- `design/d18-one-flow.md`: one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
 - `design/d17-four-verbs.md`: built `0.3.0`.
 - `history/design/` and `history/packets/`: the designs and packets of the per-file format before it.
 - `history/sittings/`: one charter per working session; each handover lists the choices made inside the design.
@@ -240,13 +238,14 @@ Each file runs alone in seconds:
 | `tests/test_answer.py` | `answer`: a pick, an amendment, no entry, both files or neither, the block |
 | `tests/test_ask.py` | `ask` under a stub renderer: the calls, the fields, one render in a temp dir, the write-back, the skipped blocks, the helper marks, no respeak |
 | `tests/test_render.py` | `render`, `--check` and `--lint`, with the file's hash before and after |
-| `tests/test_cli.py` | the six verbs, `doctor`, `backlog`, `analyze` and `audit`, the dropped ones, and where the ledger is found |
+| `tests/test_cli.py` | every verb, the dropped ones, and where the ledger is found |
 | `tests/test_common.py` | the bounded child, the git top and the one-rename write |
 | `tests/test_doctor.py` | `doctor` under a fake `pyenv` and a temp home |
 | `tests/test_backlog.py` | `backlog` over fixtures trimmed from real files: the levels, the build order, the placement, the exits, no write and no render |
 | `tests/test_analyze.py` | `analyze` over five fixture repos: the classes, the four ratios, the exits, the bound, no write |
 | `tests/test_audit.py` | `audit`: the marks, the order, no write, the exits |
-| `tests/test_plugin.py` | the plugin subtree: eight commands, the two skills, one version |
+| `tests/test_expire.py` | `expire`: the items, dry, the move, a stop |
+| `tests/test_plugin.py` | the plugin subtree: nine commands, the two skills, one version |
 | `tests/test_makefile.py` | the harness `make test` runs, and the `decisions` step |
 | `tests/test_hermetic.py` | the suite reads no live state |
 | `tests/test_gates.py` | a skip is a gate that did not run, never a pass |
@@ -257,7 +256,6 @@ Each file runs alone in seconds:
 
 ```
 PYTHONPATH=plugin/lib python3 -m unittest tests.test_ledger
-PYTHONPATH=plugin/lib python3 -m unittest tests.test_readme
 make check
 ```
 
@@ -266,7 +264,6 @@ make check
 
 ## Conventions shared with the sibling plugins
 
-This plugin is one of several built to the same conventions.
 `scripts/{hygiene,bounded,agentik}` are agentik-commons' copies, pinned by `scripts/vendored.sha256`; `scripts/doclint` (charters, packets, links) is byte-identical across them, pinned in the Makefile.
 `scripts/hygiene` keeps only generic patterns; the private ones (a person, a private repo, a host, a domain) live outside it, in `$AGENTIK_HYGIENE_PRIVATE` or `~/.config/agentik/hygiene-private.tsv`, `group<TAB>regex` rows.
 Without it the scan warns once and runs the generic groups; `--require-private` exits 2.
@@ -280,13 +277,13 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.17.1`, rendered `2026-11-01`, `458` unittest cases.
+Status: version `0.18.0`, rendered `2026-11-01`, `486` unittest cases.
 
 | Surface | State |
 |---|---|
-| Verbs `show`, `find`, `new`, `ask`, `answer`, `render`, `doctor`, `backlog`, `analyze`, `audit` | Working |
-| The lint: section shape, entry shape, the tail, the fate, unique numbers, both caps, the questions file, the legacy line | Working |
-| The plugin: two skills, eight commands and respeak's include file | Working |
+| Every verb above | Working |
+| The lint | Working |
+| The plugin | Working |
 | The session provider in `doctor` | Working |
 
 ## Layout
@@ -300,7 +297,7 @@ assets/icon.svg            the project icon
 plugin/                    the plugin, self-contained: what an install copies
 plugin/skills/decisions/   the skill that consults and drafts
 plugin/skills/ask/         the skill that asks the owner: /decisions:ask
-plugin/commands/           show, find, new, answer, render, backlog, analyze, audit
+plugin/commands/           show, find, new, answer, render, backlog, expire, analyze, audit
 plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md imports it
 src/decisions.py           the runner
 plugin/lib/decisions/     the package, each module under a thousand lines
