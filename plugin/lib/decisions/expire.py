@@ -18,11 +18,14 @@ line is followed by a line at column 0 (a lazy continuation) is kept and listed 
 that line, never moved. NICE_TO_HAVE.md is read as bytes and cut at `\n` alone: a
 `\r` stays with its line and no line end is rewritten in either file. A line break
 the parser sees that is not a `\n` (a U+2028, a form feed, a lone `\r`) is named
-in the view, and `--write` refuses that repo.
+in the view, and `--write` refuses the call.
 
-With `--write`, every repo with something to move is checked before any is written:
-HEAD holds the bytes the view was parsed from, no such line break, the archive reads;
-else nothing is written (exit 2). Then, under the repo's lock, NICE_TO_HAVE.md is
+With `--write`, a line break of that kind in any repo given, even one with nothing to
+move, refuses every repo before any write. Then every repo with something to move is
+checked before any is written: HEAD holds the bytes the view was parsed from, the
+archive reads, and its real path lies inside the repo (so no two repos share it
+through a link); else nothing is written (exit 2). A repo named twice, by any
+spelling of one real path, is taken once. Then, under the repo's lock, NICE_TO_HAVE.md is
 read once as bytes, and those bytes are the ones compared (with the view's, so with
 HEAD's blob), parsed and cut; the archive is read there too. The items' lines, with
 a bullet's indented ones, are appended byte for byte to the archive under one dated
@@ -281,9 +284,12 @@ def archive_bytes(path):
 
 
 def replaced(path, data):
-    """`path` (through a link, the file it names) holds `data`: a temp file in its
-    directory, flushed and synced, then `os.replace`. The temp goes on any failure or
-    stop that lets this run on; an OSError is refused."""
+    """`path` holds `data`: a temp file in the directory of its real path, flushed and
+    synced, then `os.replace` there, the file's mode kept. It follows every link, of
+    the file and of its folders, to the file they name: NICE_TO_HAVE.md's as it
+    stands, the archive's only once `checked` has found its real path inside the
+    repo, so the repo's lock covers it. The temp goes on any failure or stop that lets
+    this run on; an OSError is refused."""
     real = os.path.realpath(path)
     temp = None
     try:
@@ -308,12 +314,17 @@ def replaced(path, data):
 
 def checked(v):
     """Every check before any write (ruling 5), after every repo's line breaks: HEAD
-    holds the very bytes the view parsed, and the archive reads."""
+    holds the very bytes the view parsed, the archive reads, and its real path lies
+    inside the repo, whose lock is the one held over it."""
     v["head"] = head_holds(v["nice"], v["data"])
     if v["head"] is None:
         raise Refusal("expire: HEAD does not hold %s as it stands; commit it first; "
                       "nothing written" % v["nice"])
     archive_bytes(v["archive"])
+    real, top = os.path.realpath(v["archive"]), os.path.realpath(v["repo"])
+    if os.path.commonpath([real, top]) != top:
+        raise Refusal("expire: %s: its real path %s lies outside %s; nothing written"
+                      % (v["archive"], real, top))
 
 
 def moved(v, days, today, err):
@@ -399,7 +410,9 @@ def cmd_expire(args, out, err):
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("expire: %s is not a directory" % name)
-        repos.append(os.path.realpath(name))
+        real = os.path.realpath(name)
+        if real not in repos:
+            repos.append(real)
     ordered, order_file = None, getattr(args, "order", None)
     if order_file is not None:
         if not os.path.isfile(order_file):
