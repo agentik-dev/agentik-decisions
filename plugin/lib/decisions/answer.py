@@ -57,12 +57,14 @@ way out is an entry outside `Every session`, which the block lists by title only
 `--every-turn`, valid only with `--area` or `--amends`. Same size or smaller passes.
 """
 
+import collections
 import os
 import shlex
+import subprocess
 
 from . import ask, questions
-from .common import (Refusal, commit_texts, disk_text, held, keeps_crlf, on_disk, read_text,
-                     write_text)
+from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, held, keeps_crlf,
+                     on_disk, read_text, write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
                      bold_title, display, dropped, final_parenthetical, folded, load, parse,
                      repeats,
@@ -168,14 +170,71 @@ def named(block, typed):
     return exact or [label for label in labels if normal(label) == normal(typed)]
 
 
-def pick(block, args):
+def head_block(path_q, number):
+    """Question `number`'s block as git's HEAD holds the questions file, read as
+    `render.head_holds` reads one: in the real path's directory, each git child under
+    GIT_TIMEOUT. With no copy of it, a Refusal naming why, since `answer` then cannot
+    tell what the owner typed into the block (d35 ruling 5)."""
+    real = os.path.realpath(path_q)
+    where, name = os.path.dirname(real), os.path.basename(real)
+    text, why = None, None
+    try:
+        code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
+                            GIT_TIMEOUT, cwd=where)
+        sha = out.strip()
+        if code != 0 or not sha:
+            why = "no commit to read there"
+        else:
+            blob = subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, name)],
+                                  cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+            if blob.returncode != 0:
+                why = "HEAD does not hold %s" % name
+            else:
+                # the line ends `read_text` reads, so a CRLF blob parses as the file does
+                text = blob.stdout.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as exc:
+        why = "git cannot read it: %s" % exc
+    if why is None:
+        found = next((b for b in questions.parse(text).blocks if b.number == number), None)
+        if found is not None:
+            return found
+        why = "HEAD's %s holds no question %d" % (name, number)
+    raise Refusal("answer: git holds no copy of question %d (%s), so answer cannot tell what "
+                  "was typed into its block; read the block, commit %s, then run this again; "
+                  "nothing written" % (number, why, name))
+
+
+def since(block, base):
+    """The owner's lines (d35 ruling 2): each non-blank line of `block` above its
+    **Your answer:** line that `base`, HEAD's copy of the block, lacks, in order, stripped.
+    Runs of spaces count as one, and each line of `base` holds one line of `block`; a line
+    deleted since the commit is none. The answer line and what is under it stay T (d28)."""
+    held_lines = collections.Counter(" ".join(line.split()) for line in base.text.splitlines())
+    lines = []
+    for line in block.text.splitlines():
+        if line.startswith(questions.ANSWER):
+            break
+        key = " ".join(line.split())
+        if not key:
+            continue
+        if held_lines[key] > 0:
+            held_lines[key] -= 1
+        else:
+            lines.append(line.strip())
+    return lines
+
+
+def pick(block, args, lacks=()):
     """The label of the answer, `--pick`'s option or `Other: X`, held to the owner's
     typed text T, `block.answer` (d28): T that names an option takes only `--pick` of
     it; any other T refuses `--pick` and stays in `--other`'s label. An unknown
     `--pick` keeps its own refusal. A block with stray lines, text no part of it takes,
-    refuses `--pick` and puts them before T in `--other`'s label (d30 ruling 5)."""
+    refuses `--pick` and puts them before T in `--other`'s label (d30 ruling 5). So do
+    `lacks`, the block's lines HEAD's copy of it lacks, after the stray lines, each line
+    once (d35 rulings 3 and 4)."""
     typed, stray = block.answer or "", list(block.stray)
-    options = named(block, typed) if typed and not stray else []
+    lacks = [line for line in lacks if line not in stray]
+    options = named(block, typed) if typed and not stray and not lacks else []
     option = options[0] if len(options) == 1 else None
     names = ("answer: question %d's %s line names the option `%s`; pass --pick with it; "
              "nothing written" % (block.number, questions.ANSWER, option))
@@ -192,6 +251,12 @@ def pick(block, args):
             raise Refusal("answer: question %d holds text no part of its block takes; pass "
                           "--other, which keeps it in the Answered line, or join it to its "
                           "part; nothing written:\n%s" % (block.number, "\n".join(stray)))
+        if lacks:
+            raise Refusal("answer: question %d's block holds lines that HEAD's copy of it "
+                          "lacks; pass --other, which keeps them in the Answered line, or, "
+                          "when they are the block's own words, commit %s and run this "
+                          "again; nothing written:\n%s"
+                          % (block.number, ask.QUESTIONS, "\n".join(lacks)))
         if len(options) > 1:
             raise Refusal(twins)
         if typed and option is None:
@@ -208,7 +273,7 @@ def pick(block, args):
         raise Refusal(twins)
     if option is not None:
         raise Refusal(names)
-    typed = " ".join(stray + ([typed] if typed else []))
+    typed = " ".join(stray + lacks + ([typed] if typed else []))
     if typed and other.lower() != typed.lower():
         return "Other: %s; the owner's line: %s" % (other, typed)
     return "Other: " + other
@@ -281,7 +346,8 @@ def cmd_answer(args, path, out, err):
         found = next((b for b in questions.parse(old_q).blocks if b.number == number), None)
         if found is None:
             raise Refusal("answer: no open question %d in %s" % (number, display(path_q)))
-        label = pick(found, args)
+        # d35: the lines the owner typed are those HEAD's copy of block N lacks
+        label = pick(found, args, since(found, head_block(path_q, number)))
         title = found.title[:-1] if found.title.endswith(".") else found.title
         ledger = parse(ledger_text)
         proposed = next((e for e in ledger.entries

@@ -42,7 +42,7 @@ class Repo:
         super().setUpClass()
         root = tempfile.mkdtemp(prefix="decisions-d35-")
         cls.addClassCleanup(shutil.rmtree, root, True)
-        git(root, "init", "-q")
+        git(root, "init", "-q", "--template=")
         for name in BOTH:
             open(os.path.join(root, name), "w").close()
         git(root, "add", *BOTH)
