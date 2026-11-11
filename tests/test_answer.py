@@ -12,6 +12,7 @@ import decisions
 from decisions.ledger import LEGACY
 from decisions.render import BEGIN, END
 from tests.hermetic import SAMPLE
+from tests.test_answer_head import Repo
 from tests.test_new import PARTS, SAMPLE_QUESTIONS, Base, sha
 
 ENTRY9 = ("9. **Pin the interpreter.** Pin 3.12. (2026-09-28; the owner's answer to "
@@ -22,7 +23,7 @@ ONLY_312 = "The tool runs under Python 3.12 only, from the standard library alon
 WHOLE_313 = "The tool runs under Python 3.13 from the standard library alone."
 
 
-class Answer(Base):
+class Answer(Repo, Base):
 
     def setUp(self):
         super().setUp()
@@ -34,6 +35,7 @@ class Answer(Base):
         argv[argv.index("--title") + 1] = title
         code, _, err = self.run_cli(*argv)
         self.assertEqual(code, 0, err)
+        self.commit()
 
     def answer(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -304,7 +306,8 @@ class Answer(Base):
         self.assertIn("fails the lint", err)
         self.assertIn("question 12: the four labels in order", err)
         self.assertEqual((sha(self.ledger), sha(self.questions)), before)
-        self.assertEqual(sorted(os.listdir(self.tmp)), ["DECISIONS.md", "OPEN-QUESTIONS.md"])
+        self.assertEqual(sorted(n for n in os.listdir(self.tmp) if n != ".git"),
+                         ["DECISIONS.md", "OPEN-QUESTIONS.md"])
 
     def test_a_failed_block_write_keeps_the_answer(self):
         # d18 1a obs: both files are written before the block; a failed block write is a
@@ -654,6 +657,7 @@ class Answer(Base):
         at = text.index(self.DEFAULT, text.index("## %d. " % number))
         self.write(self.questions, text[:at] + "".join(line + "\n" for line in lines)
                    + text[at + len(self.DEFAULT):])
+        self.commit()
         return number
 
     def refuses(self, number, argv, words):
@@ -882,11 +886,12 @@ class Answer(Base):
         block = [b for b in decisions.questions.parse(self.read(self.questions)).blocks
                  if b.number == 10][0]
         self.assertEqual(block.stray, ())
+        self.commit()
         code, out, err = self.answer("10", "--pick", "Pin", "--source", "s", "--no-entry")
         self.assertEqual(code, 0, err)
 
 
-class T2Answer(Base):
+class T2Answer(Repo, Base):
     """d31: `--amends` writes the tail in form T2 and prints the tail it cut."""
 
     def setUp(self):
@@ -898,6 +903,7 @@ class T2Answer(Base):
         argv[argv.index("--title") + 1] = title
         code, _, err = self.run_cli(*argv)
         self.assertEqual(code, 0, err)
+        self.commit()
         return re.findall(r"^## (\d+)\. %s$" % title, self.read(self.questions), re.M)[0]
 
     def amend(self, title, entry, sentence):
@@ -963,7 +969,7 @@ def on_disk(path):
     return len(b"".join(lines[marks[0]:marks[1] + 1])) if len(marks) == 2 else 0
 
 
-class TurnAnswer(Base):
+class TurnAnswer(Repo, Base):
 
     def setUp(self):
         super().setUp()
@@ -978,6 +984,7 @@ class TurnAnswer(Base):
         argv[argv.index("--title") + 1] = title
         code, _, err = self.run_cli(*argv)
         self.assertEqual(code, 0, err)
+        self.commit()
 
     def render(self):
         self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),

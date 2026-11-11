@@ -11,18 +11,18 @@ allowed-tools: Bash(agentik-decisions *), AskUserQuestion
 The owner is asked once per session, in one batch: when the sitting blocks on
 the owner, or at close.
 
-1. Run `agentik-decisions ask`, which takes every open question, or
-   `agentik-decisions ask N...` for the ones named. It renders the open questions
-   through respeak once, writes them back into OPEN-QUESTIONS.md, and prints a
-   JSON list of AskUserQuestion calls. A warning with exit 0 means the text
-   stayed as it was; exit 2 names an unknown N or a held lock. A question
-   whose **Your answer:** line is filled in, or text under it, is not asked:
-   run `agentik-decisions answer N` for it first, from that text, which `answer`
-   reads. Text that names an option takes `--pick` with that option; `answer`
-   refuses any other pick and `--other`. Any other text, a label with a
-   condition or free words, takes `--other`, restated; `answer` refuses
-   `--pick` for it and keeps the owner's words in the Answered line. A question
-   the lint refuses is not asked either; its warning names the fault.
+1. Before `agentik-decisions ask`, read `git diff -- OPEN-QUESTIONS.md`: a changed or added line in a block HEAD
+   already holds is the owner's typing since the last commit. That question is not committed and not run through
+   `ask` first: run `agentik-decisions answer N` for it first, from that text, which `answer` reads, or, when
+   the words ask something back rather than answer, quote them to the owner in this sitting's ask. A line typed
+   above its **Your answer:** line takes `--other`, which keeps those lines in the Answered line. The answer
+   line counts too, or text under it. Text that names an option takes `--pick` with that option; `answer`
+   refuses any other pick and `--other`. Any other text, a label with a condition or free words, takes
+   `--other`, restated; `answer` refuses `--pick` for it and keeps the owner's words in the Answered line. Only
+   then run `ask`, or `ask N...` for the ones named: it renders the open questions through respeak once, writes
+   them back and prints a JSON list of AskUserQuestion calls (a warning with exit 0: the text stayed; exit 2: an
+   unknown N or a held lock). Read its `git diff`, commit OPEN-QUESTIONS.md and DECISIONS.md by path, then ask
+   the owner. A question the lint refuses is not asked; its warning names the fault.
 2. Pass each call to AskUserQuestion as it stands, back to back in one turn.
    Never reword a question, a label or a description.
 3. For each answer, run
@@ -52,12 +52,12 @@ the owner, or at close.
    unless `--shorter`. `--add S` in place of `--text` appends S to M's
    paragraph as it stands. An answer that makes the block larger under
    `Every session` is refused, since every turn loads it: pass `--every-turn`
-   only on the owner's word. A line no part of its block takes, such as text
-   typed off the **Your answer:** line, refuses `--pick`: it is the owner's,
-   so run `--other`, which keeps it in the Answered line. When the
-   ledger's block lives in a CLAUDE.md that is not beside it, pass the same
-   `--into` that `agentik-decisions render` uses: the cross-repo ledger's block is in
-   the user-level CLAUDE.md, `--into ~/.claude/CLAUDE.md`.
+   only on the owner's word. A line no part of its block takes, such as text typed off the
+   **Your answer:** line, and a line HEAD's copy of the block lacks, such as words typed
+   into an option, refuse `--pick`: they are the owner's, so run `--other`, which keeps
+   them in the Answered line. When the ledger's block lives in a CLAUDE.md that is not
+   beside it, pass the same `--into` that `agentik-decisions render` uses: the cross-repo
+   ledger's block is in the user-level CLAUDE.md, `--into ~/.claude/CLAUDE.md`.
 4. A result with `afkTimeoutMs` is no answer: the question stays open, and it
    is not asked again this session.
 5. A sitting without AskUserQuestion, such as a relay child, runs

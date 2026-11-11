@@ -83,7 +83,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; older S1 to S3, or on one, listed to lift; undated kept; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md`. Close with `Closed YYYY-MM-DD <sha, history file or void>: ` and the lead, cut to fit |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
-| `--version` | `agentik-decisions 0.18.2`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.19.1`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -141,7 +141,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
-`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it, and other text refuses `--pick` and stays in the Answered line, as `Other: X; the owner's line: T`, never in the ledger.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line HEAD's copy of the block lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; with no copy in HEAD it exits 2: commit first.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
@@ -150,7 +150,6 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
 The block is loaded on every turn: `answer` and `render` name its growth, `X B to Y B, +D B`, and an answer that makes it larger under `Every session` exits 2 and writes nothing, naming the tail note's share when that grows; an entry outside `Every session`, listed by title only, or `--every-turn` lets it through.
 At 25 entries in force, `--area` exits 2 first and names the ways out: a line under `## Superseded`, `--amends M` or `--no-entry`.
-A line no part of its block takes, such as text typed off the **Your answer:** line, refuses `--pick`, and `--other` keeps it in the Answered line.
 Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
 A `--into` target that is the ledger itself exits 2 before anything is written.
 Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
@@ -277,7 +276,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.18.2`, rendered `2026-11-01`, `503` unittest cases.
+Status: version `0.19.1`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|

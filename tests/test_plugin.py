@@ -12,7 +12,7 @@ SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
 COMMANDS = ("analyze.md", "answer.md", "audit.md", "backlog.md", "expire.md", "find.md",
             "new.md", "render.md", "show.md")
-VERSION = "0.18.2"
+VERSION = "0.19.1"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
@@ -131,7 +131,12 @@ class StructureTest(unittest.TestCase):
                        "that option", "refuses any other pick and `--other`",
                        "Any other text, a label with a condition or free words, takes "
                        "`--other`", "refuses `--pick` for it",
-                       "keeps the owner's words in the Answered line"):
+                       "keeps the owner's words in the Answered line",
+                       # d35 round 1: the owner's typing is answered before `ask` and the
+                       # commit, which would make it the block's own
+                       "Before `agentik-decisions ask`, read `git diff -- OPEN-QUESTIONS.md`",
+                       "is not committed and not run through `ask` first",
+                       "Only then run `ask`"):
             self.assertIn(needed, step1, needed)
         page = " ".join(read(os.path.join(PLUGIN, "commands", "answer.md")).split())
         self.assertIn("`answer` reads the question's **Your answer:** line and the text under "

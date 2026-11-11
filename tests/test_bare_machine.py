@@ -78,6 +78,12 @@ class BareMachine(unittest.TestCase):
         asked = self.ok(self.tool("ask"))
         self.assertTrue(asked.stderr.endswith(ASK_LINE), asked.stderr)
         self.assertIn('"header": "Decision %s"' % number, asked.stdout)
+        # d35: `answer` reads the block from HEAD, so the ask skill commits after `ask`
+        for argv in (["add", "DECISIONS.md", "OPEN-QUESTIONS.md"],
+                     ["commit", "-q", "-m", "the questions as they stand"]):
+            subprocess.run(["git", "-c", "user.name=b", "-c", "user.email=b", "-c",
+                            "commit.gpgsign=false"] + argv, cwd=self.repo, env=self.env(),
+                           check=True, capture_output=True, timeout=60)
         self.ok(self.tool("answer", number, "--pick", "A (Recommended)", "--source", "the bare test",
                           "--text", "Bare holds.", "--area", "build"))
         self.assertIn("Bare holds.", self.ok(self.tool("show", number)).stdout)
