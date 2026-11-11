@@ -48,11 +48,13 @@ class Repo:
         git(root, "add", *BOTH)
         cls.repo = os.path.join(root, ".git")
 
-    def commit(self, *names):
-        """HEAD holds `names`, both files by default, as they stand in `self.tmp`."""
-        if not os.path.isdir(os.path.join(self.tmp, ".git")):
-            shutil.copytree(self.repo, os.path.join(self.tmp, ".git"))
-        git(self.tmp, "commit", "-q", "--allow-empty", "-m", "the questions as they stand",
+    def commit(self, *names, root=None):
+        """HEAD holds `names`, both files by default, as they stand in `root`, `self.tmp`
+        by default."""
+        root = root or self.tmp
+        if not os.path.isdir(os.path.join(root, ".git")):
+            shutil.copytree(self.repo, os.path.join(root, ".git"))
+        git(root, "commit", "-q", "--allow-empty", "-m", "the questions as they stand",
             *(("--",) + names if names else ("-a",)))
 
 
@@ -166,6 +168,67 @@ class Head(Repo, Base):
                 for argv in (PICK, OTHER):
                     err = self.refused((number,) + argv[1:], "commit")
                     self.assertIn("question %s" % number, err)
+
+    # the refuter's round 1: the name git tracks, and git's own variables (F1, F3)
+
+    def test_a_name_head_tracks_under_another_case_is_read_when_it_is_the_only_one(self):
+        def track_as(*names):
+            blob = git(self.tmp, "hash-object", "-w", "OPEN-QUESTIONS.md").strip()
+            git(self.tmp, "rm", "-q", "--cached", "OPEN-QUESTIONS.md")
+            for name in names:
+                git(self.tmp, "update-index", "--add", "--cacheinfo",
+                    "100644,%s,%s" % (blob, name))
+            git(self.tmp, "commit", "-q", "-m", "the questions under another case")
+
+        with self.subTest(names="one"):
+            track_as("open-questions.md")
+            code, out, err = self.answer(*PICK)
+            self.assertEqual(code, 0, err)
+            self.assertIn("- 9. Pin the interpreter: Pin (2026-09-28; chat)\n",
+                          self.read(self.questions))
+        with self.subTest(names="two"):
+            self.scene()
+            self.commit()
+            track_as("open-questions.md", "Open-Questions.md")
+            for argv in (PICK, OTHER):
+                self.refused(argv, "HEAD does not hold OPEN-QUESTIONS.md", "commit")
+
+    def test_git_dir_naming_another_repo_reads_the_head_of_the_files_own(self):
+        typed = "%s %s" % (FOLLOW, TYPED)
+        self.swap(FOLLOW, typed)
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other, True)
+        for name in BOTH:
+            shutil.copy(os.path.join(self.tmp, name), other)
+        self.commit(root=other)
+        with mock.patch.dict(os.environ, {"GIT_DIR": os.path.join(other, ".git")}):
+            self.refused(PICK, typed, "--other")
+        self.assertIn(typed, self.read(self.questions))
+
+    def test_a_clean_block_in_a_subdirectory_takes_pick_under_a_hooks_git_dir(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        sub = os.path.join(root, "q")
+        os.mkdir(sub)
+        for name in BOTH:
+            shutil.copy(os.path.join(self.tmp, name), sub)
+        self.ledger, self.questions = (os.path.join(sub, name) for name in BOTH)
+        git(root, "init", "-q", "--template=")
+        git(root, "add", "q")
+        git(root, "commit", "-q", "-m", "the questions in a subdirectory")
+        with mock.patch.dict(os.environ, {"GIT_DIR": ".git"}):
+            code, out, err = self.answer(*PICK)
+        self.assertEqual(code, 0, err)
+        self.assertIn("- 9. Pin the interpreter: Pin (2026-09-28; chat)\n",
+                      self.read(self.questions))
+
+    def test_no_commit_while_git_dir_names_a_repo_with_one_refuses(self):
+        other = self.tmp
+        self.scene()
+        git(self.tmp, "init", "-q", "--template=")
+        with mock.patch.dict(os.environ, {"GIT_DIR": os.path.join(other, ".git")}):
+            for argv in (PICK, OTHER):
+                self.refused(argv, "no commit to read there", "question 9")
 
     def test_git_that_cannot_run_refuses(self):
         empty = tempfile.mkdtemp()
