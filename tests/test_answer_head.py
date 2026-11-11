@@ -168,6 +168,10 @@ class Head(Repo, Base):
                 for argv in (PICK, OTHER):
                     err = self.refused((number,) + argv[1:], "commit")
                     self.assertIn("question %s" % number, err)
+                    self.assertIn("read the block first: a commit makes every line in it the "
+                                  "block's own, so words the owner typed there are carried in "
+                                  "--other's text; then commit OPEN-QUESTIONS.md and run this "
+                                  "again; nothing written", err)
 
     # the refuter's round 1: the name git tracks, and git's own variables (F1, F3)
 

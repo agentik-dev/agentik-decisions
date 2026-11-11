@@ -11,18 +11,18 @@ allowed-tools: Bash(agentik-decisions *), AskUserQuestion
 The owner is asked once per session, in one batch: when the sitting blocks on
 the owner, or at close.
 
-1. Run `agentik-decisions ask`, which takes every open question, or `agentik-decisions ask N...` for
-   the ones named. It renders the open questions through respeak once, writes them back into
-   OPEN-QUESTIONS.md, and prints a JSON list of AskUserQuestion calls. A warning with exit 0 means the
-   text stayed as it was; exit 2 names an unknown N or a held lock. When it returns, read
-   `git diff OPEN-QUESTIONS.md`, then commit OPEN-QUESTIONS.md and DECISIONS.md by path, before any
-   `answer` and before the owner is asked: `answer` reads each block from HEAD and exits 2 while git holds no copy
-   of it, and a line HEAD's copy lacks is the owner's. A question whose **Your answer:** line is
-   filled in, or text under it, is not asked: run `agentik-decisions answer N` for it first, from that
-   text, which `answer` reads. Text that names an option takes `--pick` with that option; `answer`
+1. Before `agentik-decisions ask`, read `git diff -- OPEN-QUESTIONS.md`: a changed or added line in a block HEAD
+   already holds is the owner's typing since the last commit. That question is not committed and not run through
+   `ask` first: run `agentik-decisions answer N` for it first, from that text, which `answer` reads, or, when
+   the words ask something back rather than answer, quote them to the owner in this sitting's ask. A line typed
+   above its **Your answer:** line takes `--other`, which keeps those lines in the Answered line. The answer
+   line counts too, or text under it. Text that names an option takes `--pick` with that option; `answer`
    refuses any other pick and `--other`. Any other text, a label with a condition or free words, takes
-   `--other`, restated; `answer` refuses `--pick` for it and keeps the owner's words in the Answered
-   line. A question the lint refuses is not asked either; its warning names the fault.
+   `--other`, restated; `answer` refuses `--pick` for it and keeps the owner's words in the Answered line. Only
+   then run `ask`, or `ask N...` for the ones named: it renders the open questions through respeak once, writes
+   them back and prints a JSON list of AskUserQuestion calls (a warning with exit 0: the text stayed; exit 2: an
+   unknown N or a held lock). Read its `git diff`, commit OPEN-QUESTIONS.md and DECISIONS.md by path, then ask
+   the owner. A question the lint refuses is not asked; its warning names the fault.
 2. Pass each call to AskUserQuestion as it stands, back to back in one turn.
    Never reword a question, a label or a description.
 3. For each answer, run

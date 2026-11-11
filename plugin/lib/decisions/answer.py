@@ -20,8 +20,9 @@ git's HEAD (d35): a non-blank line above its **Your answer:** line that HEAD's c
 lacks, runs of spaces counted as one, is the owner's; it refuses `--pick` after the
 stray lines, and W takes it after them, each line once. With no copy of question N
 in HEAD (no commit there, HEAD lacks the file or the question, or git cannot read
-it), `--pick` and `--other` exit 2 and write nothing: commit the file first. With
-`--area A` entry N is
+it), `--pick` and `--other` exit 2 and write nothing: read the block first, since a
+commit makes every line in it the block's own and `--other`'s text then carries the
+owner's words, and commit the file. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
@@ -229,8 +230,10 @@ def head_block(path_q, number):
             return found
         why = "HEAD's %s holds no question %d" % (name, number)
     raise Refusal("answer: git holds no copy of question %d (%s), so answer cannot tell what "
-                  "was typed into its block; read the block, commit %s, then run this again; "
-                  "nothing written" % (number, why, name))
+                  "was typed into its block; read the block first: a commit makes every line "
+                  "in it the block's own, so words the owner typed there are carried in "
+                  "--other's text; then commit %s and run this again; nothing written"
+                  % (number, why, name))
 
 
 def since(block, base):
