@@ -176,23 +176,32 @@ def named(block, typed):
     return exact or [label for label in labels if normal(label) == normal(typed)]
 
 
+# a hook's GIT_DIR=.git or a caller's GIT_DIR naming another repository would make HEAD
+# that repository's, so `head_block`'s git children run without them (d35 round 1)
+REPO_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+                  "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE")
+
+
 def head_block(path_q, number):
     """Question `number`'s block as git's HEAD holds the questions file, read as
     `render.head_holds` reads one: in the real path's directory, each git child under
     GIT_TIMEOUT; a name HEAD lacks is read as the one HEAD tracks there equal to it under
-    casefold, when there is one alone. With no copy of it, a Refusal naming why, since
-    `answer` then cannot tell what the owner typed into the block (d35 ruling 5)."""
+    casefold, when there is one alone; git's repository variables are dropped from each
+    child, so HEAD is the repository that holds the file. With no copy of it, a Refusal
+    naming why, since `answer` then cannot tell what the owner typed into the block (d35
+    ruling 5)."""
     real = os.path.realpath(path_q)
     where, name = os.path.dirname(real), os.path.basename(real)
     text, why = None, None
+    env = {key: value for key, value in os.environ.items() if key not in REPO_VARIABLES}
 
     def blob_of(sha, tracked):
         return subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, tracked)],
-                              cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+                              cwd=where, env=env, capture_output=True, timeout=GIT_TIMEOUT)
 
     try:
         code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
-                            GIT_TIMEOUT, cwd=where)
+                            GIT_TIMEOUT, cwd=where, env=env)
         sha = out.strip()
         if code != 0 or not sha:
             why = "no commit to read there"
@@ -202,7 +211,7 @@ def head_block(path_q, number):
                 # a case-blind disk opens the file git tracks as open-questions.md: the
                 # one name HEAD holds there equal to `name` under casefold is the file's
                 code, out = bounded(["git", "ls-tree", "--name-only", "-z", "%s:./" % sha],
-                                    GIT_TIMEOUT, cwd=where)
+                                    GIT_TIMEOUT, cwd=where, env=env)
                 same = [tracked for tracked in out.split("\0") if code == 0 and tracked
                         and tracked.casefold() == name.casefold()]
                 if len(same) == 1:
