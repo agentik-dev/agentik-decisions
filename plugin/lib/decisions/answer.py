@@ -179,11 +179,17 @@ def named(block, typed):
 def head_block(path_q, number):
     """Question `number`'s block as git's HEAD holds the questions file, read as
     `render.head_holds` reads one: in the real path's directory, each git child under
-    GIT_TIMEOUT. With no copy of it, a Refusal naming why, since `answer` then cannot
-    tell what the owner typed into the block (d35 ruling 5)."""
+    GIT_TIMEOUT; a name HEAD lacks is read as the one HEAD tracks there equal to it under
+    casefold, when there is one alone. With no copy of it, a Refusal naming why, since
+    `answer` then cannot tell what the owner typed into the block (d35 ruling 5)."""
     real = os.path.realpath(path_q)
     where, name = os.path.dirname(real), os.path.basename(real)
     text, why = None, None
+
+    def blob_of(sha, tracked):
+        return subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, tracked)],
+                              cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+
     try:
         code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
                             GIT_TIMEOUT, cwd=where)
@@ -191,8 +197,16 @@ def head_block(path_q, number):
         if code != 0 or not sha:
             why = "no commit to read there"
         else:
-            blob = subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, name)],
-                                  cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+            blob = blob_of(sha, name)
+            if blob.returncode != 0:
+                # a case-blind disk opens the file git tracks as open-questions.md: the
+                # one name HEAD holds there equal to `name` under casefold is the file's
+                code, out = bounded(["git", "ls-tree", "--name-only", "-z", "%s:./" % sha],
+                                    GIT_TIMEOUT, cwd=where)
+                same = [tracked for tracked in out.split("\0") if code == 0 and tracked
+                        and tracked.casefold() == name.casefold()]
+                if len(same) == 1:
+                    blob = blob_of(sha, same[0])
             if blob.returncode != 0:
                 why = "HEAD does not hold %s" % name
             else:
