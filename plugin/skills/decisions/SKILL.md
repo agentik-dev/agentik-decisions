@@ -54,6 +54,8 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
   sentence that stays, with the change made. In every answer `--text` is the
   body only: `answer` writes the bold title and the `(date; source)` tail, and
   refuses a `--text` that opens with a bold title or ends in a dated tail.
+  `answer` reads question N's block from git's HEAD and exits 2 while git holds
+  no copy of it, so commit OPEN-QUESTIONS.md and the ledger after `new` and `ask`.
 - Put a question with `agentik-decisions new`, in four parts: where things stand, the
   choice, what each answer sets in motion, and the recommendation. Two to four
   `--option "Label: effect"` flags name the answers, the first the recommended

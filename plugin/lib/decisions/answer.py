@@ -15,7 +15,13 @@ part of its block takes (d30: a part is a label's or the **Report.** bold line a
 the lines under it to a blank, an option line under the third label, or the
 **Your answer:** line and all under it) refuses `--pick`, after an unknown one, and
 `--other X` takes it whatever T names, as `Other: X; the owner's line: W`, W those
-lines then T. With `--area A` entry N is
+lines then T. Under `.new.lock`, once block N is found, `answer` reads it from
+git's HEAD (d35): a non-blank line above its **Your answer:** line that HEAD's copy
+lacks, runs of spaces counted as one, is the owner's; it refuses `--pick` after the
+stray lines, and W takes it after them, each line once. With no copy of question N
+in HEAD (no commit there, HEAD lacks the file or the question, or git cannot read
+it), `--pick` and `--other` exit 2 and write nothing: commit the file first. With
+`--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
 exact name, else a unique prefix, a leading "The" left out of either; the headings
 below the legacy marker do not count, and `Every session` matches only whole):
