@@ -94,7 +94,8 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, growth, is_ledger, tail_note,
+from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, growth, is_ledger, list_gate,
+                     tail_note,
                      tree_file)
 from .tree import ceiling_for, loaded_bytes
 
@@ -494,6 +495,7 @@ def cmd_answer(args, path, out, err):
             preview(ledger_text, new_ledger, path, target, out)
             return 0
         commit_texts([(path_q, new_q), (path, new_ledger)])
+        list_gate(path)
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
         out.write("replaced: %s\n" % replaced)
@@ -624,5 +626,6 @@ def rewrite_block(path, target, out, err):
     if new != old:
         was, crlf = disk_text(target), keeps_crlf(target)
         write_text(target, new)
+        list_gate(target)
         out.write("answer: rewrote the block in %s: %s\n" % (display(target),
                                                              growth(was, new, crlf)))
