@@ -12,9 +12,11 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 
 import decisions
+from decisions.ledger import display
 from tests.hermetic import Hermetic
 from tests.test_answer_head import Repo, git
 from tests.test_new import PARTS, SAMPLE_QUESTIONS
@@ -182,6 +184,24 @@ class Preview(Lane):
     def test_a_text_with_a_tail_is_refused_in_preview(self):
         self.refused_alike(self.PICK + ("--text", "Pin. (2026-09-28; s)", "--area", "Build"))
 
+    def test_a_repo_file_not_utf8_is_said_as_answer_passes(self):
+        """d37 r1 F2: the answer passes with a warning, so the preview exits 0, says why
+        the repo's file gets no diff, and writes nothing."""
+        with open(os.path.join(self.tmp, "CLAUDE.md"), "ab") as handle:
+            handle.write(b"\nlatin1 caf\xe9\n")
+        argv = self.PICK + ("--text", "Pin 3.12.", "--area", "Build")
+        before = tree_hashes(self.tmp)
+        code, out, err = self.answer(*(argv + ("--preview",)))
+        self.assertEqual(tree_hashes(self.tmp), before)
+        self.assertEqual(code, 0, out + err)
+        self.assertRegex(out, r"(?m)^answer --preview: \S*CLAUDE\.md: unreadable: .*; render "
+                              r"would refuse it, so no diff$")
+        self.assertNotRegex(out, r"(?m)^(---|\+\+\+) ")
+        self.assertEqual(self.loads(out), {}, out)
+        code, _, err = self.answer(*argv)
+        self.assertEqual(code, 0, err)
+        self.assertIn("unreadable", err)
+
 
 class TreePreview(Lane):
     """R1: an entry in the tree's section also shows the folder's file."""
@@ -209,6 +229,83 @@ class TreePreview(Lane):
         self.assertEqual(shown, self.answer(*argv))
         self.assertEqual(shown[0], 2)
         self.assertIn("to the tree's file", shown[2])
+
+    ARGV = ("--pick", "Pin", "--source", "s", "--text", "Pin 3.12.", "--area",
+            "Every session of the tree", "--every-turn")
+
+    def folder_file(self):
+        return os.path.join(self.tmp, "orchard", "CLAUDE.md")
+
+    def render_tree(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["render", "--scope", "tree"] + list(argv)
+                              + ["--ledger", self.ledger], out=out, err=err)
+        self.assertEqual(code, 0, out.getvalue() + err.getvalue())
+
+    def without_the_folder_diff(self, reason):
+        """The preview exits 0, writes nothing, shows the repo's file and says `reason`
+        for the folder's file, with no diff and no bytes line for it."""
+        before = tree_hashes(self.tmp)
+        code, out, err = self.answer(self.q, *(self.ARGV + ("--preview",)))
+        self.assertEqual(tree_hashes(self.tmp), before)
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("answer --preview: %s; render would refuse it, so no diff\n" % reason,
+                      out)
+        self.assertEqual(len(re.findall(r"(?m)^\+\+\+ ", out)), 1, out)
+        self.assertEqual({v[3] for v in self.loads(out).values()}, {"an hq's file"}, out)
+        return out
+
+    def refused_as_render_refuses(self):
+        """d37 r1 F1: where `render --scope tree --check` refuses the folder's file, the
+        preview says render's words and shows no diff of it."""
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["render", "--scope", "tree", "--check", "--ledger",
+                               self.ledger], out=out, err=err)
+        self.assertEqual(code, 2, out.getvalue() + err.getvalue())
+        reason = err.getvalue().strip()
+        self.assertTrue(reason.startswith("decisions: render: "), reason)
+        return self.without_the_folder_diff(reason[len("decisions: "):])
+
+    def test_a_hand_written_folder_file_gets_no_diff(self):
+        self.write(self.folder_file(), "# my own notes\nhand text\n")
+        out = self.refused_as_render_refuses()
+        self.assertIn("a hand-written file is never replaced", out)
+
+    def test_a_folder_that_holds_another_tree_gets_no_diff(self):
+        os.makedirs(os.path.join(self.tmp, "orchard", "grove", "apple", ".git"))
+        out = self.refused_as_render_refuses()
+        self.assertIn("another tree's", out)
+
+    def test_a_tree_file_of_another_ledger_gets_no_diff(self):
+        elsewhere = os.path.join(self.tmp, "elsewhere", "DECISIONS.md")
+        os.makedirs(os.path.dirname(elsewhere))
+        shutil.copy(self.ledger, elsewhere)
+        out, err = io.StringIO(), io.StringIO()
+        self.assertEqual(decisions.main(["render", "--scope", "tree", "--ledger", elsewhere,
+                                         "--into", self.folder_file()], out=out, err=err), 0,
+                         out.getvalue() + err.getvalue())
+        out = self.refused_as_render_refuses()
+        self.assertIn("never writes over another ledger's block", out)
+
+    def test_a_tree_file_naming_no_ledger_gets_no_diff(self):
+        self.render_tree()
+        text = self.read(self.folder_file())
+        self.write(self.folder_file(), "".join(
+            line for line in text.splitlines(keepends=True)
+            if not line.startswith("Each is an entry of")))
+        out = self.refused_as_render_refuses()
+        self.assertIn("names no ledger", out)
+
+    def test_a_folder_file_not_utf8_is_said_as_answer_passes(self):
+        """d37 r1 F2: `answer` never reads the folder's file, so it passes; the preview
+        exits 0 and says why that file gets no diff."""
+        with open(self.folder_file(), "wb") as handle:
+            handle.write(b"caf\xe9\n")
+        self.without_the_folder_diff("%s: unreadable: 'utf-8' codec can't decode byte 0xe9 "
+                                     "in position 3: invalid continuation byte"
+                                     % display(self.folder_file()))
+        code, _, err = self.answer(self.q, *self.ARGV)
+        self.assertEqual(code, 0, err)
 
 
 class Edits(Hermetic):
@@ -279,6 +376,64 @@ class Edits(Hermetic):
     def test_no_ledger_needed(self):
         self.assertFalse(os.path.exists(os.path.join(self.repo, "DECISIONS.md")))
         self.assertEqual(self.edits(self.base)[0], 0)
+
+    def listed(self):
+        """[(short sha, [paths])] of `audit --edits` after the base, by its --json."""
+        code, out, err = self.edits(self.base, "--json")
+        self.assertEqual(code, 0, err)
+        return [(e["sha"][:7], e["paths"]) for e in json.loads(out)["edits"]]
+
+    def head(self):
+        return git(self.repo, "rev-parse", "--short=7", "HEAD").strip()
+
+    def write(self, path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def branch(self, name, *changes):
+        """A branch `name` off HEAD with a commit per (subject, path), then HEAD again."""
+        here = git(self.repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+        git(self.repo, "checkout", "-q", "-b", name)
+        shas = [self.change(subject, path)[:7] for subject, path in changes]
+        git(self.repo, "checkout", "-q", here)
+        return shas
+
+    def test_a_merge_that_resolves_a_guarded_file_by_hand_is_listed(self):
+        """d37 r1 F3: both sides came through the lane; the merge's resolution did not."""
+        self.branch("side", ("instruct: Pushes: the side's words", "CLAUDE.md"))
+        self.change("instruct: Pushes: main's words", "CLAUDE.md")
+        with self.assertRaises(subprocess.CalledProcessError):
+            git(self.repo, "merge", "-q", "side", "-m", "merge side")
+        self.write(os.path.join(self.repo, "CLAUDE.md"), "resolved by hand\n")
+        git(self.repo, "add", "CLAUDE.md")
+        git(self.repo, "commit", "-q", "-m", "merge side, resolved by hand")
+        self.assertEqual(self.listed(), [(self.head(), ["CLAUDE.md"])])
+
+    def test_a_merge_lists_what_it_changes_against_every_parent(self):
+        """d37 r1 F3: a clean merge adds nothing of its own and is omitted; a merge, an
+        octopus one too, that edits a guarded file itself is listed with that path."""
+        side = self.branch("side", ("a rule on the side", "AGENTS.md"))
+        self.change("code on main", "src/a.py")
+        git(self.repo, "merge", "-q", "--no-edit", "side")
+        self.branch("other", ("more code", "src/b.py"))
+        self.change("code again", "src/c.py")
+        git(self.repo, "merge", "-q", "--no-commit", "other")
+        self.write(os.path.join(self.repo, "CLAUDE.md"), "added in the merge\n")
+        git(self.repo, "add", "CLAUDE.md")
+        git(self.repo, "commit", "-q", "-m", "merge other, with an edit of its own")
+        evil = self.head()
+        self.branch("one", ("code one", "src/d.py"))
+        self.branch("two", ("code two", "src/e.py"))
+        self.change("code three", "src/f.py")
+        git(self.repo, "merge", "-q", "--no-commit", "one", "two")
+        self.write(os.path.join(self.repo, ".claude", "rules", "style.md"), "octopus\n")
+        git(self.repo, "add", ".claude/rules/style.md")
+        git(self.repo, "commit", "-q", "-m", "octopus, with a rule of its own")
+        self.assertEqual(len(git(self.repo, "rev-list", "--parents", "-n1", "HEAD").split()),
+                         4)
+        self.assertEqual(self.listed(), [(side[0], ["AGENTS.md"]), (evil, ["CLAUDE.md"]),
+                                         (self.head(), [".claude/rules/style.md"])])
 
 
 class Skill(Hermetic):
