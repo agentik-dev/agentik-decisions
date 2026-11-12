@@ -5,7 +5,7 @@ description: >
   entry, a CLAUDE.md line, a setting or prompt text. Use when the owner asks
   for a standing change to a rule.
 argument-hint: "[<the change in plain words> | adopt <file> | where]"
-allowed-tools: Bash(agentik decisions *), Bash(agentik-decisions *), Bash(agentik session status*), Bash(agentik session profile*)
+allowed-tools: Bash(agentik decisions *), Bash(agentik-decisions *), Bash(agentik session status*), Bash(agentik session profile*), Bash(agentik session gates*)
 ---
 
 # Instruct
@@ -30,6 +30,10 @@ with the tool that owns the file. A hand edit of an instruction file is what
 - With other words, or by yourself because the owner asked for a standing change: the
   words are the change; follow the flow. When the owner typed `/decisions:instruct`, the
   owner's word is present and step 6 asks at once.
+- When the edit gates sent you here (a refused edit of a gated file) on the owner's own ask
+  in this conversation: take it as the typed command. The change is standing, and step 6
+  asks at once, since the question confirms the owner's ask and opens no new one. In a
+  helper or a `-p` run, file the question and write nothing.
 
 ## The chain of ledgers
 
@@ -76,8 +80,9 @@ then pass it to every `agentik decisions` command with `--ledger`:
 6. **Show the owner** the layer and why, in a sentence; the preview's entry and diffs;
    and the cost, read from the preview, in this form: "+D B in FILE (X to Y of C), on
    every request of every session and helper that loads it". If the file would pass its
-   ceiling, name what leaves. When the owner typed the command, ask at once: one
-   question, the recommended answer first, through the `ask` skill. When you started
+   ceiling, name what leaves. When the owner typed the command, or the gate sent you here
+   on the owner's own ask, ask at once: one question, the recommended answer first,
+   through the `ask` skill. When you started
    yourself, leave the question filed for the session's one batch and carry on.
 7. **On yes, write through the tool that owns the target**:
    - a ledger entry: `agentik decisions answer` (with `--amends M`, and `--every-turn`
@@ -85,12 +90,16 @@ then pass it to every `agentik decisions` command with `--ledger`:
      uses; for the Mac's ledger, then the step its repo names for folding the global
      file back in; a tree's entry also needs `agentik decisions render --scope tree`,
      or the hq's check stays red;
-   - a setting: `agentik session set <knob> <value> --save`, or the settings file and
-     the step that folds it back in;
+   - a setting: `agentik session set <knob> <value> --save`, or the settings file by
+     the gated file's lane below, and the step that folds it back in;
    - an agent file, a skill or a hook's text in a tool repo: a packet, by that tree's
      landing page;
-   - a hand line or a page: an ordinary edit in the main thread, which the guard puts in
-     front of the owner as Claude Code's own dialog.
+   - a hand line, a page or a settings file the edit gates list, or a line of an
+     `edit-gates` list itself: write the whole new text to an ungated draft, run
+     `agentik session gates write <file> --from <draft> --preview` and put its diff and
+     byte change in step 6's question; on yes, run it again with `--expect <hash>`. Never
+     an edit tool or a shell write: the gate refuses both;
+   - a hand line or a page no list names: an ordinary edit in the main thread.
 8. **Check, commit and say when it takes effect.** `agentik decisions render --check`
    and the repo's own check are green. Commit by explicit path with the subject
    `instruct: <title>: <what changed>`; `audit --edits` reads that prefix, so a change
