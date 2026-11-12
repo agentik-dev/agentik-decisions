@@ -1,6 +1,6 @@
 ---
 description: The ledger's retire and rewrite candidates, Every session first with the bytes each costs
-argument-hint: "[REPO...] [--tree FILE] [--json]"
+argument-hint: "[REPO...] [--tree FILE] [--json] | --edits C [REPO] [--json]"
 allowed-tools: Bash(agentik-decisions *)
 disable-model-invocation: true
 ---
@@ -12,3 +12,5 @@ cites it, P6 a path or verb gone; P1 in the head line, the ledger at its cap. P8
 a lead for a reader to confirm, and P7 is not detected. The owner acts in one batch
 with `new`, `ask` and `answer`; a retire moves the entry's line under
 `## Superseded` by hand.
+`--edits C` lists each commit after C that touches instruction text without an
+`instruct:` subject: a list for the owner, exit 0 either way.
