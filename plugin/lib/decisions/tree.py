@@ -19,7 +19,7 @@ import re
 import subprocess
 
 from .common import GIT_TIMEOUT, bounded
-from .ledger import ordered, is_tree, TITLES, is_every
+from .ledger import TITLES, TREE_SESSION, is_every, is_tree, ordered
 
 __all__ = ["CEILINGS", "ceiling_for", "loaded_bytes", "strip_comments", "checkout",
            "canonical", "folder_file", "tree_text", "named_ledger", "is_tree_file",
@@ -122,7 +122,7 @@ def ceiling_for(target, ledger, tree):
         return CEILINGS["tree"]
     if global_file(target):
         return CEILINGS["global"]
-    if any(is_tree(e) for e in ledger.entries):
+    if any(a.name.lower() == TREE_SESSION.lower() for a in ledger.areas):
         return CEILINGS["hq"]
     return CEILINGS["repo"]
 
@@ -193,9 +193,10 @@ def tree_text(ledger, path, short_tail, begin, end):
         "## Rules for every session in this tree\n\n"
         "Each is an entry of `%s`; `agentik decisions show N --ledger` with that path reads "
         "one.\n\n"
-        "%s\n"
+        "%s"
         "%s\n" % (tilde(target), repo, repo, tree, begin, source, SCOPE_COMMAND,
-                  tilde(os.path.join(main, rel)), "\n".join(entries), end))
+                  tilde(os.path.join(main, rel)),
+                  "".join(e + "\n" for e in entries), end))
     return target, text
 
 

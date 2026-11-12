@@ -13,7 +13,9 @@ every turn: a write names its growth, `X B to Y B, +D B`, and a clean `--lint`
 prints its size. `--scope tree` writes the ledger's `Every session of the tree`
 alone, the whole file, into the CLAUDE.md of the folder that holds the repo; it
 never replaces a file it did not write, and `--check` fails when that file is
-absent or stale. `--check` and `--lint` print the file's loaded bytes beside its
+absent or stale. Without `--into` it refuses a folder that holds another tree's folder of
+checkouts, since a file there would load in that tree too; a plain `--into` never
+replaces a tree's file. `--check` and `--lint` print the file's loaded bytes beside its
 ceiling, and `--ceiling` exits 1 when it is over. `--lint` warns on an `Every
 session` title outside the ten behaviours and on a rule word in a hand-written
 line; a warning never changes the exit.

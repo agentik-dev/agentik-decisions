@@ -265,18 +265,41 @@ def warn(err, lines):
 
 
 def refuse_another(text, target, path):
-    """d36 ruling 4: refuse a target whose generated block names another ledger."""
+    """d36 ruling 4: refuse a target whose generated block names another ledger. A named
+    path that holds no ledger now is this ledger before its repo moved, so the block is
+    refreshed as at the pin (d36 r1 F1)."""
     named = named_ledger(text, target, BEGIN, END)
-    if named is None or named == os.path.realpath(path) or canonical(named) == canonical(path):
+    if named is None or not os.path.isfile(named) or named == os.path.realpath(path) \
+            or canonical(named) == canonical(path):
         return
     raise Refusal("render: the block in %s was generated from %s, not from %s, and render "
                   "never writes over another ledger's block; nothing written"
                   % (display(target), real_tilde(named), real_tilde(path)))
 
 
+def other_tree(folder):
+    """A direct child of `folder` that is no checkout and holds a checkout, or None."""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return None
+    for name in names:
+        child = os.path.join(folder, name)
+        if not os.path.isdir(child) or os.path.exists(os.path.join(child, ".git")):
+            continue
+        try:
+            inner = os.listdir(child)
+        except OSError:
+            continue
+        if any(os.path.exists(os.path.join(child, n, ".git")) for n in inner):
+            return child
+    return None
+
+
 def cmd_tree(args, ledger, path, out, err, ceiling):
     """`render --scope tree` (d36 ruling 2): the tree's section alone, the file whole."""
-    if not any(is_tree(e) for e in ledger.entries):
+    # d36 r1 F2: an emptied section still has its file, with no entry in its block
+    if not any(a.name.lower() == TREE_SESSION.lower() for a in ledger.areas):
         raise Refusal("render: %s holds no `### %s`, so it has no tree's file to write; "
                       "nothing written" % (display(path), TREE_SESSION))
     if getattr(args, "fold_tails", False):
@@ -284,6 +307,15 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
                       "without --scope tree")
     folder, text = tree_file(ledger, path)
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else folder
+    if not args.into and not args.lint:
+        other = other_tree(os.path.dirname(folder))
+        if other is not None:
+            # d36 r1 F3: a file here would load in every session of that other tree too
+            raise Refusal("render: %s holds %s, a folder of checkouts that is another tree's, "
+                          "so a CLAUDE.md in %s would load in every session of that tree too; "
+                          "nothing written; --into FILE writes it elsewhere on purpose"
+                          % (real_tilde(os.path.dirname(folder)), real_tilde(other),
+                             real_tilde(os.path.dirname(folder))))
     if args.lint:
         warn(err, title_warnings(ledger))
         out.write("render: the block for %s is %d B; it is loaded on every turn\n"
@@ -365,7 +397,14 @@ def cmd_render(args, path, out, err):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
-    refuse_another(old, target, path)
+    if args.into:
+        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin
+        refuse_another(old, target, path)
+        if is_tree_file(old, BEGIN, END):
+            # d36 r1 F4: the repo's block never takes the place of a tree's block
+            raise Refusal("render: %s is a tree's file, written by `%s`; the repo's block "
+                          "never replaces it; nothing written" % (display(target),
+                                                                  SCOPE_COMMAND))
     was = disk_text(target)
     if getattr(args, "fold_tails", False):
         apply(old, "", display(target))  # a target refused is refused before the fold
