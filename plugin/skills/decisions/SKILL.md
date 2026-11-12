@@ -64,7 +64,7 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
   the ledger, both under the same new number.
 - Ask the owner once per session, in one batch: the ask skill runs
   `agentik-decisions ask` and puts the open questions through AskUserQuestion.
-- Settle a reversible choice inside the design, and log it in one sentence
+- Settle a reversible choice inside the design, and log it
   under `## Decided without asking` in OPEN-QUESTIONS.md.
 - Before taking S4 work, run `agentik-decisions backlog`, which places each item of
   NICE_TO_HAVE.md against the build order in HANDOFF.md.

@@ -83,7 +83,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; older S1 to S3, or on one, listed to lift; undated kept; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md`. Close with `Closed YYYY-MM-DD <sha, history file or void>: ` and the lead, cut to fit |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
-| `--version` | `agentik-decisions 0.19.1`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.19.2`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -276,7 +276,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.19.1`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.19.2`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|
