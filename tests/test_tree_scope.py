@@ -505,3 +505,105 @@ class Answers(Repo, NewBase):
                                      "--area", "Build", "--move-to", "Build")
         self.assertEqual((code, out), (2, ""))
         self.assertIn("--move-to is valid only with --amends", err)
+
+
+    def test_moving_the_last_entry_out_then_render(self):
+        """d36 r1 F2: an answer that moves the last tree entry out leaves a file render
+        still writes, as the answer's stderr line says."""
+        code, _, err = self.answer(Q, "--pick", "Pin", "--source", "s", "--add",
+                                   "It holds for the hq too.", "--amends", "20",
+                                   "--move-to", "Build")
+        self.assertEqual(code, 0, err)
+        self.assertIn("render --scope tree", err)
+        out = io.StringIO()
+        code = decisions.main(["render", "--scope", "tree", "--into",
+                               os.path.join(self.tmp, "tree.md"), "--ledger", self.ledger],
+                              out=out, err=io.StringIO())
+        self.assertEqual(code, 0, out.getvalue())
+
+
+class FixRound(Tree):
+    """d36 r1: F1 a moved ledger's block refreshes; F2 an emptied section renders; F3 a
+    folder that holds another tree is refused; F4 the repo's block never replaces a tree's."""
+
+    def move_repo(self, where):
+        """The repo moved into the folder `where`, under the temp home; its new ledger."""
+        new = os.path.join(self.home, "work", where, "orchard-hq")
+        os.makedirs(os.path.dirname(new))
+        shutil.move(self.repo, new)
+        return os.path.join(new, "DECISIONS.md")
+
+    def test_a_moved_ledgers_block_refreshes_as_at_the_pin(self):
+        for name in (os.path.join(".claude", "CLAUDE.md"), os.path.join("work", "notes.md")):
+            with self.subTest(target=name):
+                target = os.path.join(self.home, name)
+                self.write(target, "# Hand\n")
+                ledger = os.path.join(self.home, "work", "old%d" % len(name), "r", "DECISIONS.md")
+                self.write(ledger, TREE_LEDGER)
+                self.assertEqual(self.render("--into", target, ledger=ledger)[0], 0)
+                moved = os.path.join(self.home, "work", "new%d" % len(name), "r")
+                os.makedirs(os.path.dirname(moved))
+                shutil.move(os.path.dirname(ledger), moved)
+                ledger = os.path.join(moved, "DECISIONS.md")
+                code, out, err = self.render("--check", "--into", target, ledger=ledger)
+                self.assertEqual(code, 1, err)
+                self.assertIn("+Generated from `~/work/new", out)
+                code, out, err = self.render("--into", target, ledger=ledger)
+                self.assertEqual(code, 0, err)
+                self.assertIn("render: wrote ", out)
+                self.assertEqual(self.render("--check", "--into", target, ledger=ledger)[0], 0)
+
+    def test_the_default_target_is_rendered_as_at_the_pin(self):
+        other = os.path.join(self.home, "work", "pear", "pear-hq", "DECISIONS.md")
+        self.write(other, TREE_LEDGER.replace("orchard-hq", "pear-hq"))
+        claude = os.path.join(self.repo, "CLAUDE.md")
+        self.write(claude, "# orchard-hq\n")
+        self.assertEqual(self.render("--into", claude, ledger=other)[0], 0)
+        code, out, err = self.render()
+        self.assertEqual(code, 0, err)
+        self.assertIn("Generated from `DECISIONS.md` by", self.read(claude))
+
+    def test_an_emptied_section_renders_an_empty_block(self):
+        self.render("--scope", "tree")
+        empty = re.sub(r"### Every session of the tree\n\n.*?(?=### Build)",
+                       "### Every session of the tree\n\n", TREE_LEDGER, flags=re.S)
+        self.write(self.ledger, empty)
+        code, out, _ = self.render("--scope", "tree", "--check")
+        self.assertEqual(code, 1, out)
+        code, _, err = self.render("--scope", "tree")
+        self.assertEqual(code, 0, err)
+        text = self.read(self.target)
+        self.assertEqual(text, re.sub(r"\n2\. .*?(?=<!-- END)", "\n", TREE_FILE, flags=re.S))
+        self.assertTrue(text.endswith("reads one.\n\n%s\n" % END), text[-80:])
+        self.assertEqual(self.render("--scope", "tree", "--check")[0], 0)
+
+    def test_a_folder_of_checkouts_only_passes(self):
+        for name in ("orchard-hq", "orchard-tool"):
+            os.makedirs(os.path.join(self.folder, name, ".git"), exist_ok=True)
+        os.makedirs(os.path.join(self.folder, "notes"))
+        self.write(os.path.join(self.folder, "notes", "plan.md"), "# Plan\n")
+        code, _, err = self.render("--scope", "tree")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.target), TREE_FILE)
+
+    def test_a_folder_that_holds_another_tree_is_refused(self):
+        os.makedirs(os.path.join(self.folder, "pear", "pear-hq", ".git"))
+        for mode in ([], ["--check"]):
+            with self.subTest(mode=mode):
+                code, out, err = self.render("--scope", "tree", *mode)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("~/work/orchard holds ~/work/orchard/pear", err)
+                self.assertIn("would load in every session of that tree", err)
+                self.assertFalse(os.path.exists(self.target))
+        into = os.path.join(self.home, "scratch.md")
+        self.assertEqual(self.render("--scope", "tree", "--into", into)[0], 0)
+        self.assertEqual(self.read(into), TREE_FILE)
+
+    def test_the_repos_block_never_replaces_a_trees_file(self):
+        self.render("--scope", "tree")
+        for mode in ([], ["--check"]):
+            with self.subTest(mode=mode):
+                code, out, err = self.render("--into", self.target, *mode)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("is a tree's file", err)
+                self.assertEqual(self.read(self.target), TREE_FILE)
