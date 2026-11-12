@@ -5,7 +5,7 @@ audience: agent
 ---
 # agentik-decisions: agent contract
 
-A Claude Code plugin, `decisions@agentik`, and a stdlib Python tool, `agentik-decisions` (run as `agentik decisions`), that serve one sectioned DECISIONS.md per repo with the verbs `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `expire`, `analyze` and `audit`. The current design is `design/d18-one-flow.md`; later packets are in `design/packets/`, older ones in `history/`.
+A Claude Code plugin, `decisions@agentik`, and a stdlib Python tool, `agentik-decisions` (run as `agentik decisions`), that serve one sectioned DECISIONS.md per repo with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `expire`, `analyze` and `audit`. The current design is `design/d18-one-flow.md`; later packets are in `design/packets/`, older ones in `history/`.
 
 - **Read order:** `README.md`, then `design/d18-one-flow.md`, then the newest `history/sittings/*.md`.
 - **The ledger:** `## In force` (`### Every session` first, then `### <area>`), `## Proposed`, `## Superseded`. An entry in force is one line, `N. **Title.** paragraph (date; source)`. Numbers are unique and never reused. `agentik decisions render --lint` checks the shape, the caps on entries and the OPEN-QUESTIONS.md beside the ledger; the line `<!-- decisions: legacy below -->` ends the parsed part of an older ledger.
