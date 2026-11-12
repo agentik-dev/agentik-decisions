@@ -16,7 +16,6 @@ import subprocess
 import tempfile
 
 import decisions
-from decisions.ledger import display
 from tests.hermetic import Hermetic
 from tests.test_answer_head import Repo, git
 from tests.test_new import PARTS, SAMPLE_QUESTIONS
@@ -251,7 +250,7 @@ class TreePreview(Lane):
         self.assertEqual(code, 0, out + err)
         self.assertIn("answer --preview: %s; render would refuse it, so no diff\n" % reason,
                       out)
-        self.assertEqual(len(re.findall(r"(?m)^\+\+\+ ", out)), 1, out)
+        self.assertNotIn("orchard/CLAUDE.md (after the answer)", out)
         self.assertEqual({v[3] for v in self.loads(out).values()}, {"an hq's file"}, out)
         return out
 
@@ -263,7 +262,7 @@ class TreePreview(Lane):
                                self.ledger], out=out, err=err)
         self.assertEqual(code, 2, out.getvalue() + err.getvalue())
         reason = err.getvalue().strip()
-        self.assertTrue(reason.startswith("decisions: render: "), reason)
+        self.assertTrue(reason.startswith("decisions: "), reason)
         return self.without_the_folder_diff(reason[len("decisions: "):])
 
     def test_a_hand_written_folder_file_gets_no_diff(self):
@@ -301,9 +300,8 @@ class TreePreview(Lane):
         exits 0 and says why that file gets no diff."""
         with open(self.folder_file(), "wb") as handle:
             handle.write(b"caf\xe9\n")
-        self.without_the_folder_diff("%s: unreadable: 'utf-8' codec can't decode byte 0xe9 "
-                                     "in position 3: invalid continuation byte"
-                                     % display(self.folder_file()))
+        out = self.refused_as_render_refuses()
+        self.assertIn("CLAUDE.md: unreadable: 'utf-8' codec can't decode byte 0xe9", out)
         code, _, err = self.answer(self.q, *self.ARGV)
         self.assertEqual(code, 0, err)
 

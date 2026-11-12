@@ -75,13 +75,17 @@ d37: `--preview` makes every check and refusal above, under the same lock, then 
 the entry as it would be written, the Answered line, the unified diff `render` would
 then make in the repo's file and, when the tree's section changes, in the folder's
 file, and each file's loaded bytes now and after beside its ceiling; it writes nothing.
+A file render would refuse, by the checks its own path makes (`render --scope tree`'s
+for the folder's file), or cannot read gets render's reason and no diff, exit 0 (d37 r1).
 """
 
 import collections
 import difflib
+import io
 import os
 import shlex
 import subprocess
+import types
 
 from . import ask, questions
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, held, keeps_crlf,
@@ -90,7 +94,8 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import BEGIN, END, TARGET, apply, block, growth, is_ledger, tail_note, tree_file
+from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, growth, is_ledger, tail_note,
+                     tree_file)
 from .tree import ceiling_for, loaded_bytes
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
@@ -524,15 +529,24 @@ def preview(ledger_text, new_ledger, path, target, out):
     each file's loaded bytes now and after beside its ceiling. It writes nothing."""
     old, new = parse(ledger_text), parse(new_ledger)
     files = []
-    was = read_text(target) if os.path.exists(target) else ""
     try:
+        # d37 r1 F2: a file render cannot read is said, as answer's warning says it
+        was = read_text(target) if os.path.exists(target) else ""
         files.append((target, was, apply(was, block(new, path, target), display(target)),
                       False))
     except Refusal as exc:
         out.write("answer --preview: %s; render would refuse it, so no diff\n" % exc)
     if tree_lines(old) != tree_lines(new):
-        folder, text = tree_file(new, path)
-        files.append((folder, read_text(folder) if os.path.exists(folder) else "", text, True))
+        try:
+            # d37 r1 F1: render's own tree path makes its target checks, its output unshown
+            cmd_tree(types.SimpleNamespace(into=None, lint=False, check=True,
+                                           fold_tails=False), new, path, io.StringIO(),
+                     io.StringIO(), False)
+            folder, text = tree_file(new, path)
+            files.append((folder, read_text(folder) if os.path.exists(folder) else "", text,
+                          True))
+        except Refusal as exc:
+            out.write("answer --preview: %s; render would refuse it, so no diff\n" % exc)
     for name, before, after, tree in files:
         shown = display(name)
         if before == after:

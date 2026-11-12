@@ -46,8 +46,10 @@ the checkout's top level only: `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.m
 with a `tests`, `testdata` or `fixtures` folder is never guarded. It reads REPO, else
 the folder of `--ledger`, else the working directory, at its git top, and needs no
 ledger. It is a list: exit 0 whether or not it lists anything; a commit name git
-cannot resolve there, or one that opens with `-`, exits 2. A merge lists no paths of
-its own, so a hand edit is seen in the commit that made it.
+cannot resolve there, or one that opens with `-`, exits 2. A merge lists, by git's
+combined diff (`--cc`), each path whose merged text differs from every parent's, so an
+edit made in its resolution is seen there; a clean merge of two edits to separate parts
+of one file differs from both parents and is listed too (d37 r1 F3).
 """
 
 import fnmatch
@@ -402,7 +404,7 @@ def edits(repo, commit):
     if code != 0 or not sha:
         raise Refusal("audit: --edits %s names no commit in %s" % (commit, display(repo)))
     code, out = run(["log", "--reverse", "--no-renames", "-z", "--format=%x1e%H%x1f%h%x1f%s",
-                     "--name-only", "%s..HEAD" % sha])
+                     "--name-only", "--cc", "%s..HEAD" % sha])
     if code != 0:
         raise Refusal("audit: git log cannot read %s..HEAD in %s" % (commit, display(repo)))
     rows = []
