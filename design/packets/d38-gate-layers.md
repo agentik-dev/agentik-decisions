@@ -10,19 +10,21 @@
 | acceptance | the table in §3; `PYTHONPATH=plugin/lib python -m unittest tests.test_d38_gate_layers` green (at the pin: 12 run, 6 failures, 1 error) |
 | budget | about 90 tool calls |
 
-## 1. The owner's words
+## 1. What the source says: the code at the pin
 
-- Entry 31 (2026-11-12): "The gate lists are layered as the instruction files are. The owner's list, ~/.claude/edit-gates, holds the user-scoped files, the global CLAUDE.md among them. A folder's list covers every repo under that folder. A checkout's list holds its own files. The agentik tools (render, answer, the instruct skill, gates write) write all three layers and manage them alike; no hq writes a member's list by hand."
-- Decision 32 (2026-11-12): the coupling checks as a `render --lint` warning, in the public plugin, no ledger entry.
+- `list_gate` (`render.py:84`) lists a file in no checkout in the owner's list, so `render --scope tree` puts a tree folder's `CLAUDE.md` there; the header of a new list names "hq design/09"; `--lint` reads no list.
+- The owner's words:
+  - Entry 31 (2026-11-12): "The gate lists are layered as the instruction files are. The owner's list, ~/.claude/edit-gates, holds the user-scoped files, the global CLAUDE.md among them. A folder's list covers every repo under that folder. A checkout's list holds its own files. The agentik tools (render, answer, the instruct skill, gates write) write all three layers and manage them alike; no hq writes a member's list by hand."
+  - Decision 32 (2026-11-12): the coupling checks as a `render --lint` warning, in the public plugin, no ledger entry.
 
-## 2. Rulings
+## 2. Rulings: the requirements
 
 - R1, the layer `list_gate` writes (`render.py:84`; `answer` calls it): in a checkout, its `.claude/edit-gates`, as at the pin; else under the owner's config folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`), the owner's list, as at the pin; else, when the target's own folder is below the home folder, that folder's `.claude/edit-gates`, the line relative to it; else the owner's list. Never under `tests`, `testdata` or `fixtures`. Listed once.
 - R2, `render --lint` (both scopes) gains two stderr warnings, exit unchanged: a non-comment line of the ledger's checkout's list that is absolute, starts with `~` or `..`, or whose first segment names a folder beside the checkout; a `/` or `~/` line of the owner's list, outside the config folder, that lies in a git checkout or under a folder below the home folder holding its own `.claude/edit-gates`. A list absent is read as empty.
 - R3, a new list's header names no hq and no design number; an existing file keeps its header.
 - R4, the instruct skill's page changes only if R1 makes a sentence of it false.
 
-## 3. Acceptance (the brief's six; each a case in `tests/test_d38_gate_layers.py`)
+## 3. Interfaces: the acceptance table (the brief's six; each a case in `tests/test_d38_gate_layers.py`)
 
 | # | line | at the pin |
 |---|---|---|
@@ -33,6 +35,14 @@
 | 5 | `--lint`'s exit is the same with and without the warnings | green (no warnings to change it) |
 | 6 | a new list's header has no `hq` and no `design/` | red |
 
-## 4. Forbidden reads
+## 4. Findings that name this row: ledger, NICE, forks
+
+- hq entries 17 and 31 and decision 32 bind it; hq design/12 §3.4 test 2 names the header's word as a NICE for this repo, closed by R3.
+
+## 5. Forbidden reads
 
 No transcript, no live state root, no file under `~/.claude`.
+
+## 6. Report
+
+The hand-back to the hq's coordinator, at most 45 lines.
