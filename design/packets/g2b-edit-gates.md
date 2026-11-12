@@ -3,7 +3,7 @@
 | item | value |
 |---|---|
 | from | the management sitting's coordinator, 2026-11-12, brief g2b (hq `history/sessions/BRIEF-2026-11-12-session-g2b-edit-gates.md` §5); design of record hq design/09 §7.2 "The edit gates" at hq 39e1a63; refuter r1: proceed. Its sister: agentik-session branch `g2b-edit-gates` (the gates, g3, `gates write`) |
-| pin | main at `5e57f3f` (0.21.1). Version 0.21.2 (the listing), 0.21.3 (the skill). Worktree `.claude/worktrees/g2b-edit-gates`, branch `g2b-edit-gates` |
+| pin | main at `5e57f3f` (0.21.1). Version 0.21.2 (the listing), 0.21.3 (the skill), 0.21.4 (in every version place). Worktree `.claude/worktrees/g2b-edit-gates`, branch `g2b-edit-gates` |
 | wall | this worktree; no push, `--amend`, rebase, merge or install; no bare `make` (the gate queue only); no test reads live state |
 | may touch | `plugin/lib/decisions/{render,answer}.py`; `plugin/skills/instruct/SKILL.md`; `plugin/.claude-plugin/plugin.json`; `tests/test_g2b_gates.py` (new); `README.md` and `design/readme/{source.md,rendered.sha256}` if the version is named there; this packet and the sitting's record |
 | verify | the gate queue's `make check`, once, last |
