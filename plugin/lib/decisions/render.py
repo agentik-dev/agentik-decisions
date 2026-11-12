@@ -64,9 +64,9 @@ TARGET = "CLAUDE.md"
 
 GATES = "edit-gates"
 GATE_EXEMPT = frozenset({"tests", "testdata", "fixtures"})
-GATES_HEAD = ("# The edit gates (hq design/09 section 7.2): the files below are refused to an edit\n"
-              "# tool and a shell write; change one through the instruct skill. A path or glob a\n"
-              "# line; `agentik decisions render` and `answer` add the files they write.\n")
+GATES_HEAD = ("# The edit gates: the files below are refused to an edit tool and a shell write;\n"
+              "# change one through the instruct skill. A path or glob a line; `agentik\n"
+              "# decisions render` and `answer` add the files they write.\n")
 
 
 def _checkout_top(path):
@@ -81,27 +81,49 @@ def _checkout_top(path):
         folder = up
 
 
+def _owner_folder():
+    """The owner's config folder: `CLAUDE_CONFIG_DIR`, else `~/.claude`."""
+    moved = os.environ.get("CLAUDE_CONFIG_DIR")
+    return os.path.abspath(os.path.expanduser(moved) if moved else
+                           os.path.join(os.path.expanduser("~"), ".claude"))
+
+
+def _owners(path):
+    """`path` lies under the owner's config folder, or under `~/.claude` when it moved."""
+    return any(_below(path, f) for f in (_owner_folder(),
+                                         os.path.join(os.path.expanduser("~"), ".claude")))
+
+
+def _below(path, folder):
+    """`path` is strictly below `folder`, by its spelling or by both real paths."""
+    pairs = ((os.path.abspath(path), os.path.abspath(folder)),
+             (os.path.realpath(path), os.path.realpath(folder)))
+    return any(p.startswith(f.rstrip(os.sep) + os.sep) for p, f in pairs)
+
+
 def list_gate(target):
-    """g2b: name `target` once in its scope's edit-gates list, so the session plugin's gate
-    refuses an edit of it: a file in a checkout in that checkout's `.claude/edit-gates`,
-    relative to its top level; a file in no checkout (the global file, a tree folder's file)
-    in the user's, in `CLAUDE_CONFIG_DIR`, else `~/.claude`, as `~/` under the home folder.
-    Never a file under a `tests`, `testdata` or `fixtures` folder. Returns the list written,
-    or None."""
+    """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
+    gate refuses an edit of it: a file in a checkout in that checkout's `.claude/edit-gates`,
+    relative to its top level; else a file under the owner's config folder (or `~/.claude`)
+    in the owner's list, as `~/` under the home folder; else a file whose folder is below
+    the home folder (a tree folder's) in that folder's `.claude/edit-gates`, by its name;
+    else the owner's list, absolute. Never a file under a `tests`, `testdata` or `fixtures`
+    folder. Returns the list written, or None."""
     target = os.path.abspath(target)
     top = _checkout_top(target)
+    home = os.path.expanduser("~").rstrip(os.sep)
+    folder = os.path.dirname(target)
     if top is not None:
         parts = os.path.relpath(target, top).split(os.sep)
         if GATE_EXEMPT.intersection(parts[:-1]):
             return None
         gates, line = os.path.join(top, ".claude", GATES), "/".join(parts)
+    elif GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
+        return None
+    elif not _owners(target) and _below(folder, home):
+        gates, line = os.path.join(folder, ".claude", GATES), os.path.basename(target)
     else:
-        if GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
-            return None
-        home = os.path.expanduser("~").rstrip(os.sep)
-        moved = os.environ.get("CLAUDE_CONFIG_DIR")
-        folder = os.path.expanduser(moved) if moved else os.path.join(home, ".claude")
-        gates = os.path.join(folder, GATES)
+        gates = os.path.join(_owner_folder(), GATES)
         line = ("~/" + target[len(home) + 1:] if target.startswith(home + os.sep)
                 else target)
     old = read_text(gates) if os.path.exists(gates) else None
