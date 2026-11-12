@@ -55,11 +55,62 @@ from .tree import (SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_b
                    named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
-           "tail_note", "tree_file", "BEGIN", "END", "TARGET"]
+           "tail_note", "tree_file", "list_gate", "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
 TARGET = "CLAUDE.md"
+
+
+GATES = "edit-gates"
+GATE_EXEMPT = frozenset({"tests", "testdata", "fixtures"})
+GATES_HEAD = ("# The edit gates (hq design/09 section 7.2): the files below are refused to an edit\n"
+              "# tool and a shell write; change one through the instruct skill. A path or glob a\n"
+              "# line; `agentik decisions render` and `answer` add the files they write.\n")
+
+
+def _checkout_top(path):
+    """The nearest folder above `path` that holds a `.git`, a worktree's file included."""
+    folder = os.path.dirname(path)
+    while True:
+        if os.path.lexists(os.path.join(folder, ".git")):
+            return folder
+        up = os.path.dirname(folder)
+        if up == folder:
+            return None
+        folder = up
+
+
+def list_gate(target):
+    """g2b: name `target` once in its scope's edit-gates list, so the session plugin's gate
+    refuses an edit of it: a file in a checkout in that checkout's `.claude/edit-gates`,
+    relative to its top level; a file in no checkout (the global file, a tree folder's file)
+    in the user's, in `CLAUDE_CONFIG_DIR`, else `~/.claude`, as `~/` under the home folder.
+    Never a file under a `tests`, `testdata` or `fixtures` folder. Returns the list written,
+    or None."""
+    target = os.path.abspath(target)
+    top = _checkout_top(target)
+    if top is not None:
+        parts = os.path.relpath(target, top).split(os.sep)
+        if GATE_EXEMPT.intersection(parts[:-1]):
+            return None
+        gates, line = os.path.join(top, ".claude", GATES), "/".join(parts)
+    else:
+        if GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
+            return None
+        home = os.path.expanduser("~").rstrip(os.sep)
+        moved = os.environ.get("CLAUDE_CONFIG_DIR")
+        folder = os.path.expanduser(moved) if moved else os.path.join(home, ".claude")
+        gates = os.path.join(folder, GATES)
+        line = ("~/" + target[len(home) + 1:] if target.startswith(home + os.sep)
+                else target)
+    old = read_text(gates) if os.path.exists(gates) else None
+    if old is not None and line in (l.strip() for l in old.splitlines()):
+        return None
+    text = GATES_HEAD if old is None else (old if old.endswith("\n") or not old else old + "\n")
+    os.makedirs(os.path.dirname(gates), exist_ok=True)
+    write_text(gates, text + line + "\n")
+    return gates
 
 
 def short_tail(text):
@@ -350,9 +401,11 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
         return 1 if stale or (over and ceiling) else 0
     if old == text:
         out.write("render: %s is fresh\n" % display(target))
+        list_gate(target)
         return 0
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(target, text)
+    list_gate(target)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
     return 0
 
@@ -415,9 +468,11 @@ def cmd_render(args, path, out, err):
         return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
+        list_gate(target)
         return 0
     crlf = keeps_crlf(target)
     write_text(target, new)
+    list_gate(target)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     return 0
 
