@@ -2,6 +2,7 @@
 description: Put a question to the owner in four parts, with its Proposed line
 argument-hint: "--title T --stands S --choice C --option \"L: E\" ... --recommend R [--report P]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions new $ARGUMENTS` and relay its output verbatim. When a part is

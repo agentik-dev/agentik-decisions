@@ -2,6 +2,7 @@
 description: Closed NICE items and S4 ones past their days, moved to history/NICE-overflow.md
 argument-hint: "[REPO...] [--order FILE] [--days N] [--write] [--json]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions expire $ARGUMENTS` and relay its output verbatim. Without

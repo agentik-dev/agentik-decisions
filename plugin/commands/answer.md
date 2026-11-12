@@ -2,6 +2,7 @@
 description: Enter the owner's answer to open question N in the ledger
 argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] [--move-to A] | --no-entry) [--into PATH] [--every-turn]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions answer $ARGUMENTS` and relay its output verbatim. Run it only on

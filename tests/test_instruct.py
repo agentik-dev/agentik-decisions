@@ -84,8 +84,9 @@ class Lane(Repo, NewBase):
         if self.LEDGER_EDIT:
             self.write(self.ledger, self.read(self.ledger).replace("### Build\n",
                                                                    self.LEDGER_EDIT, 1))
-        code, _, err = self.run_cli(*PARTS)
+        code, out, err = self.run_cli(*PARTS)
         self.assertEqual(code, 0, err)
+        self.q = re.search(r"new: (\d+)", out).group(1)
         out = io.StringIO()
         self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=out,
                                         err=io.StringIO()), 0, out.getvalue())
@@ -125,10 +126,10 @@ class Preview(Lane):
         self.assertIn("9. **Pin the interpreter.** Pin 3.12. (2026-09-28; the owner's answer "
                       "to decision 9, s)", out)
         self.assertIn("+- 9 Pin the interpreter (Build)", out)
-        self.assertIn("--- CLAUDE.md", out)
+        self.assertRegex(out, r"(?m)^--- \S*CLAUDE\.md$")
         loads = self.loads(out)
-        self.assertIn("CLAUDE.md", loads, out)
-        now, after, delta, kind, figure = loads["CLAUDE.md"]
+        self.assertEqual(len(loads), 1, out)
+        now, after, delta, kind, figure = list(loads.values())[0]
         self.assertEqual(kind, "a repo's file")
         self.assertEqual(int(after.replace(",", "")) - int(now.replace(",", "")),
                          int(delta.replace(",", "")))
@@ -192,17 +193,17 @@ class TreePreview(Lane):
 
     def test_preview_shows_the_tree_file(self):
         before = tree_hashes(self.tmp)
-        code, out, err = self.answer("9", "--pick", "Pin", "--source", "s", "--text",
+        code, out, err = self.answer(self.q, "--pick", "Pin", "--source", "s", "--text",
                                      "Pin 3.12.", "--area", "Every session of the tree",
                                      "--every-turn", "--preview")
         self.assertEqual(code, 0, out + err)
         self.assertEqual(tree_hashes(self.tmp), before)
-        self.assertIn("+9. **Pin the interpreter.** Pin 3.12. (2026-09-28)", out)
+        self.assertIn("+%s. **Pin the interpreter.** Pin 3.12. (2026-09-28)" % self.q, out)
         kinds = {v[3] for v in self.loads(out).values()}
         self.assertEqual(kinds, {"an hq's file", "a tree's file"}, out)
 
     def test_growth_of_the_tree_file_is_refused_in_preview(self):
-        argv = ("9", "--pick", "Pin", "--source", "s", "--text", "Pin 3.12.", "--area",
+        argv = (self.q, "--pick", "Pin", "--source", "s", "--text", "Pin 3.12.", "--area",
                 "Every session of the tree")
         shown = self.answer(*(argv + ("--preview",)))
         self.assertEqual(shown, self.answer(*argv))
@@ -295,9 +296,9 @@ class Skill(Hermetic):
         front, _ = split_frontmatter(read(INSTRUCT))
         self.assertIn("name: instruct", front)
         text = self.page()
-        for needed in ("`agentik decisions answer --preview`", "`agentik decisions find`",
+        for needed in ("`agentik decisions answer --preview`", "`agentik decisions find <word>`",
                        "`agentik decisions new`", "`agentik decisions render --check`",
-                       "`agentik decisions audit --edits`",
+                       "`agentik decisions audit --edits <commit>`",
                        "`instruct: <title>: <what changed>`",
                        # the chain's three ledgers, by how each is found
                        "`Generated from`", "`Each is an entry of`"):

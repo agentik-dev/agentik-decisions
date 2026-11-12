@@ -2,6 +2,7 @@
 description: The ledger's retire and rewrite candidates, Every session first with the bytes each costs
 argument-hint: "[REPO...] [--tree FILE] [--json]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions audit $ARGUMENTS` and relay its output verbatim. It edits

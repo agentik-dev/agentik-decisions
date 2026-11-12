@@ -2,6 +2,7 @@
 description: Each repo's NICE_TO_HAVE.md placed against its HANDOFF.md build order
 argument-hint: "[REPO...] [--order FILE] [--json]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions backlog $ARGUMENTS` and relay its output verbatim. It writes
