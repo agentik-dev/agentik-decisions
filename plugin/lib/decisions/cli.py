@@ -14,17 +14,25 @@ Verbs
     ask [N...]                    the open questions, rendered once through respeak
                                   and written back, as AskUserQuestion calls (JSON)
     answer N (--pick L | --other T) --source S [--text P | --add S]
-        (--area A | --amends M [--shorter] | --no-entry) [--into PATH]
-        [--every-turn]            the owner's answer: entry N, an amendment or
+        (--area A | --amends M [--shorter] [--move-to A] | --no-entry)
+        [--into PATH] [--every-turn]
+                                  the owner's answer: entry N, an amendment or
                                   none; the question leaves, an Answered line stays;
                                   A resolves as `show --area` does, or is new;
+                                  --move-to moves the amended entry under A;
                                   --every-turn lets it grow the block under
-                                  Every session
-    render [--into PATH] [--check | --lint | --fold-tails]
-                                  the lint, then the generated block in the
+                                  Every session, or the tree's file
+    render [--scope tree] [--into PATH] [--check | --lint | --fold-tails]
+        [--ceiling]               the lint, then the generated block in the
                                   CLAUDE.md beside the ledger, or in PATH;
-                                  --fold-tails first writes each tail in force
-                                  in form T2, once HEAD holds the ledger
+                                  --scope tree writes the ledger's `Every
+                                  session of the tree` alone, the whole file,
+                                  into the CLAUDE.md of the folder that holds
+                                  the repo; --check and --lint print the
+                                  file's loaded bytes beside its ceiling, and
+                                  --ceiling fails a file over it; --fold-tails
+                                  first writes each tail in force in form T2,
+                                  once HEAD holds the ledger
     doctor [--json]               the interpreter, the tool, the plugin, the
                                   provider, the ledger and respeak
     install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
@@ -67,7 +75,8 @@ Exit codes
        and `audit` whenever its view printed; `answer` whose block write failed
        after both files were written (a warning on stderr names `agentik decisions
        render`)
-    1  `render`: a lint problem, or with --check a stale block
+    1  `render`: a lint problem, with --check a stale block or an absent tree's
+       file, or under --ceiling a file over its ceiling
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
@@ -168,16 +177,26 @@ def build_parser():
     answer.add_argument("--shorter", action="store_true",
                         help="with --amends: let through a --text that drops a sentence of "
                         "the old paragraph")
+    answer.add_argument("--move-to", default=None, metavar="A",
+                        help="with --amends: move the amended entry last under ### A, "
+                        "resolved as --area is")
     answer.add_argument("--every-turn", action="store_true",
                         help="let through an answer that makes the block, loaded on every "
-                        "turn, larger under Every session")
+                        "turn, larger under Every session, or the tree's file larger")
     answer.add_argument("--into", default=None,
                         help="the CLAUDE.md block's target; the default is beside the ledger")
 
     render = subs.add_parser("render", parents=[ledger],
                              help="the lint, then the generated block in a CLAUDE.md")
     render.add_argument("--into", default=None,
-                        help="the target; the default is the CLAUDE.md beside the ledger")
+                        help="the target; the default is the CLAUDE.md beside the ledger, "
+                        "or under --scope tree the folder's")
+    render.add_argument("--scope", choices=("repo", "tree"), default="repo",
+                        help="tree: the ledger's `Every session of the tree` alone, the whole "
+                        "file, into the CLAUDE.md of the folder that holds the repo")
+    render.add_argument("--ceiling", action="store_true",
+                        help="with --check or --lint: exit 1 when the file loads more than "
+                        "its ceiling")
     mode = render.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true",
                       help="write nothing; print the diff, exit 1 when stale")

@@ -1,14 +1,16 @@
 """The ledger: one sectioned DECISIONS.md per repo, parsed and linted.
 
     ## In force      `### Every session` first when present, then `### <area>`;
-                     each entry one line, `N. **Title.** paragraph (YYYY-MM-DD; source)`
+                     each entry one line, `N. **Title.** paragraph (YYYY-MM-DD; source)`;
+                     an hq's ledger may also hold `### Every session of the tree` (d36)
     ## Proposed      `N. **Title.** one sentence (proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`
     ## Superseded    `- What: replaced by X (entry N), YYYY-MM-DD.` or `N. text`,
                      `merged into` or `lapsed with` in place of `replaced by`
 
 Front matter, a title and prose may precede `## In force`. Proposed and
 Superseded may be absent. Numbers are unique across the three sections; at
-most 25 entries are in force, at most 7 under `Every session`. A title ends in
+most 25 entries are in force. No count caps `Every session`: `render` measures the
+file it checks against a ceiling in bytes instead (d36). A title ends in
 `.`, `?` or `!` inside the bold; the `.` alone is dropped from `Entry.title`.
 An unknown `## ` heading after a known one ends the section and the area
 before it: a `N.` line under it is an entry with no section and no area, whose
@@ -31,16 +33,23 @@ from . import questions
 
 __all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "display", "check_entry",
            "lint", "repeats", "sentences", "dropped", "unclosed", "final_parenthetical",
-           "bold_title", "NAME", "IN_FORCE",
-           "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "IN_FORCE_CAP", "EVERY_SESSION_CAP", "LEGACY"]
+           "bold_title", "NAME", "IN_FORCE", "is_every", "is_tree", "ordered", "TITLES",
+           "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "TREE_SESSION", "IN_FORCE_CAP", "LEGACY"]
 
 NAME = "DECISIONS.md"
 IN_FORCE, PROPOSED, SUPERSEDED = "In force", "Proposed", "Superseded"
 SECTIONS = (IN_FORCE, PROPOSED, SUPERSEDED)
 EVERY_SESSION = "Every session"
-# Rulings, not measurements: example-mac entry 4 (2026-09-25), built by d17. They count
-# entries, not bytes; design/d17-four-verbs.md records the block's bytes at the caps.
-IN_FORCE_CAP, EVERY_SESSION_CAP = 25, 7
+# d36: an hq's ledger may hold this section; `render --scope tree` writes it alone into
+# the CLAUDE.md of the folder that holds the hq's checkout, and the plain render leaves it out.
+TREE_SESSION = "Every session of the tree"
+# A ruling, not a measurement: example-mac entry 4 (2026-09-25), built by d17. d36 drops
+# the count of seven under `Every session`; the ceilings in bytes are in `tree.CEILINGS`.
+IN_FORCE_CAP = 25
+# d36 (hq design/09 section 4): the ten behaviours' titles, in the order both blocks list
+# their entries; an entry titled otherwise keeps its place after them, in ledger order.
+TITLES = ("Writes", "Never run", "Devices", "Commits", "Pushes", "Never commit", "Helpers",
+          "Budget", "Deciding and asking", "Changing these rules")
 # The line that ends the parsed part of an older ledger (design d18 section 2, L4).
 LEGACY = "<!-- decisions: legacy below -->"
 
@@ -203,6 +212,29 @@ def folded(tail, amendment=None):
     return "; ".join(parts + [latest])
 
 
+def is_every(entry):
+    """True for an entry in force under `### Every session`."""
+    return entry.section == IN_FORCE and (entry.area or "").lower() == EVERY_SESSION.lower()
+
+
+def is_tree(entry):
+    """True for an entry in force under `### Every session of the tree` (d36)."""
+    return entry.section == IN_FORCE and (entry.area or "").lower() == TREE_SESSION.lower()
+
+
+def title_rank(title):
+    """The index of `title` in TITLES, its case and runs of spaces aside, else None."""
+    want = " ".join(title.split()).lower()
+    return next((i for i, t in enumerate(TITLES) if t.lower() == want), None)
+
+
+def ordered(entries):
+    """`entries` in the order of the ten titles, then each other one in ledger order (d36)."""
+    ranked = [(title_rank(e.title), i, e) for i, e in enumerate(entries)]
+    known = sorted((r, i, e) for r, i, e in ranked if r is not None)
+    return [e for _r, _i, e in known] + [e for r, _i, e in ranked if r is None]
+
+
 def section_of(name):
     """The canonical section a `##` heading names, or None."""
     for section in SECTIONS:
@@ -302,7 +334,9 @@ def parse(text, path=NAME):
             if level == 3 and section == IN_FORCE:
                 if any(a.name.lower() == name.lower() for a in areas):
                     problems.append((n, "a second `### %s`" % name))
-                if name.lower() == EVERY_SESSION.lower() and areas:
+                # d36: the tree's section may sit anywhere under `## In force`
+                if name.lower() == EVERY_SESSION.lower() and any(
+                        a.name.lower() != TREE_SESSION.lower() for a in areas):
                     problems.append((n, "`### %s` comes first under `## In force`"
                                         % EVERY_SESSION))
                 area = Area(name, (section_head, line), n)
@@ -347,10 +381,6 @@ def parse(text, path=NAME):
     if len(in_force) > IN_FORCE_CAP:
         problems.append((in_force[IN_FORCE_CAP].line, "%d entries in force; the cap is %d"
                          % (len(in_force), IN_FORCE_CAP)))
-    every = [e for e in in_force if (e.area or "").lower() == EVERY_SESSION.lower()]
-    if len(every) > EVERY_SESSION_CAP:
-        problems.append((every[EVERY_SESSION_CAP].line, "%d entries under `%s`; the cap is %d"
-                         % (len(every), EVERY_SESSION, EVERY_SESSION_CAP)))
     problems.sort()
     return Ledger(path, entries, areas, problems, legacy)
 

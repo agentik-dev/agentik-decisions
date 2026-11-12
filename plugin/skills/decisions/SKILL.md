@@ -23,7 +23,8 @@ and it carries no data.
   `N. **Title.** one sentence (proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`.
 - `## Superseded` holds one line per retired entry, naming its replacement.
 - Numbers are unique across the three sections and never reused. At most 25
-  entries are in force, and at most 7 sit under `Every session`.
+  entries are in force. An hq's ledger may also hold `### Every session of the
+  tree`, whose entries bind every session in every repo of its tree.
 - An older ledger in another shape puts an empty `## In force` and the line
   `<!-- decisions: legacy below -->` above its old text, then takes new
   entries in this shape. The text below that line is read by `show` and
@@ -32,7 +33,8 @@ and it carries no data.
 ## 2. Reading
 
 - The `Every session` entries arrive in the CLAUDE.md block that
-  `agentik-decisions render` writes, with one line for each other entry in force.
+  `agentik-decisions render` writes, with one line for each other entry in force;
+  the tree's entries arrive in the CLAUDE.md of the folder that holds the tree.
 - Before touching an area, read it: `agentik-decisions show --area <name>` prints the
   whole area, and `agentik-decisions show <n>...` prints the entries named.
 - `agentik-decisions find <word>` lists the entries that mention a word.
@@ -79,5 +81,7 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
 ## 5. Keeping the block fresh
 
 After the ledger changes, `agentik-decisions render` rewrites the block in the
-CLAUDE.md beside it. `agentik-decisions render --check` prints the diff and exits 1
-when the block is stale, and a lint problem exits 1 in every mode.
+CLAUDE.md beside it, and on its tree flag (`render --help`) the folder's file. `agentik-decisions
+render --check` prints the diff and exits 1 when the file is stale, and a lint
+problem exits 1 in every mode. `--check` and `--lint` print the file's loaded bytes
+beside its ceiling; `--ceiling` makes the excess fail.

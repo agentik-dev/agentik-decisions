@@ -157,7 +157,8 @@ class Legacy(Verb):
         self.assertIn(self.line("3. "), self.run_cli("show", "--area", "build")[1])
         self.assertEqual(self.run_cli("show", "1")[1].splitlines()[-1], self.line("1. "))
         self.assertRegex("%d %s" % self.run_cli("render", "--lint")[:2],  # d32: the size line
-                         r"^0 render: the block for \S+ is \d+ B; it is loaded on every turn\n$")
+                         r"^0 render: the block for \S+ is \d+ B; it is loaded on every turn\n"
+                         r"render: \S+ loads [\d,]+ B, [^\n]+\n$")  # d36: the loaded bytes
 
 
 class TheArea(Verb):

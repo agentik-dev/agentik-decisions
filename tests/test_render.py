@@ -15,13 +15,26 @@ from decisions.render import BEGIN, END
 from tests.hermetic import SAMPLE, Hermetic
 
 SIZED = re.compile(r"^render: the block for \S+ is \d+ B; it is loaded on every turn\n$")
+# d36: `--check` and `--lint` print the file's loaded bytes beside its ceiling, and `--lint`
+# warns on stderr; a test that pinned them silent reads them and takes them out.
+LOADS = re.compile(r"^render: \S+ loads [\d,]+ B, comments aside and imports included; "
+                   r"the ceiling for [^\n]+ is [\d,]+ B(?:; over by [\d,]+ B)?\n", re.M)
+WARNING = re.compile(r"^render: warning: [^\n]*\n", re.M)
+
+
+def checked(result):
+    """(code, out, err) of a `--check` with its one loaded-bytes line read and taken out."""
+    code, out, err = result
+    found = LOADS.findall(out)
+    return code, (LOADS.sub("", out) if len(found) == 1 else out + "(no loads line)"), err
 
 
 def sized(result):
     """d32: a clean `--lint` prints the block's size: (code, out, err) with that one line
-    read and taken out, so a test that pinned the lint silent pins nothing else."""
-    code, out, err = result
-    return code, ("" if SIZED.match(out) else out + "(no size line)"), err
+    read and taken out, so a test that pinned the lint silent pins nothing else; d36: its
+    loaded-bytes line and its warnings too."""
+    code, out, err = checked(result)
+    return code, ("" if SIZED.match(out) else out + "(no size line)"), WARNING.sub("", err)
 
 
 def sha(path):
@@ -210,7 +223,7 @@ class Check(Base):
     def test_fresh_exits_0_prints_nothing_and_writes_nothing(self):
         self.write("Head.\n\n" + self.block())
         before = sha(self.target)
-        self.assertEqual(self.run_cli("--check")[:2], (0, ""))
+        self.assertEqual(checked(self.run_cli("--check"))[:2], (0, ""))
         self.assertEqual(sha(self.target), before)
 
     def test_absent_markers_or_target_read_stale(self):
@@ -295,7 +308,7 @@ class Tails(Base):
     def test_tails_whole_form_checks_fresh(self):
         self.write("# Notes\n\n" + self.blocks()[1])
         before = sha(self.target)
-        code, out, err = self.run_cli("--check")
+        code, out, err = checked(self.run_cli("--check"))
         self.assertEqual((code, out), (0, ""), err)
         self.assertEqual(err, "render: CLAUDE.md carries the entries' whole tails, 75 B more; "
                               "run render to shorten it\n")
@@ -314,7 +327,7 @@ class Tails(Base):
         self.assertEqual(code, 0, err)
         self.assertIn("render: wrote", out)
         self.assertIn(SHORT, self.read())
-        self.assertEqual(self.run_cli("--check"), (0, "", ""))
+        self.assertEqual(checked(self.run_cli("--check")), (0, "", ""))
 
 
 # d31, the T2 fixture (F2): entry 1 holds four amendments, two moves and nested parentheticals with
@@ -469,7 +482,7 @@ class T2(Hermetic):
         self.assertEqual(self.run_cli()[0], 0)
         code, out, err = self.run_cli("--fold-tails")
         self.assertEqual(code, 0, err)
-        self.assertEqual(self.run_cli("--check")[:2], (0, ""))
+        self.assertEqual(checked(self.run_cli("--check"))[:2], (0, ""))
         self.assertEqual(sized(self.run_cli("--lint")), (0, "", ""))
 
     def test_t2_block_keeps_its_count(self):
@@ -613,8 +626,8 @@ class TurnRender(Base):
         for argv, name in (((), "CLAUDE.md"), (("--into", other), "other.md")):
             size = on_disk(other if argv else self.target)
             with self.subTest(argv=argv):
-                code, out, err = self.run_cli("--lint", *argv)
-                self.assertEqual((code, err), (0, ""))
+                code, out, err = checked(self.run_cli("--lint", *argv))
+                self.assertEqual((code, WARNING.sub("", err)), (0, ""))
                 self.assertRegex(out, r"^render: the block for \S*%s is %d B; it is loaded on "
                                       r"every turn\n$" % (re.escape(name), size))
         with open(self.ledger, "a", encoding="utf-8") as handle:
@@ -629,6 +642,6 @@ class TurnRender(Base):
         self.write(self.read() * 2)  # two blocks: render refuses this target
         code, out, err = self.run_cli("--lint")
         self.assertEqual((code, out), (0, ""))
-        self.assertEqual(len(err.splitlines()), 1, err)
+        self.assertEqual(len(WARNING.sub("", err).splitlines()), 1, err)
         self.assertIn("markers are not one block, so no size", err)
         self.assertEqual(self.run_cli()[0], 2)

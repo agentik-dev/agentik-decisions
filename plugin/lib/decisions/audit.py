@@ -23,9 +23,11 @@ wrapped across a line counts; a file that is not UTF-8 is read with replacement;
 M` and `N-M` name every number from N to M.
 
 Every Every session entry prints first, marked or not (d34; ` none` only when there
-is none), then the other entries in force that carry a mark, each with the bytes its
+is none), then each entry of `Every session of the tree`, labelled as the tree's (d36),
+then the other entries in force that carry a mark, each with the bytes its
 line costs in the block `render` writes into the CLAUDE.md beside the ledger, read
-from `render.block`'s output with its line end, CRLF when that file keeps it.
+from `render.block`'s output with its line end, CRLF when that file keeps it; a tree
+entry's bytes are its line's in the folder's file `render --scope tree` writes.
 `--json` lists the first as `every_session_entries`, `marks` `[]` when none, and keeps
 `candidates`, the marked entries, as d33 had it. The text ends naming the owner's way to act: `new`, `ask` and `answer`.
 
@@ -42,8 +44,9 @@ import subprocess
 
 from . import common, render
 from .common import Refusal, git_top, keeps_crlf, on_disk, read_text
-from .ledger import (EVERY_SESSION, EVERY_SESSION_CAP, IN_FORCE, IN_FORCE_CAP, amended,
-                     display, final_parenthetical, load)
+from .ledger import (IN_FORCE, IN_FORCE_CAP, amended, display, final_parenthetical, is_tree,
+                     load)
+from .ledger import is_every as in_every
 
 __all__ = ["cmd_audit", "audit", "as_text", "tree_of", "MARKS", "OWNER"]
 
@@ -241,17 +244,24 @@ def audit(path, repos, missing, verbs):
     """The view `--json` prints (packet d33 section 3)."""
     ledger = load(path)
     in_force = [e for e in ledger.entries if e.section == IN_FORCE]
-    every = {e.number for e in in_force if (e.area or "").lower() == EVERY_SESSION.lower()}
+    every = {e.number for e in in_force if in_every(e)}
+    tree = {e.number for e in in_force if is_tree(e)}
     real = os.path.realpath(path)
     top = os.path.realpath(git_top(os.path.dirname(real)) or os.path.dirname(real))
     target = os.path.join(os.path.dirname(path), render.TARGET)
     crlf = keeps_crlf(target)
     generated = render.block(ledger, path, target)
     costs = block_lines(generated, crlf)
+    if tree:
+        # d36: a tree entry costs its line in the folder's file, every turn of the tree
+        tree_target, tree_text = render.tree_file(ledger, path)
+        costs.update({(False, n): b for (is_line, n), b in
+                      block_lines(tree_text, keeps_crlf(tree_target)).items()
+                      if is_line and n in tree})
     cited, unread = citations(in_force, real, top, repos)
     any_read = len(unread) < len(repos)
     roots = [top] + [r for r in repos if r != top] + [os.path.dirname(top)]
-    candidates, every_rows = [], []
+    candidates, every_rows, tree_rows = [], [], []
     for entry in in_force:
         is_every = entry.number in every
         paragraph, tail = paragraph_and_tail(entry)
@@ -272,14 +282,18 @@ def audit(path, repos, missing, verbs):
         if lost:
             marks.append(("P6", "gone: " + ", ".join(lost)))
         row = {"number": entry.number, "title": entry.title, "area": entry.area,
-               "every_session": is_every, "bytes": costs.get((is_every, entry.number), 0),
+               "every_session": is_every, "tree": entry.number in tree,
+               "bytes": costs.get((is_every, entry.number), 0),
                "marks": [{"mark": m, "lead": False, "evidence": e} for m, e in marks]}
         if is_every:
             # d34: every Every session entry prints with its bytes, marked or not.
             every_rows.append(row)
+        if row["tree"]:
+            # d36: so does every entry of the tree's section, labelled as the tree's
+            tree_rows.append(row)
         if marks:
             candidates.append(row)
-    candidates.sort(key=lambda c: not c["every_session"])
+    candidates.sort(key=lambda c: (not c["every_session"], not c["tree"]))
     leads = []
     words = [(e, title_words(e.title)) for e in in_force]
     for i, (a, wa) in enumerate(words):
@@ -290,7 +304,9 @@ def audit(path, repos, missing, verbs):
                               "titles": [a.title, b.title], "shared": sorted(shared)})
     return {"ledger": path, "in_force": len(in_force), "cap": IN_FORCE_CAP,
             "at_cap": len(in_force) >= IN_FORCE_CAP, "every_session": len(every),
-            "every_session_cap": EVERY_SESSION_CAP, "every_session_entries": every_rows,
+            # d36: no count caps Every session; the key stays, as d34 kept every key
+            "every_session_cap": None, "every_session_entries": every_rows,
+            "tree_session": len(tree), "tree_session_entries": tree_rows,
             "block_bytes": render.block_bytes(generated, crlf) or 0,
             "candidates": candidates, "leads": leads,
             "not_detected": ["P7"] if any_read else ["P5", "P7"],
@@ -301,15 +317,20 @@ def as_text(v, names=None):
     """The text view; `names` maps a repo's path to the name its row gives it."""
     def name(path):
         return (names or {}).get(path) or os.path.basename(path)
-    lines = ["audit: %s: %d of %d in force%s, %d of %d under Every session; the block is "
+    lines = ["audit: %s: %d of %d in force%s, %d under Every session%s; the block is "
              "%s B, loaded on every turn" % (
                  display(v["ledger"]), v["in_force"], v["cap"],
                  " (P1, at the cap)" if v["at_cap"] else "", v["every_session"],
-                 v["every_session_cap"], "{:,}".format(v["block_bytes"]))]
-    for title, every in (("Every session, paid every turn:", True),
-                         ("Other entries in force:", False)):
-        rows = (v["every_session_entries"] if every else
-                [c for c in v["candidates"] if not c["every_session"]])
+                 ", %d under Every session of the tree" % v["tree_session"]
+                 if v.get("tree_session") else "", "{:,}".format(v["block_bytes"]))]
+    groups = [("Every session, paid every turn:", "every")]
+    if v.get("tree_session"):
+        groups.append(("Every session of the tree, the tree's, paid every turn in each of "
+                       "its repos:", "tree"))
+    for title, group in groups + [("Other entries in force:", "other")]:
+        rows = (v["every_session_entries"] if group == "every" else
+                v["tree_session_entries"] if group == "tree" else
+                [c for c in v["candidates"] if not c["every_session"] and not c["tree"]])
         lines.append(title + ("" if rows else " none"))
         for c in rows:
             lines.append("%d %s  %d B" % (c["number"], c["title"], c["bytes"]) + (

@@ -1,6 +1,17 @@
 """`render`: the lint, then the generated block in a CLAUDE.md.
 
-    render [--into PATH] [--check | --lint | --fold-tails]
+    render [--scope tree] [--into PATH] [--check | --lint | --fold-tails] [--ceiling]
+
+d36: the block lists the `Every session` entries in the ten titles' order (`ledger.TITLES`),
+others after in ledger order, and leaves the tree's section out, its entries and titles
+both. `--scope tree` writes that section alone, the whole file, as `tree.tree_text` makes
+it, into the CLAUDE.md of the folder that holds the main checkout, or PATH; it refuses a
+ledger without the section, and a target that exists and is not a tree's file this ledger
+wrote; `--check` exits 1 when that file is absent or differs. Either scope refuses a target
+whose block names another ledger. `--check` and `--lint` print the file's loaded bytes
+beside its ceiling (`tree.CEILINGS`), and exit 1 over it only under `--ceiling`; `--lint`
+warns on stderr, its exit unchanged, on a title outside the ten and on a rule word in a
+hand-written line outside the block.
 
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
 beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there,
@@ -37,11 +48,14 @@ from . import questions
 from .ask import LOCK, NEW_WAIT
 from .common import (GIT_TIMEOUT, Refusal, bounded, disk_text, held, keeps_crlf, on_disk,
                      read_text, write_text)
-from .ledger import (DATE, EVERY_SESSION, IN_FORCE, amended, display, final_parenthetical,
-                     folded, lint, load, parse)
+from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_parenthetical,
+                     folded, is_every, is_tree, lint, load, ordered, parse)
+from .tree import tilde as real_tilde
+from .tree import (SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
+                   named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
-           "tail_note", "BEGIN", "END", "TARGET"]
+           "tail_note", "tree_file", "BEGIN", "END", "TARGET"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -200,10 +214,12 @@ def block(ledger, path, target, tails=False):
     pieces = ["Generated from `%s` by `%s`; edit the ledger and rerun it, never this block."
               % (source, command)]
     in_force = [e for e in ledger.entries if e.section == IN_FORCE]
-    every = [e.text if tails else short_tail(e.text) for e in in_force
-             if (e.area or "").lower() == EVERY_SESSION.lower()]
+    # d36: the Every session entries in the ten titles' order; the tree's section is the
+    # folder's file's, never this block's, so its entries and titles both stay out
+    every = [e.text if tails else short_tail(e.text)
+             for e in ordered([e for e in in_force if is_every(e)])]
     others = ["- %d %s (%s)" % (e.number, e.title, e.area) for e in in_force
-              if (e.area or "").lower() != EVERY_SESSION.lower()]
+              if not is_every(e) and not is_tree(e)]
     if every:
         pieces.append("\n".join(every))
     if others:
@@ -224,15 +240,138 @@ def apply(text, generated, target=TARGET):
     return "".join(lines[:begins[0]]) + generated + "".join(lines[ends[0] + 1:])
 
 
+def tree_file(ledger, path):
+    """(the folder's file, its whole text) `render --scope tree` writes for the ledger at
+    `path` (d36 ruling 2)."""
+    return tree_text(ledger, path, short_tail, BEGIN, END)
+
+
+def measure(out, target, text, ledger, tree):
+    """Print the bytes `text`, the file at `target`, loads beside its ceiling (d36 ruling
+    6); True when it is over."""
+    figure, kind = ceiling_for(target, ledger, tree)
+    size = loaded_bytes(target, text)
+    out.write("render: %s loads %s B, comments aside and imports included; the ceiling for "
+              "%s is %s B%s\n" % (display(target), "{:,}".format(size), kind,
+                                  "{:,}".format(figure),
+                                  "; over by {:,} B".format(size - figure)
+                                  if size > figure else ""))
+    return size > figure
+
+
+def warn(err, lines):
+    for line in lines:
+        err.write("render: warning: %s\n" % line)
+
+
+def refuse_another(text, target, path):
+    """d36 ruling 4: refuse a target whose generated block names another ledger. A named
+    path that holds no ledger now is this ledger before its repo moved, so the block is
+    refreshed as at the pin (d36 r1 F1)."""
+    named = named_ledger(text, target, BEGIN, END)
+    if named is None or not os.path.isfile(named) or named == os.path.realpath(path) \
+            or canonical(named) == canonical(path):
+        return
+    raise Refusal("render: the block in %s was generated from %s, not from %s, and render "
+                  "never writes over another ledger's block; nothing written"
+                  % (display(target), real_tilde(named), real_tilde(path)))
+
+
+def other_tree(folder):
+    """A direct child of `folder` that is no checkout and holds a checkout, or None."""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return None
+    for name in names:
+        child = os.path.join(folder, name)
+        if not os.path.isdir(child) or os.path.exists(os.path.join(child, ".git")):
+            continue
+        try:
+            inner = os.listdir(child)
+        except OSError:
+            continue
+        if any(os.path.exists(os.path.join(child, n, ".git")) for n in inner):
+            return child
+    return None
+
+
+def cmd_tree(args, ledger, path, out, err, ceiling):
+    """`render --scope tree` (d36 ruling 2): the tree's section alone, the file whole."""
+    # d36 r1 F2: an emptied section still has its file, with no entry in its block
+    if not any(a.name.lower() == TREE_SESSION.lower() for a in ledger.areas):
+        raise Refusal("render: %s holds no `### %s`, so it has no tree's file to write; "
+                      "nothing written" % (display(path), TREE_SESSION))
+    if getattr(args, "fold_tails", False):
+        raise Refusal("render: --fold-tails rewrites the ledger and the repo's block; run it "
+                      "without --scope tree")
+    folder, text = tree_file(ledger, path)
+    target = os.path.abspath(os.path.expanduser(args.into)) if args.into else folder
+    if not args.into and not args.lint:
+        other = other_tree(os.path.dirname(folder))
+        if other is not None:
+            # d36 r1 F3: a file here would load in every session of that other tree too
+            raise Refusal("render: %s holds %s, a folder of checkouts that is another tree's, "
+                          "so a CLAUDE.md in %s would load in every session of that tree too; "
+                          "nothing written; --into FILE writes it elsewhere on purpose"
+                          % (real_tilde(os.path.dirname(folder)), real_tilde(other),
+                             real_tilde(os.path.dirname(folder))))
+    if args.lint:
+        warn(err, title_warnings(ledger))
+        out.write("render: the block for %s is %d B; it is loaded on every turn\n"
+                  % (display(target), block_bytes(text) or 0))
+        return 1 if measure(out, target, text, ledger, True) and ceiling else 0
+    if is_ledger(target, path):
+        raise Refusal("render: the target %s is the ledger itself; nothing written"
+                      % display(target))
+    old = read_text(target) if os.path.exists(target) else None
+    if old is not None:
+        if not is_tree_file(old, BEGIN, END):
+            raise Refusal("render: %s exists and is not a tree's file written by `%s`; a "
+                          "hand-written file is never replaced; nothing written"
+                          % (display(target), SCOPE_COMMAND))
+        refuse_another(old, target, path)
+        if named_ledger(old, target, BEGIN, END) is None:
+            raise Refusal("render: %s names no ledger, so it is not %s's tree file; nothing "
+                          "written" % (display(target), real_tilde(path)))
+    if args.check:
+        if old is None:
+            out.write("render: %s is absent; `%s` writes it\n" % (display(target),
+                                                                   SCOPE_COMMAND))
+            measure(out, target, text, ledger, True)
+            return 1
+        stale = old != text
+        if stale:
+            name = display(target)
+            out.writelines(difflib.unified_diff(old.splitlines(keepends=True),
+                                                text.splitlines(keepends=True),
+                                                name, name + " (rendered)"))
+        over = measure(out, target, text, ledger, True)
+        return 1 if stale or (over and ceiling) else 0
+    if old == text:
+        out.write("render: %s is fresh\n" % display(target))
+        return 0
+    was, crlf = disk_text(target), keeps_crlf(target)
+    write_text(target, text)
+    out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
+    return 0
+
+
 def cmd_render(args, path, out, err):
     ledger, problems = lint(path)
     if problems:
         for name, line, message in problems:
             out.write("%s:%d: %s\n" % (name, line, message))
         return 1
+    ceiling = getattr(args, "ceiling", False)
+    if ceiling and not (args.check or args.lint):
+        raise Refusal("render: --ceiling goes with --check or --lint; nothing written")
+    if getattr(args, "scope", None) == "tree":
+        return cmd_tree(args, ledger, path, out, err, ceiling)
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if args.lint:
+        warn(err, title_warnings(ledger))
         # d32: the measure, the bytes of the block render would write there, CRLF counted
         # when the target keeps it; a target render refuses gets no size (F4)
         try:
@@ -245,14 +384,27 @@ def cmd_render(args, path, out, err):
             err.write("render: %s: its GENERATED markers are not one block, so no size\n"
                       % display(target))
             return 0
+        generated = block(ledger, path, target)
         out.write("render: the block for %s is %d B; it is loaded on every turn\n"
-                  % (display(target), on_disk(block(ledger, path, target),
-                                             keeps_crlf(target))))
-        return 0
+                  % (display(target), on_disk(generated, keeps_crlf(target))))
+        # d36 ruling 5: a rule word in a hand-written line outside the block
+        warn(err, ["%s:%d: a hand-written line holds %s; a rule lives in the ledger, and "
+                   "render puts it in the block" % (display(target), n, ", ".join(
+                       "`%s`" % w for w in words)) for n, words in rule_words(text, BEGIN, END)])
+        over = measure(out, target, apply(text, generated, display(target)), ledger, False)
+        return 1 if over and ceiling else 0
     if is_ledger(target, path):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
+    if args.into:
+        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin
+        refuse_another(old, target, path)
+        if is_tree_file(old, BEGIN, END):
+            # d36 r1 F4: the repo's block never takes the place of a tree's block
+            raise Refusal("render: %s is a tree's file, written by `%s`; the repo's block "
+                          "never replaces it; nothing written" % (display(target),
+                                                                  SCOPE_COMMAND))
     was = disk_text(target)
     if getattr(args, "fold_tails", False):
         apply(old, "", display(target))  # a target refused is refused before the fold
@@ -260,19 +412,7 @@ def cmd_render(args, path, out, err):
         ledger = load(path)
     new = apply(old, block(ledger, path, target), display(target))
     if args.check:
-        if new == old:
-            return 0
-        whole = block(ledger, path, target, tails=True)
-        if apply(old, whole, display(target)) == old:
-            more = len(whole.encode()) - len(block(ledger, path, target).encode())
-            err.write("render: %s carries the entries' whole tails, %d B more; run render to "
-                      "shorten it\n" % (os.path.basename(target), more))
-            return 0
-        name = display(target)
-        out.writelines(difflib.unified_diff(old.splitlines(keepends=True),
-                                            new.splitlines(keepends=True),
-                                            name, name + " (rendered)"))
-        return 1
+        return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
         return 0
@@ -280,3 +420,23 @@ def cmd_render(args, path, out, err):
     write_text(target, new)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     return 0
+
+
+def check(old, new, ledger, path, target, out, err, ceiling):
+    """`render --check`: the diff and exit 1 when stale; then the loaded bytes beside the
+    ceiling, exit 1 over it under `--ceiling` (d36 ruling 6)."""
+    code = 0
+    if new != old:
+        whole = block(ledger, path, target, tails=True)
+        if apply(old, whole, display(target)) == old:
+            more = len(whole.encode()) - len(block(ledger, path, target).encode())
+            err.write("render: %s carries the entries' whole tails, %d B more; run render to "
+                      "shorten it\n" % (os.path.basename(target), more))
+        else:
+            name = display(target)
+            out.writelines(difflib.unified_diff(old.splitlines(keepends=True),
+                                                new.splitlines(keepends=True),
+                                                name, name + " (rendered)"))
+            code = 1
+    over = measure(out, target, new, ledger, False)
+    return 1 if code or (over and ceiling) else 0

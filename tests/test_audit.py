@@ -407,14 +407,15 @@ class AuditEvery(Hermetic):
 
     def test_json_gains_every_session_entries_and_keeps_its_keys(self):
         view = json.loads(self.text("--json"))
-        self.assertEqual(sorted(set(view) - {"every_session_entries"}), D33_KEYS)
+        self.assertEqual(sorted(set(view) - {"every_session_entries", "tree_session",
+                                              "tree_session_entries"}), D33_KEYS)
         rows = view["every_session_entries"]
         self.assertEqual([(r["number"], r["bytes"], [m["mark"] for m in r["marks"]])
                           for r in rows],
                          [(1, self.cost("1. **Short rule.**"), ["P2", "P4"]),
                           (2, self.cost("2. **Clean rule.**"), [])])
         self.assertEqual(sorted(rows[1]), ["area", "bytes", "every_session", "marks",
-                                           "number", "title"])
+                                           "number", "title", "tree"])  # d36: "tree"
         self.assertNotIn(2, [c["number"] for c in view["candidates"]])
 
     def test_no_every_session_entry_prints_none(self):
