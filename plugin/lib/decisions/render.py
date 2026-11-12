@@ -10,8 +10,10 @@ ledger without the section, and a target that exists and is not a tree's file th
 wrote; `--check` exits 1 when that file is absent or differs. Either scope refuses a target
 whose block names another ledger. `--check` and `--lint` print the file's loaded bytes
 beside its ceiling (`tree.CEILINGS`), and exit 1 over it only under `--ceiling`; `--lint`
-warns on stderr, its exit unchanged, on a title outside the ten and on a rule word in a
-hand-written line outside the block.
+warns on stderr, its exit unchanged, on a title outside the ten, on a rule word in a
+hand-written line outside the block, and (d38) on a line of the ledger's checkout's
+edit-gates list that reaches outside the checkout or of the owner's list that a checkout's
+or a folder's list owns.
 
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
 beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there,
@@ -133,6 +135,53 @@ def list_gate(target):
     os.makedirs(os.path.dirname(gates), exist_ok=True)
     write_text(gates, text + line + "\n")
     return gates
+
+
+def _list_lines(gates):
+    """(number, line) of each non-comment line of the list `gates`; none when it is absent."""
+    try:
+        text = read_text(gates) if os.path.isfile(gates) else ""
+    except (OSError, Refusal):
+        return []
+    return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
+            if l.strip() and not l.strip().startswith("#")]
+
+
+def gate_warnings(path):
+    """d38 R2, for `--lint`: a line of the ledger's checkout's list that is absolute, starts
+    with `~` or `..`, or whose first segment names a folder beside the checkout; a `/` or
+    `~/` line of the owner's list, outside its config folder, that lies in a checkout or
+    under a folder below the home folder that holds its own list."""
+    found, top = [], _checkout_top(os.path.abspath(path))
+    keep = "a checkout's list holds its own files, relative to its top level"
+    if top is not None:
+        gates, up = os.path.join(top, ".claude", GATES), os.path.dirname(top)
+        for n, line in _list_lines(gates):
+            first = os.path.join(up, line.split("/")[0])
+            if line.startswith(("/", "~", "..")):
+                found.append("%s:%d: `%s` reaches outside the checkout; %s"
+                             % (real_tilde(gates), n, line, keep))
+            elif line.split("/")[0] not in ("", ".") and first != top \
+                    and os.path.isdir(first) and not os.path.lexists(
+                        os.path.join(top, line.split("/")[0])):
+                found.append("%s:%d: `%s` names %s, a folder beside the checkout; %s"
+                             % (real_tilde(gates), n, line, real_tilde(first), keep))
+    home = os.path.expanduser("~").rstrip(os.sep)
+    owner = os.path.join(_owner_folder(), GATES)
+    for n, line in _list_lines(owner):
+        full = home + line[1:] if line.startswith("~/") else line
+        if not full.startswith("/") or _owners(full):
+            continue
+        layer, folder = _checkout_top(full), os.path.dirname(full)
+        while layer is None and _below(folder, home):
+            if os.path.isfile(os.path.join(folder, ".claude", GATES)):
+                layer = folder
+            folder = os.path.dirname(folder)
+        if layer is not None:
+            found.append("%s:%d: `%s` lies under %s, a layer with a list of its own; the "
+                         "owner's list holds the user-scoped files" % (real_tilde(owner), n,
+                                                                      line, real_tilde(layer)))
+    return found
 
 
 def short_tail(text):
@@ -391,6 +440,7 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
                              real_tilde(os.path.dirname(folder))))
     if args.lint:
         warn(err, title_warnings(ledger))
+        warn(err, gate_warnings(path))
         out.write("render: the block for %s is %d B; it is loaded on every turn\n"
                   % (display(target), block_bytes(text) or 0))
         return 1 if measure(out, target, text, ledger, True) and ceiling else 0
@@ -447,6 +497,7 @@ def cmd_render(args, path, out, err):
         os.path.join(os.path.dirname(path), TARGET)
     if args.lint:
         warn(err, title_warnings(ledger))
+        warn(err, gate_warnings(path))
         # d32: the measure, the bytes of the block render would write there, CRLF counted
         # when the target keeps it; a target render refuses gets no size (F4)
         try:

@@ -5,7 +5,7 @@
 | from | the management sitting's coordinator, 2026-11-12, brief d38 (hq `history/sessions/BRIEF-2026-11-12-decisions-d38-gate-layers.md`); design of record hq design/12 §3.2, §3.4, §3.5. A small change by entry 17, cut as a packet because its tests carry it past 50 lines |
 | pin | main at `fb2fa97` (0.21.4). Version 0.21.5. Worktree `.claude/worktrees/d38-gate-layers`, branch `d38-gate-layers`; nothing linked from main |
 | wall | this worktree; no push, `--amend`, rebase, merge or install; no bare `make` (the gate queue only); no test reads live state or writes outside its temp home |
-| may touch | `plugin/lib/decisions/render.py`; `plugin/skills/instruct/SKILL.md` only if R1 makes a sentence false; `tests/test_d38_gate_layers.py` (new); the four version places, `tests/test_plugin.py`, `README.md` and `design/readme/{source.md,rendered.sha256}`; this packet and the sitting's record |
+| may touch | `plugin/lib/decisions/render.py`; `plugin/skills/instruct/SKILL.md` only if R1 makes a sentence false; `tests/test_d38_gate_layers.py` (new); `tests/test_tree_scope.py` (one assertion R1 moves: the folder now holds `.claude`); the four version places, `tests/test_plugin.py`, `README.md` and `design/readme/{source.md,rendered.sha256}`; this packet and the sitting's record |
 | verify | the gate queue's `make check`, once, last |
 | acceptance | the table in §3; `PYTHONPATH=plugin/lib python -m unittest tests.test_d38_gate_layers` green (at the pin: 12 run, 6 failures, 1 error) |
 | budget | about 90 tool calls |
