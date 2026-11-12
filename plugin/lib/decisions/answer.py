@@ -62,6 +62,13 @@ the lint has passed (a result that fails the lint is refused on the lint): the
 refusal names the bytes, and the entry's tail note's share when the note grows. The
 way out is an entry outside `Every session`, which the block lists by title only, or
 `--every-turn`, valid only with `--area` or `--amends`. Same size or smaller passes.
+
+d36: `Every session of the tree` answers `--area` only by its whole name, as `Every
+session` does. `--move-to A`, valid only with `--amends M`, puts the amended entry last
+under the heading A names, resolved as `--area` is. An answer that touches the tree's
+section and makes the folder's file larger is refused as the block's growth is, and
+`--every-turn` lets it through; the folder's file is never written here: a stderr line
+names `render --scope tree` when the section changed.
 """
 
 import collections
@@ -73,13 +80,15 @@ from . import ask, questions
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, held, keeps_crlf,
                      on_disk, read_text, write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
-                     bold_title, display, dropped, final_parenthetical, folded, load, parse,
-                     repeats,
-                     sentences, unclosed)
+                     TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
+                     is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import BEGIN, END, TARGET, apply, block, growth, is_ledger, tail_note
+from .render import BEGIN, END, TARGET, apply, block, growth, is_ledger, tail_note, tree_file
 
-__all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line"]
+__all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
+
+# d36: the two sections an answer reaches only by their whole names
+WHOLE = (EVERY_SESSION.lower(), TREE_SESSION.lower())
 
 # D22: how a refusal names each part of the shape a `--text` repeats.
 REFUSED = {"title": "opens with a bold title", "tail": "ends in a (date; source) tail"}
@@ -147,6 +156,17 @@ def amend_entry(text, ledger, number, paragraph, amendment, shorter=False, add=N
     lines[entry.line - 1] = "%d. **%s** %s (%s)\n" % (
         number, titled.group(1), paragraph, folded(tail, amendment))
     return "".join(lines), replaced
+
+
+def move_entry(text, number, area):
+    """`text` with entry `number`'s line in force taken out and put last under `### area`
+    (d36: `--amends M --move-to A`); `area` is a heading the ledger holds, or a new one."""
+    ledger = parse(text)
+    entry = next(e for e in ledger.entries if e.section == IN_FORCE and e.number == number)
+    if (entry.area or "").lower() == area.lower():
+        return text
+    rest = drop_line(text, entry.line - 1)
+    return insert_entry(rest, parse(rest), area, entry.text)
 
 
 def drop_line(text, index):
@@ -332,6 +352,13 @@ def cmd_answer(args, path, out, err):
         raise Refusal("answer: empty --area; nothing written")
     if not (area or args.amends is not None or args.no_entry):
         raise Refusal("answer: name --area A, --amends M or --no-entry; nothing written")
+    move = getattr(args, "move_to", None)
+    if move is not None:
+        if args.amends is None:
+            raise Refusal("answer: --move-to is valid only with --amends; nothing written")
+        move = ask.clean(move).lstrip("#").strip()
+        if not move or "\n" in move or "\r" in move:
+            raise Refusal("answer: --move-to names one heading; nothing written")
     if area is not None and os.path.exists(path):
         count = len([e for e in parse(read_text(path)).entries if e.section == IN_FORCE])
         if count >= IN_FORCE_CAP:
@@ -400,12 +427,22 @@ def cmd_answer(args, path, out, err):
             cut = was if folded(was, amendment) != "%s; amended %s" % (was, amendment) \
                 else None
             done = "entry %d amended" % args.amends
+            if move is not None:
+                # d36: the amended entry, moved last under the heading --move-to names
+                try:
+                    found_area = pick_area(parse(new_ledger), move, "answer", legacy=False,
+                                           absent=True, whole=WHOLE)
+                except Refusal as exc:
+                    raise Refusal("%s; nothing written" % exc)
+                heading = found_area.name if found_area else move
+                new_ledger = move_entry(new_ledger, args.amends, heading)
+                done = "entry %d amended, under `### %s`" % (args.amends, heading)
         else:
             line = "%d. %s %s (%s; %s)" % (number, bold_title(title), text, date, cause)
             current = parse(new_ledger)
             try:
                 found_area = pick_area(current, area, "answer", legacy=False, absent=True,
-                                       whole=(EVERY_SESSION.lower(),))
+                                       whole=WHOLE)
             except Refusal as exc:
                 raise Refusal("%s; nothing written" % exc)
             heading = found_area.name if found_area else area
@@ -426,13 +463,20 @@ def cmd_answer(args, path, out, err):
         # d32 fold (F2): the lint first, so a refusal's way out never meets the lint
         if not getattr(args, "every_turn", False):
             every_turn(ledger_text, new_ledger, path, target, args.amends,
-                       None if args.no_entry or args.amends is not None else heading)
+                       None if args.no_entry or (args.amends is not None and move is None)
+                       else heading)
         commit_texts([(path_q, new_q), (path, new_ledger)])
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
         out.write("replaced: %s\n" % replaced)
     if cut is not None:
         out.write("tail was: (%s)\n" % cut)
+    if tree_lines(parse(ledger_text)) != tree_lines(parse(new_ledger)):
+        # d36: the folder's file is above the repo; answer leaves it to its own command
+        err.write("answer: the tree's section changed; `agentik decisions render --scope tree"
+                  "%s` rewrites the folder's file\n" % (
+                      " --ledger %s" % shlex.quote(args.ledger)
+                      if getattr(args, "ledger", None) else ""))
     try:
         rewrite_block(path, target, out, err)
     except Refusal as exc:
@@ -446,7 +490,29 @@ def cmd_answer(args, path, out, err):
     return 0
 
 
+def tree_lines(ledger):
+    """The text of each entry of the tree's section, in ledger order."""
+    return [e.text for e in ledger.entries if is_tree(e)]
+
+
 def every_turn(ledger_text, new_ledger, path, target, amends, heading):
+    """d32 and d36: refuse an answer that makes the repo's block larger under `Every
+    session`, or the tree's file larger under `Every session of the tree`."""
+    repo_block(ledger_text, new_ledger, path, target, amends, heading)
+    old, new = parse(ledger_text), parse(new_ledger)
+    touched = any(is_tree(e) and e.number == amends for e in old.entries) or \
+        (heading is not None and heading.lower() == TREE_SESSION.lower())
+    if not touched:
+        return
+    was = len(tree_file(old, path)[1].encode()) if any(is_tree(e) for e in old.entries) else 0
+    now = len(tree_file(new, path)[1].encode()) if any(is_tree(e) for e in new.entries) else 0
+    if now > was:
+        raise Refusal("answer: this answer adds %d B to the tree's file, %d B to %d B, which "
+                      "every session of the tree loads on every turn; put it in another "
+                      "entry, or pass --every-turn; nothing written" % (now - was, was, now))
+
+
+def repo_block(ledger_text, new_ledger, path, target, amends, heading):
     """d32: refuse an answer that makes the block larger when it touches `Every session`,
     by `--amends M` with M in force there or an `--area` that resolves to it (`heading`).
     The block is the one `render` would write at `target`, markers or none: the relay puts
