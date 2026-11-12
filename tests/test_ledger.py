@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 import decisions
-from decisions.ledger import (EVERY_SESSION_CAP, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED,
+from decisions.ledger import (IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED,
                               SUPERSEDED, final_parenthetical, lint, parse)
 from tests.hermetic import SAMPLE
 
@@ -73,11 +73,9 @@ class Lint(unittest.TestCase):
                                ).problems, [])
 
     def test_8_in_every_session(self):
+        # d36: the ceilings in bytes replace the count of seven, so eight lint clean
         text = HEAD + "### Every session\n\n" + "".join(entry(n) for n in range(1, 9))
-        self.assertEqual(messages(text), ["8 entries under `Every session`; the cap is %d"
-                                          % EVERY_SESSION_CAP])
-        self.assertEqual(messages(HEAD + "### Every session\n\n"
-                                  + "".join(entry(n) for n in range(1, 8))), [])
+        self.assertEqual(messages(text), [])
 
     def test_an_entry_outside_a_subsection(self):
         text = HEAD + entry(1) + "\n### A\n\n" + entry(2)
