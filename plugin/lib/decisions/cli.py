@@ -15,13 +15,15 @@ Verbs
                                   and written back, as AskUserQuestion calls (JSON)
     answer N (--pick L | --other T) --source S [--text P | --add S]
         (--area A | --amends M [--shorter] [--move-to A] | --no-entry)
-        [--into PATH] [--every-turn]
+        [--into PATH] [--every-turn] [--preview]
                                   the owner's answer: entry N, an amendment or
                                   none; the question leaves, an Answered line stays;
                                   A resolves as `show --area` does, or is new;
                                   --move-to moves the amended entry under A;
                                   --every-turn lets it grow the block under
-                                  Every session, or the tree's file
+                                  Every session, or the tree's file; --preview
+                                  prints the entry, each diff and the bytes
+                                  and writes nothing
     render [--scope tree] [--into PATH] [--check | --lint | --fold-tails]
         [--ceiling]               the lint, then the generated block in the
                                   CLAUDE.md beside the ledger, or in PATH;
@@ -60,6 +62,12 @@ Verbs
                                   first with each line's bytes in the block;
                                   P5 reads the tree, each REPO, FILE's repos or
                                   the ledger's git top; writes nothing
+    audit --edits C [REPO] [--json]
+                                  each commit after C that touches instruction
+                                  text (CLAUDE.md, DECISIONS.md, AGENTS.md,
+                                  .claude/rules, .claude/settings*.json at the
+                                  top) without an `instruct:` subject; needs
+                                  no ledger; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog`, `expire` and `analyze` read no ledger and ignore it.
@@ -86,7 +94,8 @@ Exit codes
        nor a directory, or an `expire` REPO not a directory, `--order` FILE it
        cannot read, --days under 1, or a --write whose NICE_TO_HAVE.md HEAD does
        not hold, whose files changed under it, or that failed, or an `audit`
-       REPO that is not a directory or `--tree` FILE it cannot read
+       REPO that is not a directory or `--tree` FILE it cannot read, or an
+       `--edits` commit name git cannot resolve
 """
 
 import argparse
@@ -96,7 +105,7 @@ import sys
 
 from .analyze import cmd_analyze
 from .answer import cmd_answer
-from .audit import cmd_audit
+from .audit import cmd_audit, cmd_edits
 from .backlog import cmd_backlog
 from .expire import cmd_expire
 from .ask import cmd_new
@@ -185,6 +194,9 @@ def build_parser():
                         "turn, larger under Every session, or the tree's file larger")
     answer.add_argument("--into", default=None,
                         help="the CLAUDE.md block's target; the default is beside the ledger")
+    answer.add_argument("--preview", action="store_true",
+                        help="make every check, then print the entry, the diff of each file "
+                        "render would change and its bytes beside the ceiling; write nothing")
 
     render = subs.add_parser("render", parents=[ledger],
                              help="the lint, then the generated block in a CLAUDE.md")
@@ -248,6 +260,9 @@ def build_parser():
                             "git top")
     audit.add_argument("--tree", default=None, metavar="FILE",
                        help='a file {"repos": [{"name": N, "path": P}]} naming the tree\'s repos')
+    audit.add_argument("--edits", default=None, metavar="C",
+                       help="list each commit after C that touches instruction text without "
+                            "an `instruct:` subject, in REPO or the working directory's repo")
     audit.add_argument("--json", action="store_true")
 
     install = subs.add_parser("install-cli",
@@ -299,6 +314,9 @@ def main(argv=None, out=None, err=None):
         if args.verb == "analyze":
             # `analyze` reads git and NICE_TO_HAVE.md, never a ledger.
             return cmd_analyze(args, out, err)
+        if args.verb == "audit" and getattr(args, "edits", None) is not None:
+            # d37: `audit --edits` reads git's history, never a ledger
+            return cmd_edits(args, out, err)
         path = locate(getattr(args, "ledger", None), os.getcwd())
         return VERBS[args.verb](args, path, out, err)
     except Refusal as exc:

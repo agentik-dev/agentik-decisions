@@ -1,9 +1,8 @@
 ---
 name: decisions
 description: >
-  Consult, cite and draft the entries of a repo's DECISIONS.md. Use before
-  touching a decided area, when a question needs the owner, or when cutting a
-  packet or brief.
+  Read, cite and draft a repo's DECISIONS.md entries: before touching a decided
+  area, when a question needs the owner, or when cutting a packet or brief.
 allowed-tools: Bash(agentik-decisions *)
 ---
 
@@ -77,6 +76,9 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
   its own, moves them to history/NICE-overflow.md.
 - Write an entry in plain present-tense English. Its first sentence states the
   decision whole, and its closing parenthetical names the date and the source.
+- A standing change to how sessions behave, whether an entry, a CLAUDE.md line, a
+  setting or prompt text, goes through the `instruct` skill, never a hand edit: it
+  places the change, shows the owner its cost and commits it as `instruct:`.
 
 ## 5. Keeping the block fresh
 

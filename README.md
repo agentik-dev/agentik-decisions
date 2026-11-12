@@ -74,16 +74,17 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
-| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] [--move-to A] \| --no-entry) [--into PATH] [--every-turn]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
+| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] [--move-to A] \| --no-entry) [--into PATH] [--every-turn] [--preview]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays; `--preview` prints the entry, each file's diff and its bytes, and writes nothing |
 | `render [--scope tree] [--into PATH] [--check] [--ceiling]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
-| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
-| `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; older S1 to S3, or on one, listed to lift; undated kept; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md`. Close with `Closed YYYY-MM-DD <sha, history file or void>: ` and the lead, cut to fit |
+| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step with its items, S3, S4; `S4?` has no level; a closed item only counts; writes nothing |
+| `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md` |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
-| `--version` | `agentik-decisions 0.20.1`, the version `doctor` compares with the one on PATH |
+| `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
+| `--version` | `agentik-decisions 0.21.1`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -96,11 +97,9 @@ agentik decisions ask                   # the open questions as AskUserQuestion 
 agentik decisions answer 9 --pick pin --source "the sitting" --text "Pin 3.12." --area build
 agentik decisions render                # write the block into the CLAUDE.md beside the ledger
 agentik decisions render --check        # exit 1 and the diff when the block is stale
-agentik decisions render --lint         # exit 1 and one line per problem
 agentik decisions render --into ~/.claude/CLAUDE.md
-agentik decisions doctor --json
 agentik decisions backlog               # this repository's backlog against its build order
-agentik decisions analyze churn --since 7d  # what the last week's commits wrote
+agentik decisions audit --edits HEAD~20  # instruction text changed outside the lane
 ```
 
 `new` appends `## N. T` to the `OPEN-QUESTIONS.md` beside the ledger, before `## Decided without asking` when that heading exists, with or without text after it:
@@ -143,7 +142,7 @@ A sitting without AskUserQuestion runs `ask` for the render alone; the owner ans
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
-`--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`; the tail it cut prints as `tail was:`, and `git log -p -S'amended A' -- DECISIONS.md` finds an older amendment whole on a `-` line. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
+`--amends M` replaces entry M's paragraph and writes its tail in form T2, `(FIRST; amended K times, A to B; amended DATE, source)`; the tail it cut prints as `tail was:`, and git keeps the whole tail. It exits 2 when M's tail is missing or does not open with a date; `--no-entry` changes no entry.
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
 The block is loaded on every turn: `answer` and `render` name its growth, `X B to Y B, +D B`, and an answer that makes it larger under `Every session` exits 2 and writes nothing, naming the tail note's share when that grows; an entry outside `Every session`, listed by title only, or `--every-turn` lets it through.
@@ -181,12 +180,13 @@ Exit codes:
 
 ## The plugin
 
-The plugin carries manners and no data; a repository owns its ledger.
+The plugin carries manners and no data; a repository owns its ledger. Only the owner types a command; the model runs the tool.
 
 | part | name | what it does |
 |---|---|---|
 | skill | `decisions` | consult, cite and draft entries before touching a decided area |
 | skill | `/decisions:ask` | ask the open questions in one batch through AskUserQuestion, then enter each answer |
+| skill | `/decisions:instruct [<change> \| adopt <file> \| where]` | change how sessions behave through the ledger; `where` prints where each thing is set |
 | command | `/decisions:show <n>...` | entries by number, or one area with `--area <name>` |
 | command | `/decisions:find <word>` | the title line of each entry that holds the word |
 | command | `/decisions:new --title T --stands S --choice C --option "L: E" ... --recommend R` | the four-part question and its Proposed line |
@@ -204,10 +204,7 @@ One example each:
 /decisions:find interpreter
 /decisions:ask
 /decisions:render --check
-/decisions:backlog
-/decisions:analyze churn
-/decisions:expire
-/decisions:audit
+/decisions:instruct where
 ```
 
 Or say it: "which decisions cover the relay?" reaches the skill.
@@ -244,7 +241,8 @@ Each file runs alone in seconds:
 | `tests/test_analyze.py` | `analyze` over fixture repos: the ratios, the exits, no write |
 | `tests/test_audit.py` | `audit`: the marks, the order, no write, the exits |
 | `tests/test_expire.py` | `expire`: the items, dry, the move, a stop |
-| `tests/test_plugin.py` | the plugin subtree: nine commands, the two skills, one version |
+| `tests/test_plugin.py` | the plugin subtree: the commands, the skills, one version |
+| `tests/test_instruct.py` | `answer --preview`, `audit --edits`, the `instruct` skill |
 | `tests/test_makefile.py` | the harness `make test` runs, and the `decisions` step |
 | `tests/test_hermetic.py` | the suite reads no live state |
 | `tests/test_gates.py` | a skip is a gate that did not run, never a pass |
@@ -276,7 +274,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.20.1`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.21.1`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -296,6 +294,7 @@ assets/icon.svg            the project icon
 plugin/                    the plugin, self-contained: what an install copies
 plugin/skills/decisions/   the skill that consults and drafts
 plugin/skills/ask/         the skill that asks the owner: /decisions:ask
+plugin/skills/instruct/    the lane for a change of instruction text
 plugin/commands/           show, find, new, answer, render, backlog, expire, analyze, audit
 plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md imports it
 src/decisions.py           the runner

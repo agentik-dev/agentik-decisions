@@ -2,6 +2,7 @@
 description: Lint the ledger, then write or check its generated block in CLAUDE.md
 argument-hint: "[--scope tree] [--into <path>] [--check | --lint | --fold-tails] [--ceiling]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions render $ARGUMENTS` and relay its output verbatim. Exit 1 means a

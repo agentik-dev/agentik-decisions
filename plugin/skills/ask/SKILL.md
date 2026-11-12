@@ -1,8 +1,8 @@
 ---
 name: ask
 description: >
-  Ask the owner the open questions in a repo's OPEN-QUESTIONS.md in one batch
-  through AskUserQuestion, then enter each answer with agentik-decisions answer.
+  Ask the owner a repo's open questions (OPEN-QUESTIONS.md) in one batch through
+  AskUserQuestion, then enter each answer with agentik-decisions answer.
 allowed-tools: Bash(agentik-decisions *), AskUserQuestion
 ---
 

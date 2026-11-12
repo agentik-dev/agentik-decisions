@@ -1,7 +1,8 @@
 ---
 description: Enter the owner's answer to open question N in the ledger
-argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] [--move-to A] | --no-entry) [--into PATH] [--every-turn]"
+argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] [--move-to A] | --no-entry) [--into PATH] [--every-turn] [--preview]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions answer $ARGUMENTS` and relay its output verbatim. Run it only on
@@ -25,4 +26,4 @@ and a name no heading matches makes a new area. `--move-to A`, with `--amends M`
 it is not the one beside the ledger; pass the same `--into` that
 `agentik-decisions render` uses. The block is loaded on every turn: its line
 names its growth, and growth under `Every session`, or of the tree's file under `Every session of the tree`, is refused, exit 2, unless `--every-turn`, passed
-only on the owner's word.
+only on the owner's word. `--preview` makes every check, prints the entry, each file's diff and its bytes beside the ceiling, and writes nothing.

@@ -12,7 +12,7 @@ SKILL = os.path.join(PLUGIN, "skills", "decisions", "SKILL.md")
 ASK = os.path.join(PLUGIN, "skills", "ask", "SKILL.md")
 COMMANDS = ("analyze.md", "answer.md", "audit.md", "backlog.md", "expire.md", "find.md",
             "new.md", "render.md", "show.md")
-VERSION = "0.20.1"
+VERSION = "0.21.1"
 DESCRIBED = ("plugin/.claude-plugin/plugin.json",
              "pyproject.toml", "CLAUDE.md", "design/readme/source.md", "README.md",
              "plugin/lib/decisions/__init__.py", "plugin/lib/decisions/cli.py")
@@ -56,7 +56,7 @@ class StructureTest(unittest.TestCase):
     def test_exactly_the_six_commands(self):
         # d25: and /decisions:install-cli, which runs the plugin's own launcher, never PATH's
         self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "commands"))),
-                         sorted(COMMANDS + ("install-cli.md",)))
+                         sorted(COMMANDS + ("install-cli.md", "instruct.md")))
         text = read(os.path.join(PLUGIN, "commands", "install-cli.md"))
         self.assertIn("allowed-tools: [Bash(*/bin/agentik-decisions install-cli*)]", text)
         self.assertIn("!`${CLAUDE_PLUGIN_ROOT}/bin/agentik-decisions install-cli $ARGUMENTS`",
@@ -99,7 +99,9 @@ class StructureTest(unittest.TestCase):
 
     def test_ask_skill_drives_the_selector(self):
         """d18 section 1: the skill serves /decisions:ask, so no command shares its name."""
-        self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "skills"))), ["ask", "decisions"])
+        # d37: and `instruct`, whose command only the owner types
+        self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "skills"))),
+                         ["ask", "decisions", "instruct"])
         front, body = split_frontmatter(read(ASK))
         self.assertIn("name: ask", front)
         self.assertIn("allowed-tools: Bash(agentik-decisions *), AskUserQuestion", front)

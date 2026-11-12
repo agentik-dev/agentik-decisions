@@ -2,6 +2,7 @@
 description: What a repo's git history says: churn, records written against code landed
 argument-hint: "[churn] [REPO...] [--since Nd|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]"
 allowed-tools: Bash(agentik-decisions *)
+disable-model-invocation: true
 ---
 
 Run `agentik-decisions analyze $ARGUMENTS` and relay its output verbatim. It writes
