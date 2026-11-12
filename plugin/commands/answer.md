@@ -1,6 +1,6 @@
 ---
 description: Enter the owner's answer to open question N in the ledger
-argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] | --no-entry) [--into PATH] [--every-turn]"
+argument-hint: "N (--pick L | --other T) --source S [--text P | --add S] (--area A | --amends M [--shorter] [--move-to A] | --no-entry) [--into PATH] [--every-turn]"
 allowed-tools: Bash(agentik-decisions *)
 ---
 
@@ -19,11 +19,10 @@ this one whole, and prints the tail it cut as `tail was:`. A line no part of its
 block takes, and a line HEAD's copy of the block lacks, refuse `--pick`; `--other` keeps them in the Answered line; with no copy of question N in git's HEAD, it exits 2: read the block first, since a commit makes its lines the block's own and `--other` must then carry the owner's words, and commit OPEN-QUESTIONS.md.
 One of `--area`, `--amends` and `--no-entry` is required. `--area A` resolves
 as `agentik-decisions show --area A` does, a unique prefix included, but among the
-headings above the legacy marker only, and `Every session` only by its whole
-name; the output names the heading it matched, and a name no heading matches
-makes a new area.
+headings above the legacy marker only, and `Every session` and `Every session of the tree` only by their whole names; the output names the heading it matched,
+and a name no heading matches makes a new area. `--move-to A`, with `--amends M` alone, moves the amended entry last under A, resolved as `--area` is.
 `--into` names the CLAUDE.md that holds the ledger's block when
 it is not the one beside the ledger; pass the same `--into` that
 `agentik-decisions render` uses. The block is loaded on every turn: its line
-names its growth, and growth under `Every session` is refused, exit 2, unless
-`--every-turn`, passed only on the owner's word.
+names its growth, and growth under `Every session`, or of the tree's file under `Every session of the tree`, is refused, exit 2, unless `--every-turn`, passed
+only on the owner's word.

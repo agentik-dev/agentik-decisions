@@ -43,8 +43,8 @@ Front matter, a title and prose may come first; then three sections, in this ord
 - A Proposed line is one sentence ending in `(proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`; only the owner's answer moves it into force.
 - A Superseded line holds a date and names its fate: `replaced by`, `merged into` or `lapsed with`, in any case; unnumbered lines are legal.
 - Numbers are unique across the three sections and never reused.
-- At most 25 entries are in force, and at most 7 sit under `Every session`.
-- The line `<!-- decisions: legacy below -->` ends the parsed part. An older ledger in another shape puts an empty `## In force` and that line above its old text, then takes new entries in this shape. `show --area` and `find` read the text below the line; the lint and the caps pass over it.
+- At most 25 entries are in force. An hq's ledger may also hold `### Every session of the tree`.
+- The line `<!-- decisions: legacy below -->` ends the parsed part. An older ledger in another shape puts an empty `## In force` and that line above its old text, then takes new entries in this shape. `show --area` and `find` read below it; the lint passes over it.
 
 ## Install
 
@@ -74,22 +74,21 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
-| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] \| --no-entry) [--into PATH] [--every-turn]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
-| `render [--into PATH] [--check]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
-| `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size |
+| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] [--move-to A] \| --no-entry) [--into PATH] [--every-turn]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays |
+| `render [--scope tree] [--into PATH] [--check] [--ceiling]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
+| `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s bullets and rows under `\| id \| level \| area \| finding \| evidence \| from \|`, against `HANDOFF.md`'s build order or FILE's steps whose `repo` is the repo less `agentik-`, or `suite`: S1, S2, each open step with its path's items, S3, S4; `S4?` has no level; a closed lead (`**Closed`, `~~`, `[x]`) only counts, `N closed, not placed`; writes nothing |
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; older S1 to S3, or on one, listed to lift; undated kept; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md`. Close with `Closed YYYY-MM-DD <sha, history file or void>: ` and the lead, cut to fit |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
-| `--version` | `agentik-decisions 0.19.2`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.20.0`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
 ```
 agentik decisions show 4                # entry 4 under its heading
-agentik decisions show 4 12             # two entries, each heading once
 agentik decisions show --area relay     # the whole Relay area
 agentik decisions find interpreter      # the title line of each entry that names it
 agentik decisions new --title "Pin the interpreter" --stands "It runs under 3.12." --choice "Pin 3.12, or follow the newest?" --option "Pin: Keeps one interpreter." --option "Follow: Tracks releases." --recommend "Pin 3.12."
@@ -134,7 +133,6 @@ The first label holds at most four words, since ` (Recommended)` follows it, and
 
 `ask` skips, with one warning each, a block whose **Your answer:** line is filled in or has text under it, which `agentik decisions answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
-The render runs in a temp dir as `OPEN-QUESTIONS.md`, beside a copy of the repo's `.claude/respeak/`, and its `claude -p` child runs as a marked session helper.
 It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
 It then prints one AskUserQuestion call per four questions: the header `Decision N`, the question from where things stand and the choice, and each option's label and effect.
 With respeak absent, a failed render, or a directory `ask` cannot write, the text stays, one warning goes to stderr, and the exit is 0; a failed render's warning carries the renderer's first error line.
@@ -149,12 +147,13 @@ It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE
 `--text` is the body only: `answer` writes the bold title and the tail, and a `--text` that opens with a bold title or ends in a `(DATE; source)` tail exits 2 and writes nothing.
 With `--amends M`, `--text` is the whole paragraph in force after the answer; the old paragraph prints as `replaced:`, and a `--text` that drops a sentence of it is refused unless `--shorter`; `--add S` in its place appends S to the paragraph as it stands.
 The block is loaded on every turn: `answer` and `render` name its growth, `X B to Y B, +D B`, and an answer that makes it larger under `Every session` exits 2 and writes nothing, naming the tail note's share when that grows; an entry outside `Every session`, listed by title only, or `--every-turn` lets it through.
+`--move-to A` with `--amends M` moves the amended entry under A; the tree's section answers to its whole name, and growth of the tree's file needs `--every-turn`.
 At 25 entries in force, `--area` exits 2 first and names the ways out: a line under `## Superseded`, `--amends M` or `--no-entry`.
 Every run removes question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `## Answered`, under `.new.lock`, both files or neither; it then rewrites the `CLAUDE.md` block when that file holds the markers.
 A `--into` target that is the ledger itself exits 2 before anything is written.
 Once both files are written the answer stands: when the block cannot be written, one warning on stderr names the `agentik decisions render` command, with the `--ledger` and `--into` the answer used, and the exit is 0.
 
-`render` lints first in every mode: the section shape, the entry shape, unique numbers and both caps.
+`render` lints first in every mode: the section shape, the entry shape, unique numbers and the cap.
 An entry's tail opens with its date and names a source after it, where `amended DATE` and `amended K times, A to B` name none; its body is more than its tail; its bold title and its tail each appear once; a Proposed line's tail names `OPEN-QUESTIONS.md`; and a Superseded line holds a date and names its fate.
 After an unknown `## ` heading no entry belongs to the section or the area before it.
 When an `OPEN-QUESTIONS.md` sits beside the ledger, its first heading starts `# Decisions for the owner`, at most five questions are open, each block holds the four labels in order, 2 to 4 options with the first alone recommended and no two labels equal ignoring case, and an answer line, no two blocks share a number, and each question has its Proposed line; front matter and a `## ` line inside a code fence are skipped.
@@ -162,8 +161,12 @@ Lines under `## Decided without asking` are `- ` bullets after an optional parag
 Each problem prints `file:line: message`, and the exit is 1.
 Otherwise it writes the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->`, replacing a stale block in place, or appends it after one blank line when the markers are absent.
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
-The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
-Proposed and Superseded entries stay out.
+`--check` and `--lint` print the file's loaded bytes, comments aside and imports included, beside its ceiling; `--ceiling` exits 1 over it.
+`--lint` warns, its exit unchanged, on an `Every session` title outside the ten behaviours and on a hand-written line holding `never`, `always`, `must` or `only`.
+The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word, in the ten behaviours' order, but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
+Proposed, Superseded and tree entries stay out.
+`render --scope tree` writes `### Every session of the tree` alone, the whole file, into the `CLAUDE.md` of the folder that holds the repo's main checkout; `--check` fails when it is absent or stale.
+`render` refuses a target whose block came from another ledger, and `--scope tree` a file it did not write.
 Rendered into a file that sits beside no ledger, such as `~/.claude/CLAUDE.md`, the block names the ledger whole, and its commands carry `--ledger`.
 A target that is the ledger itself, by its path, a link, a hard link or its name in another case on a case-insensitive disk, exits 2 and writes nothing.
 Every verb that writes keeps a file's line ends, CRLF or LF, and writes through a link to the file it names, so the link stays; a link into a missing directory exits 2.
@@ -173,8 +176,8 @@ Exit codes:
 | code | meaning |
 |---|---|
 | 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze`, `audit` and `expire` whenever a view printed or a move was made; `answer` whose block write failed after both files were written, with its warning |
-| 1 | `render`: a lint problem, or with `--check` a stale block |
-| 2 | usage, an unknown verb, entry or area, an unreadable ledger, a `new`, `answer` or `expire` refusal, an `ask` for an unknown N or under a held lock, a `render` or `answer` target that is the ledger itself, a failed `doctor` check (an absent `--ledger` file among them), a `backlog`, `expire` or `audit` REPO not a directory or a file it cannot read as UTF-8 (`--order`, `--tree` too), an `analyze` window it cannot read or argument neither an analysis nor a directory, or a `render --fold-tails` whose ledger HEAD does not hold; a `warn` never changes the exit |
+| 1 | `render`: a lint problem, with `--check` a stale block or an absent tree's file, or under `--ceiling` a file over its ceiling |
+| 2 | usage, an unknown verb, entry or area, an unreadable ledger or file, a `new`, `answer` or `expire` refusal, a `render` target that is the ledger or holds another ledger's block, a `--scope tree` file it did not write or ledger with no tree section, a `--fold-tails` whose ledger HEAD does not hold, an `ask` for an unknown N or under a held lock, a failed `doctor` check, a REPO not a directory, or an `analyze` window or argument it cannot read; a `warn` never changes the exit |
 
 ## The plugin
 
@@ -197,7 +200,6 @@ The plugin carries manners and no data; a repository owns its ledger.
 One example each:
 
 ```
-/decisions:show 4 12
 /decisions:show --area relay
 /decisions:find interpreter
 /decisions:ask
@@ -213,7 +215,6 @@ Or say it: "which decisions cover the relay?" reaches the skill.
 ## Configuration
 
 The tool reads no configuration file: the ledger is `--ledger` or `DECISIONS.md` at the git top level.
-The session plugin is an optional provider: `doctor` reports whether the session's resolved file is absent, in range, out of range or unparsable, and the tool runs the same either way.
 
 ## Design
 
@@ -221,8 +222,7 @@ The session plugin is an optional provider: `doctor` reports whether the session
 - `design/d29-churn.md`: `analyze`, and the block's short tails.
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
 - `design/d18-one-flow.md`: one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
-- `design/d17-four-verbs.md`: built `0.3.0`.
-- `history/design/` and `history/packets/`: the designs and packets of the per-file format before it.
+- `history/`: the older designs and packets.
 - `history/sittings/`: one charter per working session; each handover lists the choices made inside the design.
 
 ## Tests
@@ -231,17 +231,17 @@ Each file runs alone in seconds:
 
 | File | What it pins |
 |---|---|
-| `tests/test_ledger.py` | the parser and the lint: each shape, unique numbers, both caps, the tail, the fate, the questions file, the legacy line |
+| `tests/test_ledger.py` | the parser and the lint: each shape, unique numbers, the cap, the tail, the fate, the questions file, the legacy line |
 | `tests/test_lookup.py` | `show` and `find` over the sample ledger, and below the legacy line |
 | `tests/test_new.py` | `new`: a fresh file, an existing one, the insert point, the options, an empty part |
 | `tests/test_answer.py` | `answer`: a pick, an amendment, no entry, both files or neither, the block |
-| `tests/test_ask.py` | `ask` under a stub renderer: the calls, the fields, one render in a temp dir, the write-back, the skipped blocks, the helper marks, no respeak |
+| `tests/test_ask.py` | `ask` under a stub renderer: the calls, the write-back, the skipped blocks, no respeak |
 | `tests/test_render.py` | `render`, `--check` and `--lint`, with the file's hash before and after |
 | `tests/test_cli.py` | every verb, the dropped ones, and where the ledger is found |
 | `tests/test_common.py` | the bounded child, the git top and the one-rename write |
 | `tests/test_doctor.py` | `doctor` under a fake `pyenv` and a temp home |
-| `tests/test_backlog.py` | `backlog` over fixtures trimmed from real files: the levels, the build order, the placement, the exits, no write and no render |
-| `tests/test_analyze.py` | `analyze` over five fixture repos: the classes, the four ratios, the exits, the bound, no write |
+| `tests/test_backlog.py` | `backlog` over trimmed real files: the levels, the placement, the exits, no write |
+| `tests/test_analyze.py` | `analyze` over fixture repos: the ratios, the exits, no write |
 | `tests/test_audit.py` | `audit`: the marks, the order, no write, the exits |
 | `tests/test_expire.py` | `expire`: the items, dry, the move, a stop |
 | `tests/test_plugin.py` | the plugin subtree: nine commands, the two skills, one version |
@@ -276,7 +276,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.19.2`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.20.0`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|
@@ -301,11 +301,7 @@ plugin/respeak-include.md  respeak's include file: how to write here; CLAUDE.md 
 src/decisions.py           the runner
 plugin/lib/decisions/     the package, each module under a thousand lines
 design/                    the current design, its packet and this README's source
-scripts/readme-render      make readme: the status line, the render, the verifier, the stamp
-scripts/hygiene            the name and path lint
-scripts/doclint            charters, packets and relative links
-scripts/bounded            the wall, lock and load breaker make check runs under
-scripts/agentik            the agentik front door
+scripts/                   readme-render, hygiene, doclint, bounded, the agentik door
 tests/                     unittest suites and the sample ledger
 history/                   the old designs and packets, and one charter per working session
 ```
