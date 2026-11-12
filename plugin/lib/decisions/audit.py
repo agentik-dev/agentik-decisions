@@ -35,8 +35,22 @@ It parses the ledger tolerantly, as `show` does, and runs only `git rev-parse` a
 `git --no-optional-locks grep`, each bounded at `common.GIT_TIMEOUT`; it writes no
 file and takes no lock. Exit 0 whenever the view printed; 2 for usage, an unreadable
 ledger or tree file, or a REPO that is not a directory.
+
+    audit --edits C [REPO] [--json]
+
+d37 (hq design/09 section 7.2, "The list that sees the rest"): each commit after C to
+HEAD, oldest first, that touches a guarded path and whose subject does not begin
+`instruct:`, one line each: the short sha, the subject, the guarded paths. Guarded, at
+the checkout's top level only: `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`,
+`AGENTS.md`, `.claude/rules/**`, `DECISIONS.md` and `.claude/settings*.json`; a path
+with a `tests`, `testdata` or `fixtures` folder is never guarded. It reads REPO, else
+the folder of `--ledger`, else the working directory, at its git top, and needs no
+ledger. It is a list: exit 0 whether or not it lists anything; a commit name git
+cannot resolve there, or one that opens with `-`, exits 2. A merge lists no paths of
+its own, so a hand edit is seen in the commit that made it.
 """
 
+import fnmatch
 import json
 import os
 import re
@@ -48,7 +62,8 @@ from .ledger import (IN_FORCE, IN_FORCE_CAP, amended, display, final_parenthetic
                      load)
 from .ledger import is_every as in_every
 
-__all__ = ["cmd_audit", "audit", "as_text", "tree_of", "MARKS", "OWNER"]
+__all__ = ["cmd_audit", "cmd_edits", "edits", "guarded", "audit", "as_text", "tree_of",
+           "MARKS", "OWNER"]
 
 MARKS = ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8")
 AMENDED_AT = 3
@@ -349,6 +364,90 @@ def as_text(v, names=None):
         lines.append("not read: %s" % ", ".join(name(r) for r in v["not_read"]))
     lines.append(OWNER)
     return "\n".join(lines) + "\n"
+
+
+GUARDED = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md", "DECISIONS.md")
+NEVER_GUARDED = ("tests", "testdata", "fixtures")
+LANE = "instruct:"
+
+
+def guarded(path):
+    """True for a path, relative to the checkout's top, that holds instruction text (d37)."""
+    parts = path.split("/")
+    if any(part in NEVER_GUARDED for part in parts[:-1]):
+        return False
+    if path in GUARDED or path.startswith(".claude/rules/"):
+        return True
+    return len(parts) == 2 and parts[0] == ".claude" and fnmatch.fnmatchcase(
+        parts[1], "settings*.json")
+
+
+def edits(repo, commit):
+    """(C's full sha, [{sha, short, subject, paths}]): each commit after `commit` to HEAD
+    in `repo`, oldest first, that touches a guarded path, its subject not `instruct:`."""
+    if not commit or commit.startswith("-"):
+        raise Refusal("audit: --edits %r is no commit name" % commit)
+
+    def run(argv):
+        try:
+            return common.bounded(["git", "--no-optional-locks", "-c", "core.quotepath=off"]
+                                  + argv, common.GIT_TIMEOUT, cwd=repo)
+        except subprocess.TimeoutExpired:
+            raise Refusal("audit: git timed out after %d s in %s" % (common.GIT_TIMEOUT, repo))
+        except OSError as exc:
+            raise Refusal("audit: git cannot run in %s: %s" % (repo, exc))
+
+    code, out = run(["rev-parse", "--verify", "--quiet", "%s^{commit}" % commit])
+    sha = out.strip()
+    if code != 0 or not sha:
+        raise Refusal("audit: --edits %s names no commit in %s" % (commit, display(repo)))
+    code, out = run(["log", "--reverse", "--no-renames", "-z", "--format=%x1e%H%x1f%h%x1f%s",
+                     "--name-only", "%s..HEAD" % sha])
+    if code != 0:
+        raise Refusal("audit: git log cannot read %s..HEAD in %s" % (commit, display(repo)))
+    rows = []
+    for record in out.split("\x1e")[1:]:
+        head, _, names = record.partition("\0")
+        full, short, subject = (head.split("\x1f") + ["", ""])[:3]
+        paths = [p for p in (n.strip("\n") for n in names.split("\0")) if p and guarded(p)]
+        if paths and not subject.startswith(LANE):
+            rows.append({"sha": full, "short": short, "subject": subject,
+                         "paths": sorted(set(paths), key=paths.index)})
+    return sha, rows
+
+
+def cmd_edits(args, out, err):
+    """`audit --edits C [REPO]` (d37): the list, exit 0."""
+    names = list(getattr(args, "repos", None) or [])
+    if len(names) > 1 or getattr(args, "tree", None) is not None:
+        raise Refusal("audit: --edits reads one repo; name at most one REPO and no --tree")
+    if names:
+        if not os.path.isdir(names[0]):
+            raise Refusal("audit: %s is not a directory" % names[0])
+        where = names[0]
+    elif getattr(args, "ledger", None):
+        where = os.path.dirname(os.path.abspath(os.path.expanduser(args.ledger)))
+    else:
+        where = os.getcwd()
+    repo = git_top(where) if os.path.isdir(where) else None
+    if repo is None:
+        raise Refusal("audit: --edits reads a git checkout, and %s is in none" % display(where))
+    sha, rows = edits(repo, args.edits)
+    if getattr(args, "json", False):
+        out.write(json.dumps({"repo": repo, "after": sha, "edits": [
+            {"sha": r["sha"], "subject": r["subject"], "paths": r["paths"]} for r in rows]},
+            indent=2) + "\n")
+        return 0
+    if not rows:
+        out.write("audit --edits: no commit after %s touches instruction text without an "
+                  "`%s` subject\n" % (args.edits, LANE))
+        return 0
+    out.write("audit --edits: %d commit%s after %s touch instruction text without an `%s` "
+              "subject; read each\n" % (len(rows), "" if len(rows) == 1 else "s", args.edits,
+                                        LANE))
+    for r in rows:
+        out.write("%s %s  %s\n" % (r["short"], r["subject"], ", ".join(r["paths"])))
+    return 0
 
 
 def cmd_audit(args, path, out, err):
