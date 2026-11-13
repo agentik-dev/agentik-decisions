@@ -43,6 +43,11 @@ Verbs
                                   from git, with its next act; `check` walks
                                   open and closed rows for contradictions;
                                   writes nothing
+    describe --json | describe config --json [KEY]
+                                  this tool as one JSON object for the suite: its
+                                  verbs, needs and reads; `config` each setting it
+                                  reads here (no settings file): its value, where
+                                  it comes from and what changes it; writes nothing
     install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
                                   its `decisions` link and the `agentik` door
                                   under P (default ~/.local): 0, or 1 it could not
@@ -88,8 +93,8 @@ Verbs
                                   no ledger; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog`, `expire`, `analyze` and `rows` read no ledger and ignore it,
-and `questions` ignores it, reading the DECISIONS.md beside each REPO's file.
+working directory; `backlog`, `expire`, `analyze`, `rows` and `describe` read no ledger and
+ignore it, and `questions` ignores it, reading the DECISIONS.md beside each REPO's file.
 `--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -99,8 +104,9 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
        read; `questions` whenever its read ran, a lint problem or a skipped REPO
-       too; `expire` whenever its view printed or its move was made; `analyze`
-       and `audit` whenever its view printed; `answer` whose block write failed
+       too; `describe` whenever its read ran; `expire` whenever its view printed or
+       its move was made; `analyze` and `audit` whenever its view printed; `answer`
+       whose block write failed
        after both files were written (a warning on stderr names `agentik decisions
        render`)
     1  `render`: a lint problem, with --check a stale block or an absent tree's
@@ -116,7 +122,8 @@ Exit codes
        cannot read, --days under 1, or a --write whose NICE_TO_HAVE.md HEAD does
        not hold, whose files changed under it, or that failed, or an `audit`
        REPO that is not a directory or `--tree` FILE it cannot read, or an
-       `--edits` commit name git cannot resolve
+       `--edits` commit name git cannot resolve, or a `describe` without --json or
+       with a word other than `config`
 """
 
 import argparse
@@ -136,6 +143,8 @@ from .common import VERSION, Refusal
 from .doctor import cmd_doctor
 from .ledger import locate
 from .lookup import cmd_find, cmd_show
+from .plug import answer_failure, cmd_describe
+from .plug import schema_of as plug_schema
 from .render import cmd_render
 from .rows import cmd_rows
 
@@ -310,6 +319,14 @@ def build_parser():
                            "working directory's git top, whose git top is the home")
     rows.add_argument("--json", action="store_true")
 
+    describe = subs.add_parser("describe", parents=[ledger],
+                               help="this tool and its settings here, as JSON for the suite; "
+                                    "writes nothing")
+    describe.add_argument("words", nargs="*", metavar="[config [KEY]]",
+                          help="`config`: each setting read here; KEY: that one alone")
+    describe.add_argument("--json", action="store_true",
+                          help="required: the one form, a JSON object on stdout")
+
     install = subs.add_parser("install-cli",
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
@@ -340,9 +357,11 @@ def main(argv=None, out=None, err=None):
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             parser = build_parser()
             # rw2 review 1 F1: `rows` takes its words and options in any order; every
-            # other verb's leftover words are refused as `parse_args` refuses them.
+            # other verb's leftover words are refused as `parse_args` refuses them. ak6:
+            # `describe config --json KEY` too.
             args, extra = parser.parse_known_args(argv)
-            if extra and args.verb == "rows" and not any(w.startswith("-") for w in extra):
+            words = args.verb in ("rows", "describe")
+            if extra and words and not any(w.startswith("-") for w in extra):
                 args.words = list(args.words or []) + extra
             elif extra:
                 parser.error("unrecognized arguments: %s" % " ".join(extra))
@@ -354,6 +373,9 @@ def main(argv=None, out=None, err=None):
     if args.verb == "install-cli":
         return cmd_install_cli(args, out, err)
     try:
+        if args.verb == "describe":
+            # ak6: `describe` answers where there is no ledger, and reads none.
+            return cmd_describe(args, out, err)
         if args.verb == "doctor":
             # `doctor` finds the ledger for itself and reports its absence as a check.
             return cmd_doctor(args, out, err)
@@ -380,6 +402,13 @@ def main(argv=None, out=None, err=None):
     except Refusal as exc:
         err.write("decisions: %s\n" % exc)
         return 2
+    except (OSError, UnicodeError) as exc:
+        # ak6 review 1 R1-F1: one of the plug's reads that cannot run answers the contract's
+        # §2 object, exit 2; any other run fails as it did
+        schema = plug_schema(args)
+        if schema is None:
+            raise
+        return answer_failure(schema, exc, out)
 
 
 def cmd_install_cli(args, out, err):
@@ -393,4 +422,4 @@ VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
          "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
          "analyze": cmd_analyze, "audit": cmd_audit,
-         "rows": cmd_rows, "install-cli": cmd_install_cli}
+         "rows": cmd_rows, "describe": cmd_describe, "install-cli": cmd_install_cli}
