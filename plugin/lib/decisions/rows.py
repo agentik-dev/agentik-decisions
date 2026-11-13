@@ -21,6 +21,7 @@ from .backlog import (CELL_LEVEL, DATE_WORD, HANDOFF, HEADING, HOME_CELL, LEVEL,
                       ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red, gathered,
                       most_urgent, nice_items, short_name)
 from .common import Refusal, git_top, read_text
+from .speak import CONTROL, ESCAPE
 
 __all__ = ["cmd_rows", "table", "KEYS", "SCHEMA"]
 
@@ -415,6 +416,12 @@ def line_of(row):
     return "  ".join(p for p in parts if p)
 
 
+def clean(line):
+    """Review 1 F3: a text line less its terminal escapes and control characters, as
+    speak.py cleans the renderer's line; `--json` carries them as JSON escapes."""
+    return CONTROL.sub("", ESCAPE.sub("", line))
+
+
 def skipped_of(skipped):
     """[{repo, why, rows}] in first-seen order."""
     out = []
@@ -529,5 +536,5 @@ def cmd_rows(args, out, err):
         lines.append("checked %d rows under %s: %d stale" % (len(walked), root, reds))
     elif not opened:
         lines.append("no open rows under %s" % root)
-    out.write("\n".join(lines) + "\n")
+    out.write("\n".join(clean(line) for line in lines) + "\n")
     return 1 if check and reds else 0
