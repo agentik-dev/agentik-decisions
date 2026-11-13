@@ -15,6 +15,7 @@ stale; 2 for usage or no DIR, with `--json` an error object on stdout.
 import json
 import os
 import re
+import shlex
 
 from .backlog import (CELL_LEVEL, DATE_WORD, HANDOFF, HEADING, HOME_CELL, LEVEL, NICE,
                       ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red, gathered,
@@ -264,8 +265,9 @@ def judged(row, git, build):
     merge = os.path.join(row["folder"], MERGE)
     current = row["base"] is not None and row["base"] == row["main"]
     if current and row["rec"]["merge"]:
-        command = "agentik session gate land %s %s %s %s" % (row["path"], row["branch"],
-                                                              row["tip"], merge)
+        # review 1 F2: each part quoted for a POSIX shell, so a pasted line is four words
+        command = "agentik session gate land " + " ".join(
+            shlex.quote(part) for part in (row["path"], row["branch"], row["tip"], merge))
         return "ready", None, command, MERGE
     if row["tip"] and not current:
         return "reviewed", "phase 2: merge main into %s" % row["branch"], None, review["file"]

@@ -397,9 +397,9 @@ class Review1(Rows):
     F3 no control character in the text view, F4 a stage by its opening words, F5 a cell is
     the second cell, L1 an unreadable row.md skipped."""
 
-    def ready(self, branch):
+    def ready(self, branch, file="ready-1.txt"):
         """A row of `branch` under self.root that reads `ready`; its folder."""
-        tip = self.on_branch(branch, "ready-1.txt")
+        tip = self.on_branch(branch, file)
         self.row("p1-ready", branch=branch)
         self.build("p1-ready", 1, tip)
         self.review("p1-ready", 1, "%s..%s" % (self.base(branch)[:7], tip[:7]), ruling="closed")
@@ -448,7 +448,7 @@ class Review1(Rows):
         for name, view in (("my rows;$HOME 'q\"", "text"), ("rows\nwith a newline", "json")):
             self.root = os.path.join(self.hq, name)
             os.makedirs(self.root)
-            tip, folder = self.ready(branch)
+            tip, folder = self.ready(branch, "ready-%s.txt" % view)
             if view == "json":
                 command = self.view()["p1-ready"]["next"]["command"]
             else:
