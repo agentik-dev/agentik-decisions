@@ -33,6 +33,7 @@ CLAUDE.md: sibling                      # the plugin's name and its verbs
 Makefile: sibling                       # the plugin's name and its package path
 NICE_TO_HAVE.md: sibling                # the plugin's name
 history/NICE-2026-11-01.md: sibling     # the plugin's name, in the NICE frozen 2026-11-01
+history/NICE-overflow.md: sibling       # the plugin's name, in the S4 rows moved out of the NICE
 README.md: sibling                      # the plugin's name and its install lines
 pyproject.toml: sibling                 # the package is named for the plugin
 .claude/respeak/*: sibling              # this repo's own respeak config
