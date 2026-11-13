@@ -463,6 +463,16 @@ SHA_WORD = re.compile(r"^[0-9a-fA-F]{7,40}$")
 # (`g2` never matches `g2b-edit-gates`; a name never ends in `.`).
 NAME_END = r"(?![\w/+@-]|\.\w)"
 SKIP_WHY = "repo not named or absent"
+NO_MAIN = "no main branch, unreadable"
+WORD = re.compile(r"^`([^`]+)`[:.,]?$")
+
+
+def branch_word(word):
+    """r1 F5: a branch word less its surrounding backticks and one trailing `:`, `.` or `,`."""
+    m = WORD.match(word)
+    if m:
+        return m.group(1)
+    return word[:-1] if word[-1:] in (":", ".", ",") else word
 
 
 def reference(cell, names):
@@ -471,21 +481,23 @@ def reference(cell, names):
     with `<repo>` one of `names`, the table's repo column; `building [<repo>] <branch>`;
     `done <date> <sha>`; `watch:`; else its first word."""
     head = cell.split(";", 1)[0].strip()
-    words = [w.rstrip(",") for w in head.split()]
+    raw = head.split()
+    words = [w.rstrip(",") for w in raw]
     if head.startswith("waiting:"):
         rest = head[len("waiting:"):].strip()
-        w = [x.rstrip(",.") for x in rest.split()]
+        w = rest.split()
+        n = w[1].rstrip(",.") if len(w) >= 2 else ""
         if rest.startswith("the owner:"):
             return {"kind": "waiting", "on": "the owner"}
-        if len(w) >= 2 and w[0] in ("owner", "row") and w[1].isdigit():
-            return {"kind": "waiting", "on": w[0], "n": int(w[1])}
+        if len(w) >= 2 and w[0] in ("owner", "row") and n.isdigit():
+            return {"kind": "waiting", "on": w[0], "n": int(n)}
         if len(w) >= 2 and w[0] in names:
-            return {"kind": "waiting", "on": "branch", "repo": w[0], "branch": w[1]}
+            return {"kind": "waiting", "on": "branch", "repo": w[0], "branch": branch_word(w[1])}
         return {"kind": "waiting", "on": None}
     if words[:1] == ["building"] and len(words) >= 2:
         if len(words) >= 3 and words[1] in names:
-            return {"kind": "building", "repo": words[1], "branch": words[2]}
-        return {"kind": "building", "repo": None, "branch": words[1]}
+            return {"kind": "building", "repo": words[1], "branch": branch_word(raw[2])}
+        return {"kind": "building", "repo": None, "branch": branch_word(raw[1])}
     if words[:1] == ["done"]:
         date = words[1] if len(words) > 1 and DATE_WORD.match(words[1]) else None
         sha = words[2] if date and len(words) > 2 and SHA_WORD.match(words[2]) else None
@@ -532,11 +544,10 @@ class Git(object):
 
     def line(self):
         """[(sha, parents, committer date, subject)] of main's first-parent line, newest first;
-        main is `main` when it is a branch, else HEAD."""
+        a repo with no `main` branch is never read (r1 F3: its rows are skipped)."""
         if self._line is None:
-            main = "refs/heads/main" if self.tip("main") else "HEAD"
             out = self.run("log", "--first-parent", "--date=short",
-                           "--format=%H%x1f%P%x1f%cd%x1f%s", main, "--")
+                           "--format=%H%x1f%P%x1f%cd%x1f%s", "refs/heads/main", "--")
             self._line = []
             for record in (out or "").splitlines():
                 parts = record.split("\x1f")
@@ -593,7 +604,8 @@ def checked(path, steps, repos, home):
     by_name = {}
     for repo in repos:
         if os.path.isdir(repo) and git_top(repo):
-            by_name.setdefault(short_name(repo), os.path.realpath(repo))
+            real = os.path.realpath(repo)  # r1 F1: `.`, `pear/` and a link name the repo
+            by_name.setdefault(short_name(real), real)
     gits = {}
 
     def checkout(name):
@@ -624,6 +636,9 @@ def checked(path, steps, repos, home):
         if where is None:
             row["skipped"] = SKIP_WHY
             continue
+        if gits[where].tip("main") is None:
+            row["skipped"] = NO_MAIN
+            continue
         row["checked_in"] = where
         if branch is not None:
             row["red"], sha, date = building_red(gits[where], branch)
@@ -641,7 +656,7 @@ def moved(path, results):
     landed = [r for r in results if r["landed"] and r["reference"]["kind"] == "building"]
     if not landed:
         return None
-    lines = disk_text(path).split("\n")
+    lines = disk_text(path).splitlines(True)  # r1 F4: numbered as `build_order` numbers
     done = os.path.join(os.path.dirname(path), DONE_FILE)
     old = disk_text(done)
     last = next((l for l in reversed(old.splitlines()) if l.strip()), "")
@@ -656,7 +671,7 @@ def moved(path, results):
         r["cell"] = "done %s %s" % (r["landed"]["date"], r["landed"]["sha"])
         added.insert(0, "%s%d %s, %s" % (bullet, r["n"], r["item"], r["cell"]))
     sep = "" if not old or old.endswith("\n") else "\n"
-    return "\n".join(lines), done, old + sep + "".join(a + "\n" for a in added)
+    return "".join(lines), done, old + sep + "".join(a + "\n" for a in added)
 
 
 def cmd_check(args, out, err):
@@ -696,10 +711,11 @@ def cmd_check(args, out, err):
             lines.append("%d  %s  %s%s" % (r["n"], said(r["reference"]), r["red"],
                                            "; moved to %s" % DONE_FILE if r["n"] in written
                                            else ""))
-    skipped = [r for r in results if r["skipped"]]
-    if skipped:
-        lines.append("skipped (%s): %s" % (SKIP_WHY, ", ".join(
-            "%d %s" % (r["n"], r["reference"].get("repo") or r["repo"]) for r in skipped)))
+    for why in (SKIP_WHY, NO_MAIN):
+        skipped = [r for r in results if r["skipped"] == why]
+        if skipped:
+            lines.append("skipped (%s): %s" % (why, ", ".join(
+                "%d %s" % (r["n"], r["reference"].get("repo") or r["repo"]) for r in skipped)))
     lines.append("checked %d rows of %s: %d stale" % (len(results), os.path.basename(path),
                                                        len(left)))
     out.write("\n".join(lines) + "\n")
