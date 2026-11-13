@@ -24,7 +24,8 @@ def cmd_init(args, out, err):
     if not os.path.isdir(folder):
         raise Refusal("init: %s is no folder; nothing written" % folder)
     target = os.path.join(folder, TARGET)
-    if is_ledger(target, path):
+    # dc1 r1 F3: by name, never by the disk, so `claude.md` refuses on a disk of either case
+    if os.path.basename(path).casefold() == TARGET.casefold() or is_ledger(target, path):
         raise Refusal("init: the ledger %s would be its own CLAUDE.md; nothing written"
                       % display(path))
     old = read_text(target) if os.path.exists(target) else ""

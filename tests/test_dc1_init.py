@@ -257,3 +257,13 @@ class ReviewOne(Base):
         self.assertEqual(self.read(self.ledger), EMPTY)
         self.assertEqual(self.read(self.claude), "hand\n\n" + BLOCK)
 
+    def test_f3_a_ledger_named_claude_md_in_any_case(self):
+        # by name, never by the disk, so it holds on a case-sensitive disk too
+        os.mkdir(os.path.join(self.repo, "docs"))
+        for name in ("claude.md", "Claude.MD", os.path.join("docs", "cLaUdE.md")):
+            before = snapshot(self.repo)
+            code, out, err = self.run_cli("init", "--ledger", name)
+            self.assertEqual(code, 2, (name, out))
+            self.assertIn("its own CLAUDE.md", err)
+            self.assertEqual(snapshot(self.repo), before, name)
+
