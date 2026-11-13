@@ -81,6 +81,8 @@ class Head(Repo, Base):
             argv[argv.index("--title") + 1] = title
         code, _, err = self.run_cli(*argv)
         self.assertEqual(code, 0, err)
+        # d41: these cases pin d35's HEAD rule, so every block holds no base line
+        self.restamp(unstamp=True)
 
     def answer(self, *argv):
         out, err = io.StringIO(), io.StringIO()
