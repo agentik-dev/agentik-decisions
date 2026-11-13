@@ -147,3 +147,11 @@ class Lists(Home):
         self.assertEqual(self.checkout_list(b"CLAUDE.md\nplum\x00x\ndocs\x00y\n"), [])
         self.put(self.owner, b"~/work/orchard/pear/x\x00y\n")
         self.assertEqual([l for l in self.render("--lint")[2].splitlines() if GATES in l], [])
+
+    def test_r5_an_undecodable_byte_silences_no_other_line(self):
+        warned = self.checkout_list(b"CLAUDE.md\n\xff\n/abs/x\n")
+        self.assertEqual(len(warned), 1, warned)
+        self.assertIn(":3:", warned[0])
+        self.put(self.owner, b"\xff\n~/work/orchard/pear/z\n")
+        owner = [l for l in self.render("--lint")[2].splitlines() if "lies under" in l]
+        self.assertEqual(len(owner), 1, owner)

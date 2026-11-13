@@ -167,8 +167,12 @@ def list_gate(target, err=None, verb="render"):
 def _list_lines(gates):
     """(number, line) of each non-comment line of the list `gates`; none when it is absent."""
     try:
-        text = read_text(gates) if os.path.isfile(gates) else ""
-    except (OSError, Refusal):
+        if os.path.isfile(gates):
+            with open(gates, encoding="utf-8", errors="replace") as handle:  # n80
+                text = handle.read()
+        else:
+            text = ""
+    except OSError:
         return []
     return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
             if l.strip() and not l.strip().startswith("#")]
