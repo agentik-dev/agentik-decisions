@@ -88,7 +88,8 @@ class Orchard(Hermetic):
         """HANDOFF.md with `rows`, each (n, repo, state)."""
         body = "".join("| %d | Row %d of the orchard | S3 | %s | `x.md` | %s |\n" % (n, n, repo, s)
                        for n, repo, s in rows)
-        self.put(self.handoff, "# Handoff\n\n## The build order\n\n" + HEADER + body
+        self.put(self.handoff, "# Handoff\n\n<!-- decisions: build order -->\n\n"
+                 "## The build order\n\n" + HEADER + body
                  + "\n## After\n\nProse.\n")
 
     def check(self, *argv, repos=None):
@@ -150,9 +151,9 @@ class Reds(Orchard):
     def test_waiting_on_a_branch_is_checked_as_building(self):
         got, _ = self.reds((1, "suite", "waiting: pear p1-live; its review"),
                            (2, "suite", "waiting: pear p2-done"),
-                           (3, "suite", "waiting: pear p9-none"))
+                           (3, "suite", "waiting: pear p9-none"), (9, "pear", "open"))
         self.assertEqual(got, {1: None, 2: "stale: landed %s %s" % (self.p2_merge[:7], DATE),
-                               3: "stale: branch gone"})
+                               3: "stale: branch gone", 9: None})
 
     def test_the_owners_text_and_watch_are_never_red(self):
         got, code = self.reds((1, "hq", "waiting: the owner: picks the pears"),
@@ -161,8 +162,14 @@ class Reds(Orchard):
         self.assertEqual(code, 0)
 
     def test_a_suite_row_building_another_repos_branch(self):
-        got, _ = self.reds((1, "suite", "building pear p2-done"), (2, "suite", "building pear g2"))
-        self.assertEqual(got, {1: "stale: landed %s %s" % (self.p2_merge[:7], DATE), 2: None})
+        got, _ = self.reds((1, "suite", "building pear p2-done"), (2, "suite", "building pear g2"),
+                           (9, "pear", "open"))
+        self.assertEqual(got, {1: "stale: landed %s %s" % (self.p2_merge[:7], DATE), 2: None,
+                               9: None})
+
+    def test_a_repo_is_a_name_of_the_tables_repo_column(self):
+        got, _ = self.reds((1, "suite", "waiting: pear p9-none"), (2, "suite", "building pear g2"))
+        self.assertEqual(got, {1: None, 2: "stale: branch gone"})
 
     def test_the_text_view_prints_one_line_a_red(self):
         self.table((1, "pear", "building p1-live"), (2, "pear", "building p9-none; later"))
