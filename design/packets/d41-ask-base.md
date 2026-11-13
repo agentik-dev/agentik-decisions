@@ -40,7 +40,9 @@ The fault, measured at `f55e5f8` with a hand script in temp dirs: after `new`, a
 
 ## 4. Findings that name this row: ledger, NICE, forks
 
-n41 leaves `NICE_TO_HAVE.md`; two rows join: `head_block`'s removal once no base-less block is left, and "a deleted base line puts its block under HEAD's rule". The owner's fork, built as recommended: an editor shows the base line, a comment under each heading.
+n41 leaves `NICE_TO_HAVE.md`; two rows join: n82, `head_block`'s removal once no base-less block is left, and n83, a damaged or deleted base line puts its block under HEAD's rule. The owner's fork is closed: the base line as built, decision 39 (2026-11-12).
+
+Round 1 of the review: 2 findings, 0 blocking, both to NICE: F1 is n83 reworded (a damaged base line, then a commit and `ask`'s stamp, loses the words even under `--other`), F2 is n84 (a second base-shaped line the owner types leaves `Block.text`). The last pass also files n85 and n86 from d39's review r1 (`backlog --check`), and merges main at `9e87c4b` (vendored scripts) on the coordinator's word; nothing under `plugin/` changed after the version commit.
 
 ## 5. Forbidden reads
 
