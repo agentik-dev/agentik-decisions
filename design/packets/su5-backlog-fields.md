@@ -40,7 +40,7 @@ The table's four rows: `3 | S2 | pear | waiting: the owner: opens the gate; then
 | 6 | held: `tests/test_backlog.py` (but §4), `test_d39_backlog_check`, `test_d43_backlog_built_on`, `test_expire` | green |
 | 7 | `make check` green through the queue, once, last | |
 
-## 4. Where the brief and the code part
+## 4. Findings that name this row: where the brief and the code part
 
 - `tests/test_backlog.py`'s `test_json_fields` holds a `N. ` list step to exactly `{n, line, title, done}`, which R3, R5 and line 4 change; its one assertion gains `level` and `state`. The brief's held line says that file passes with no edit: the rulings win.
 - R4's names need the REPOs named, which only `cmd_backlog` knows: `as_json` takes them as an argument and `cmd_backlog`'s `--json` call passes them, its one changed line.
