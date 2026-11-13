@@ -135,6 +135,17 @@ def _gate_line(target):
         "~/" + target[len(home) + 1:] if target.startswith(home + os.sep) else target)
 
 
+def _spelled(path):
+    """`path` by its real path, the home folder written as the user spells it, then as
+    `display` writes it."""
+    real = os.path.realpath(path)
+    spelled_home = os.path.expanduser("~").rstrip(os.sep)
+    real_home = os.path.realpath(spelled_home)
+    if real.startswith(real_home + os.sep):
+        real = spelled_home + real[len(real_home):]
+    return display(real)
+
+
 def list_gate(target, err=None, verb="render"):
     """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
     gate refuses an edit of it: a file in a checkout (found from its real path) in that
@@ -144,7 +155,7 @@ def list_gate(target, err=None, verb="render"):
     `.claude/edit-gates`, by its name; else the owner's list, absolute. Never a file under a
     `tests`, `testdata` or `fixtures` folder. Never raises: a list it cannot write is one
     warning on `err` (r1 F2). Returns the list written, or None."""
-    gates = target
+    gates = None
     try:
         found = _gate_line(target)
         if found is None:
@@ -159,8 +170,12 @@ def list_gate(target, err=None, verb="render"):
         write_text(gates, text + line + "\n")
         return gates
     except (OSError, ValueError, Refusal) as why:
-        (err or sys.stderr).write("%s: warning: %s is not listed: %s cannot be written (%s)\n"
-                                  % (verb, display(target), display(gates), why))
+        # n81: target and list are spelled one way, by real path under the home folder's real
+        # path; a line that could not be made names the target once
+        what = ("%s cannot be written" % _spelled(gates) if gates is not None
+                else "its line cannot be resolved")
+        (err or sys.stderr).write("%s: warning: %s is not listed: %s (%s)\n"
+                                  % (verb, _spelled(target), what, why))
         return None
 
 

@@ -155,3 +155,26 @@ class Lists(Home):
         self.put(self.owner, b"\xff\n~/work/orchard/pear/z\n")
         owner = [l for l in self.render("--lint")[2].splitlines() if "lies under" in l]
         self.assertEqual(len(owner), 1, owner)
+
+    def test_r6_the_warning_spells_target_and_list_one_way(self):
+        os.makedirs(os.path.join(self.repo, "sub"))
+        link = os.path.join(self.home, "link")
+        os.symlink(os.path.join(self.repo, "sub"), link)
+        self.put(os.path.join(self.repo, ".claude"), b"")
+        code, _, err = self.render("--into", os.path.join(link, "CLAUDE.md"))
+        self.assertEqual(code, 0, err)
+        warned = [l for l in err.splitlines() if "warning" in l]
+        self.assertEqual(len(warned), 1, err)
+        self.assertNotIn("link", warned[0])
+        self.assertIn("is not listed: ~/work/orchard/pear/.claude/%s cannot be written" % GATES,
+                      warned[0])
+        self.assertIn("~/work/orchard/pear/sub/CLAUDE.md is not listed", warned[0])
+
+    def test_r6_a_line_that_cannot_be_made_says_it_cannot_be_resolved(self):
+        target = os.path.join(self.home, "work", "orchard", "pear", "CLAUDE.md")
+        err = io.StringIO()
+        with mock.patch("decisions.render._gate_line", side_effect=OSError("too many links")):
+            self.assertIsNone(list_gate(target, err))
+        text = err.getvalue()
+        self.assertEqual(text.count("CLAUDE.md"), 1, text)
+        self.assertIn("is not listed: its line cannot be resolved (too many links)", text)
