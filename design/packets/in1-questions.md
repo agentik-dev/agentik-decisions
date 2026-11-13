@@ -48,6 +48,8 @@ The ledger, cited: hq entry 6 (`/usr/bin/python3` at a 3.9 floor, the standard l
 
 None filed. Entry 9's "six verbs" sentences stay. No fork for the owner.
 
+Round 1 of the review: 1 finding, fixed in the phase 2 after main's merge at `f8da965` (su5): F1, `decided.newest` took any `NNNN-NN-NN` run, a malformed date or one cut from a longer run; it now keeps only a whole stamp that is a day of the calendar (three cases in `tests/test_in1_questions.py`). Its leads go to NICE: L1 is n89, L2 n90 (S3), L3 with L4 n91, L5 n92. The phase 2 also files su5's review r1 leads: L1 with L3 is n93, L5 n94. Version 0.21.16.
+
 ## 5. Forbidden reads
 
 No transcript, no live state root, no gate ledger, no file under `~/.claude`, no real ledger or questions file.
