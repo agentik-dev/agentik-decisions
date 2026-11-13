@@ -171,14 +171,16 @@ def _list_lines(gates):
     except (OSError, Refusal):
         return []
     return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
-            if l.strip() and not l.strip().startswith("#") and "\0" not in l]
+            if l.strip() and not l.strip().startswith("#")]
 
 
 def _checkout_warning(gates, top, up, n, line, keep):
     first = os.path.join(up, line.split("/")[0])
-    if line.startswith(("/", "~", "..")):
+    if line.startswith(("/", "~", "..")):  # n79: before a NUL line is skipped
         return ["%s:%d: `%s` reaches outside the checkout; %s"
-                % (real_tilde(gates), n, line, keep)]
+                % (real_tilde(gates), n, line.replace("\0", "\\0"), keep)]
+    if "\0" in line:  # no path call takes a NUL, and a line with none is not worth a warning
+        return []
     if line.split("/")[0] not in ("", ".") and first != top and os.path.isdir(first) \
             and not os.path.lexists(os.path.join(top, line.split("/")[0])):
         return ["%s:%d: `%s` names %s, a folder beside the checkout; %s"
@@ -216,6 +218,8 @@ def gate_warnings(path):
     home = os.path.expanduser("~").rstrip(os.sep)
     owner = os.path.join(_owner_folder(), GATES)
     for n, line in _list_lines(owner):
+        if "\0" in line:
+            continue
         try:
             layer = _lower_layer(line, home)
         except (OSError, ValueError):

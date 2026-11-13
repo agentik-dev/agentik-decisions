@@ -13,9 +13,10 @@ import unittest
 from unittest import mock
 
 import decisions
-from decisions.render import head_holds
+from decisions.render import GATES, head_holds, list_gate
 from tests import gates
 from tests.hermetic import Hermetic
+from tests.test_d38_gate_layers import Home
 from tests.test_expire import Fixture, git, repo_at
 from tests.test_render import FIXTURE
 
@@ -117,3 +118,32 @@ class GatesWalkThePlugin(unittest.TestCase):
             status = gates.main(["--skips-allow", "skips.allow"])
         self.assertEqual(status, 0)
         self.assertFalse(hasattr(gates, "shebang_gate"))
+
+
+class Lists(Home):
+    """R4 to R6 (n79, n80, n81): what `render --lint` reads from a list and how the
+    cannot-be-listed warning spells its paths."""
+
+    def put(self, path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+    def checkout_list(self, data):
+        self.put(os.path.join(self.repo, ".claude", GATES), data)
+        code, _, err = self.render("--lint")
+        self.assertEqual(code, 0, err)
+        return [l for l in err.splitlines() if GATES in l]
+
+    def test_r4_a_nul_line_with_an_outside_prefix_warns_once(self):
+        warned = self.checkout_list(b"/abs\x00x\n")
+        self.assertEqual(len(warned), 1, warned)
+        self.assertIn("reaches outside the checkout", warned[0])
+        for line in (b"~/x\x00y\n", b"../plum\x00x\n"):
+            self.assertEqual(len(self.checkout_list(line)), 1, line)
+
+    def test_r4_a_nul_line_with_no_such_prefix_is_skipped_silently(self):
+        os.makedirs(os.path.join(os.path.dirname(self.repo), "plum"))
+        self.assertEqual(self.checkout_list(b"CLAUDE.md\nplum\x00x\ndocs\x00y\n"), [])
+        self.put(self.owner, b"~/work/orchard/pear/x\x00y\n")
+        self.assertEqual([l for l in self.render("--lint")[2].splitlines() if GATES in l], [])
