@@ -44,6 +44,12 @@ Verbs
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
                                   repo or `suite`; writes nothing
+    backlog --check --order FILE [REPO...] [--write] [--json]
+                                  each row's state cell held against git in its
+                                  repo (`hq` and `suite` rows in FILE's checkout;
+                                  a row of a REPO absent or not named is skipped);
+                                  --write moves a landed `building` row out to
+                                  history/handoff-done.md
     expire [REPO...] [--order FILE] [--days N] [--write] [--json]
                                   the closed NICE items and the S4 ones older
                                   than N days (14) on no open step; --write
@@ -84,7 +90,8 @@ Exit codes
        after both files were written (a warning on stderr names `agentik decisions
        render`)
     1  `render`: a lint problem, with --check a stale block or an absent tree's
-       file, or under --ceiling a file over its ceiling
+       file, or under --ceiling a file over its ceiling; `backlog --check`: a
+       stale state cell left
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
@@ -228,6 +235,12 @@ def build_parser():
                          help="one HANDOFF.md for every REPO: its steps whose `repo` cell "
                               "is the repo's name less `agentik-`, or `suite`")
     backlog.add_argument("--json", action="store_true")
+    backlog.add_argument("--check", action="store_true",
+                         help="with --order: each row's state cell against git; exit 1 "
+                              "on a stale one")
+    backlog.add_argument("--write", action="store_true",
+                         help="with --check: move each landed `building` row out to "
+                              "history/handoff-done.md")
 
     expire = subs.add_parser("expire", parents=[ledger],
                              help="move closed and old S4 NICE items to history/NICE-overflow.md")

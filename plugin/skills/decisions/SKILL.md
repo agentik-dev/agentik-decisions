@@ -68,7 +68,10 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
 - Settle a reversible choice inside the design, and log it
   under `## Decided without asking` in OPEN-QUESTIONS.md.
 - Before taking S4 work, run `agentik-decisions backlog`, which places each item of
-  NICE_TO_HAVE.md against the build order in HANDOFF.md.
+  NICE_TO_HAVE.md against the build order in HANDOFF.md. `agentik-decisions backlog
+  --check --order HANDOFF.md <repos>` holds each row's state cell against git and exits 1
+  on a stale one; `--check --write` moves a landed `building` row to
+  history/handoff-done.md.
 - Close a NICE_TO_HAVE.md item by opening its `finding`, or its bullet, with
   `Closed YYYY-MM-DD <sha, history file or void>: ` and then its lead, shortened so the
   row fits. `agentik-decisions expire` then lists it, with the open S4 items

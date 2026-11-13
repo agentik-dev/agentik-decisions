@@ -106,11 +106,21 @@ def _below(path, folder):
 
 def _gate_line(target):
     """(list, line) for `target` by `list_gate`'s layers, or None for an exempt file."""
+    home = os.path.expanduser("~").rstrip(os.sep)
+    spelled = os.path.abspath(target)
+    # d39 R7: the owner's folders are tested on the spelled path first, so the owner's file
+    # that is a link into a checkout (a dotfiles one) stays the owner's; the spelled pair
+    # alone (r1 F2), so a config folder that links into a checkout does not take a file
+    # spelled inside that checkout.
+    owners = (_owner_folder(), os.path.join(home, ".claude"))
+    if any(spelled.startswith(os.path.abspath(f).rstrip(os.sep) + os.sep) for f in owners) \
+            and not GATE_EXEMPT.intersection(spelled.split(os.sep)[:-1]):
+        return os.path.join(_owner_folder(), GATES), (
+            "~/" + spelled[len(home) + 1:] if spelled.startswith(home + os.sep) else spelled)
     real = os.path.realpath(target)
     top = _checkout_top(real)  # r1: a link into a checkout is that checkout's file
-    target = real if top is not None else os.path.abspath(target)
+    target = real if top is not None else spelled
     top = top if top is not None else _checkout_top(target)
-    home = os.path.expanduser("~").rstrip(os.sep)
     folder = os.path.dirname(target)
     if top is not None:
         parts = os.path.relpath(target, top).split(os.sep)
