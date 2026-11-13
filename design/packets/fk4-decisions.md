@@ -5,7 +5,7 @@
 | from | the hq's coordinator, 2026-11-13, brief fk4 |
 | pin | main at `ba33fc7` (0.21.20, after ak6). Version 0.22.3 (dc1-init lands 0.22.2 first). Worktree `.claude/worktrees/fk4-decisions`, branch `fk4-decisions`, nothing linked |
 | wall | this worktree; no push, `--amend`, rebase, merge, install or bare `make`; no test starts the real `claude` or suite, or reads the live home |
-| may touch | `plugin/lib/decisions/speak.py`, `doctor.py`, `plug.py` and `scripts/readme-render` (the two callers of `newest_root`); `tests/test_fk4_source.py` (new), `tests/test_backlog.py` (one assertion), `tests/test_ak6_plug.py` (a fixture: the installed file R3 now reads); the version places, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
+| may touch | `plugin/lib/decisions/speak.py`, `doctor.py`, `plug.py` and `scripts/readme-render` (the two callers of `newest_root`); `tests/test_fk4_source.py` (new), `tests/test_backlog.py` (one assertion), `tests/test_ak6_plug.py` (a fixture: the installed file R3 now reads; respeak's check's key list gains `source`), `tests/test_readme.py` (the two `--cache` cases: a temp HOME, and the installed file decides); the version places, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
 | verify | the gate queue's `make check`, once, last |
 | acceptance | §3; `python -m unittest tests.test_fk4_source tests.test_backlog tests.test_bare_machine tests.test_doctor tests.test_ak6_plug` |
 | budget | about 90 tool calls |

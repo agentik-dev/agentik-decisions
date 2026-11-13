@@ -19,7 +19,7 @@ from .common import VERSION, Refusal, git_top
 from .doctor import PLUGIN
 from .ledger import IN_FORCE_CAP, locate
 from .rows import ROOT
-from .speak import RENDER, newest_root, respeak_root
+from .speak import RENDER, respeak_root
 from .tree import CEILINGS
 
 __all__ = ["cmd_describe", "describe", "config", "settings", "SUMMARIES", "USAGE"]
@@ -122,8 +122,10 @@ def settings(cwd, env):
     home = env.get("HOME") or os.path.expanduser("~")
     cache = os.path.join(home, ".claude", "plugins", "cache")
     # the contract's §4: each layer that sets the key, lowest first; the variable sets it
-    # whenever it is not empty, as `respeak_root` reads it, whether or not it names a renderer
-    shipped, named = newest_root(cache), env.get(ENV) or None
+    # whenever it is not empty, as `respeak_root` reads it, whether or not it names a renderer;
+    # the default layer is the root found without it (fk4: the suite's sources, else the file)
+    shipped = respeak_root({k: v for k, v in env.items() if k != ENV}, cache)
+    named = env.get(ENV) or None
     layered = ([{"layer": "default", "value": shipped}] if shipped else []) + (
         [{"layer": "env", "value": named}] if named else [])
     top = _top(cwd)
