@@ -171,7 +171,7 @@ class Round1(Home):
     def test_f1_a_nul_in_either_list_drops_that_line_only(self):
         before = self.render("--lint")[0]
         self.put(self.owner, b"~/work/orchard/pear/x\x00y\n~/work/orchard/pear/z\n")
-        self.put(os.path.join(self.repo, ".claude", GATES), b"/abs\x00x\nCLAUDE.md\n")
+        self.put(os.path.join(self.repo, ".claude", GATES), b"CLAUDE\x00x\nCLAUDE.md\n")
         code, _, err = self.render("--lint")
         self.assertEqual(code, before, err)
         warned = [l for l in err.splitlines() if GATES in l]

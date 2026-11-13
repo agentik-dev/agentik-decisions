@@ -97,7 +97,7 @@ from .lookup import pick_area
 from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, growth, is_ledger, list_gate,
                      tail_note,
                      tree_file)
-from .tree import ceiling_for, loaded_bytes
+from .tree import REPO_VARIABLES, ceiling_for, loaded_bytes
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
 
@@ -212,9 +212,8 @@ def named(block, typed):
 
 
 # a hook's GIT_DIR=.git or a caller's GIT_DIR naming another repository would make HEAD
-# that repository's, so `head_block`'s git children run without them (d35 round 1)
-REPO_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
-                  "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE")
+# that repository's, so `head_block`'s git children run without `tree.REPO_VARIABLES`, the
+# one list `render.head_holds` drops too (d35 round 1; d40 R1)
 
 
 def head_block(path_q, number):

@@ -54,7 +54,7 @@ from .common import (GIT_TIMEOUT, Refusal, bounded, disk_text, held, keeps_crlf,
 from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_parenthetical,
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
-from .tree import (SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
+from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
                    named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
@@ -135,6 +135,18 @@ def _gate_line(target):
         "~/" + target[len(home) + 1:] if target.startswith(home + os.sep) else target)
 
 
+def _spelled(path):
+    """`path` by its real path, the home folder written as the user spells it, then as
+    `display` writes it."""
+    real = os.path.realpath(path)
+    spelled_home = os.path.expanduser("~").rstrip(os.sep)
+    # a home of `/` spells as "", and realpath("") is the working folder: no rewrite then
+    real_home = os.path.realpath(spelled_home).rstrip(os.sep) if spelled_home else ""
+    if spelled_home and real_home and real.startswith(real_home + os.sep):
+        real = spelled_home + real[len(real_home):]
+    return display(real)
+
+
 def list_gate(target, err=None, verb="render"):
     """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
     gate refuses an edit of it: a file in a checkout (found from its real path) in that
@@ -144,7 +156,7 @@ def list_gate(target, err=None, verb="render"):
     `.claude/edit-gates`, by its name; else the owner's list, absolute. Never a file under a
     `tests`, `testdata` or `fixtures` folder. Never raises: a list it cannot write is one
     warning on `err` (r1 F2). Returns the list written, or None."""
-    gates = target
+    gates = None
     try:
         found = _gate_line(target)
         if found is None:
@@ -159,27 +171,39 @@ def list_gate(target, err=None, verb="render"):
         write_text(gates, text + line + "\n")
         return gates
     except (OSError, ValueError, Refusal) as why:
-        (err or sys.stderr).write("%s: warning: %s is not listed: %s cannot be written (%s)\n"
-                                  % (verb, display(target), display(gates), why))
+        # n81: target and list are spelled one way, by real path under the home folder's real
+        # path; a line that could not be made names the target once
+        what = ("%s cannot be written" % _spelled(gates) if gates is not None
+                else "its line cannot be resolved")
+        (err or sys.stderr).write("%s: warning: %s is not listed: %s (%s)\n"
+                                  % (verb, _spelled(target), what, why))
         return None
 
 
 def _list_lines(gates):
     """(number, line) of each non-comment line of the list `gates`; none when it is absent."""
     try:
-        text = read_text(gates) if os.path.isfile(gates) else ""
-    except (OSError, Refusal):
+        if os.path.isfile(gates):
+            with open(gates, encoding="utf-8", errors="replace") as handle:  # n80
+                text = handle.read()
+        else:
+            text = ""
+    except OSError:
         return []
     return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
-            if l.strip() and not l.strip().startswith("#") and "\0" not in l]
+            if l.strip() and not l.strip().startswith("#")]
 
 
 def _checkout_warning(gates, top, up, n, line, keep):
     first = os.path.join(up, line.split("/")[0])
-    if line.startswith(("/", "~", "..")):
+    if line.startswith(("/", "~", "..")):  # n79: before a NUL line is skipped
         return ["%s:%d: `%s` reaches outside the checkout; %s"
-                % (real_tilde(gates), n, line, keep)]
-    if line.split("/")[0] not in ("", ".") and first != top and os.path.isdir(first) \
+                % (real_tilde(gates), n, line.replace("\0", "\\0"), keep)]
+    if "\0" in line:  # no path call takes a NUL, and a line with none is not worth a warning
+        return []
+    # a U+FFFD is a byte the list could not decode (n80), so no folder was named by it
+    if "\ufffd" not in line and line.split("/")[0] not in ("", ".") and first != top \
+            and os.path.isdir(first) \
             and not os.path.lexists(os.path.join(top, line.split("/")[0])):
         return ["%s:%d: `%s` names %s, a folder beside the checkout; %s"
                 % (real_tilde(gates), n, line, real_tilde(first), keep)]
@@ -216,6 +240,8 @@ def gate_warnings(path):
     home = os.path.expanduser("~").rstrip(os.sep)
     owner = os.path.join(_owner_folder(), GATES)
     for n, line in _list_lines(owner):
+        if "\0" in line:
+            continue
         try:
             layer = _lower_layer(line, home)
         except (OSError, ValueError):
@@ -314,17 +340,21 @@ def head_holds(path, data):
     name in another case, a link, an index told not to look."""
     real = os.path.realpath(path)
     where, name = os.path.dirname(real), os.path.basename(real)
+    # git's repository variables are dropped from each child (n43), so HEAD is the repository
+    # that holds the file, whatever a hook or a caller exports
+    env = {key: value for key, value in os.environ.items() if key not in REPO_VARIABLES}
     try:
         code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
-                            GIT_TIMEOUT, cwd=where)
+                            GIT_TIMEOUT, cwd=where, env=env)
         sha = out.strip()
         if code != 0 or not sha:
             return None
         blob = subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, name)],
-                              cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+                              cwd=where, env=env, capture_output=True, timeout=GIT_TIMEOUT)
         if blob.returncode != 0 or blob.stdout != data:
             return None
-        code, out = bounded(["git", "rev-parse", "--short", sha], GIT_TIMEOUT, cwd=where)
+        code, out = bounded(["git", "rev-parse", "--short", sha], GIT_TIMEOUT, cwd=where,
+                            env=env)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return out.strip() if code == 0 and out.strip() else None

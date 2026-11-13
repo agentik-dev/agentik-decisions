@@ -186,6 +186,16 @@ class Analyze(Hermetic):
         self.assertEqual((analyze.percent(1, 8), analyze.percent(1, 3)), (13, 33))
         self.assertEqual(self.text(self.repo("A")).splitlines()[-1], NOT_COMPUTED)
 
+    def test_two_rules_fitting_one_path_the_first_of_the_design_wins(self):
+        """n19: `docs/tests/x.md` fits the design rule (a file below `docs/`) and the test
+        rule (a `tests` folder); the earlier rule, design, wins, and so a vendor folder beats
+        both, since vendor is the first rule."""
+        from decisions import analyze
+        for path, cls in (("docs/tests/x.md", "design"), ("tests/docs/x.md", "test"),
+                          ("design/packets/tests/x.md", "packets"),
+                          ("docs/vendor/x.md", "vendor"), ("tests/vendor/x.py", "vendor")):
+            self.assertEqual(analyze.path_class(path), cls, path)
+
     def test_known_no_landing(self):
         out = self.text(self.repo("A"))
         self.assertEqual(out.splitlines(), [
