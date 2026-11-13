@@ -39,6 +39,7 @@ PHASE_2 = "phase 2"
 # Review 1 F4: R3's four stages, read by a cell's opening words.
 STAGE = re.compile(r"^(first build|fix of review [0-9]+|phase 2|cut)(?![\w-])")
 GATE_STATUS = "agentik session gate status"
+UNREADABLE = "unreadable"
 # R6: a row's keys, in this order.
 KEYS = ("row", "repo", "level", "from", "depends_on", "waits", "state", "stale", "branch",
         "worktree", "tip", "dirty", "past", "record", "head", "gate", "ruling", "owed", "next")
@@ -373,7 +374,12 @@ def gathered_rows(root, repos, closed):
         folder = os.path.join(root, name)
         if not os.path.isfile(os.path.join(folder, ROW)):
             continue
-        rec = records(folder)
+        try:
+            rec = records(folder)
+        except (Refusal, OSError):
+            # review 1 L1: a record that is not text skips its row; the read goes on
+            skipped.append((None, UNREADABLE, name))
+            continue
         if rec["done"]["state"] == "withdrawn":
             continue
         cells = rec["cells"]
@@ -539,8 +545,8 @@ def cmd_rows(args, out, err):
             lines.append(line_of(row))
             lines.extend("  stale: %s" % what for what in row["stale"])
     for group in skipped:
-        lines.append("skipped (%s): %s: %s" % (group["why"], group["repo"],
-                                               ", ".join(group["rows"])))
+        lines.append("skipped (%s): %s%s" % (group["why"], "" if group["repo"] is None
+                                             else group["repo"] + ": ", ", ".join(group["rows"])))
     if check:
         lines.append("checked %d rows under %s: %d stale" % (len(walked), root, reds))
     elif not opened:
