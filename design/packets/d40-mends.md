@@ -7,10 +7,14 @@
 | wall | this worktree; no push, `--amend`, rebase, merge or install; no bare `make` (the gate queue only); no test reads live state |
 | may touch | `plugin/lib/decisions/render.py`, `answer.py`, `tree.py` (R1 only), and `plugin/lib` files pyflakes names (R2); `tests/gates.py`; `tests/test_d40_mends.py` (new), `tests/test_analyze.py`; `NICE_TO_HAVE.md` (the six rows leave); the version places, `tests/test_plugin.py`, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet |
 | verify | the gate queue's `make check`, once, last |
-| acceptance | the table in §2; `PYTHONPATH=plugin/lib python3 -m unittest tests.test_d40_mends` |
+| acceptance | the table in §3; `PYTHONPATH=plugin/lib python3 -m unittest tests.test_d40_mends` |
 | budget | about 90 tool calls |
 
-## 1. Rulings (one commit each, its test red at the pin)
+## 1. What the source says: the code at the pin
+
+Six rows of `NICE_TO_HAVE.md` (n1, n19, n43, n79, n80, n81) hold the evidence; the owner's words are none new.
+
+## 2. Rulings (one commit each, its test red at the pin)
 
 - R1 n43: `head_holds` runs its git children without git's repository variables; one list, `tree.REPO_VARIABLES`, which `answer` now imports instead of keeping its own (`answer` imports `render`, so `render` cannot import `answer`).
 - R2 n1: `plugin/lib` joins `ROOTS`; the shebang gate goes; the checkout runner `src/decisions.py` stays when anything names it.
@@ -19,7 +23,7 @@
 - R5 n80: the list is read with `errors="replace"`.
 - R6 n81: the cannot-be-listed warning spells target and list one way; the unmakeable line says "cannot be resolved". No other message changes; no new flag.
 
-## 2. Acceptance
+## 3. Interfaces: the acceptance table
 
 | # | line | at the pin |
 |---|---|---|
@@ -30,3 +34,15 @@
 | 5 | one `\xff` line and one warning line: the warning prints | red |
 | 6 | one spelling for the two paths; "cannot be resolved" for the unmakeable line | red |
 | 7 | `make check` green through the queue, once, last | |
+
+## 4. Findings that name this row: ledger, NICE, forks
+
+The six rows above leave `NICE_TO_HAVE.md` in the last commit but the version's. No fork.
+
+## 5. Forbidden reads
+
+No transcript, no live state root, no file under `~/.claude`.
+
+## 6. Report
+
+The hand-back to the hq's coordinator, at most 35 lines.
