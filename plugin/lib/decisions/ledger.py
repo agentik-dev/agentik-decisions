@@ -394,7 +394,21 @@ def where(ledger=None, cwd=None):
     if ledger:
         seps = tuple(filter(None, (os.sep, os.altsep)))
         raw = os.path.expanduser(ledger)
-        full = os.path.abspath(os.path.join(cwd, raw.rstrip("".join(seps)) or raw))
+        bare = raw.rstrip("".join(seps)) or raw
+        full = os.path.abspath(os.path.join(cwd, bare))
+        parts = bare.split(os.sep)
+        for k, part in enumerate(parts[1:], 1):
+            # dc1 r2 F2: abspath reads `gone/..` by its letters; the system reads the disk
+            if part == ".." and parts[k - 1] not in ("", ".", "..") and \
+                    not os.path.isdir(os.path.join(cwd, os.sep.join(parts[:k]) or os.sep)):
+                raise Refusal("no ledger: --ledger %s steps out of %s, which is no folder; "
+                              "name the ledger's file by a path that is there"
+                              % (shlex.quote(ledger), shlex.quote(os.sep.join(parts[:k]))))
+        if parts[-1] in (".", ".."):
+            # dc1 r2 F2: a last part `.` or `..` names a folder, as a trailing slash does
+            raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
+                          % (shlex.quote(ledger),
+                             shlex.quote(os.path.join(os.path.normpath(ledger), NAME))))
         if raw.endswith(seps) and not os.path.isfile(full):
             # dc1 r1 F4: --ledger names the ledger's file, never a folder; r2 F3: a slash
             # after an existing ledger's name reads that ledger, as before r1

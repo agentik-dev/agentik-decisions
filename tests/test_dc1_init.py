@@ -417,3 +417,24 @@ class ReviewTwo(Base):
         self.assertEqual(code, 2, out)
         self.assertIn("already", err)
         self.assertEqual(snapshot(self.repo), before)
+
+    def test_r2_f2_a_dot_part_or_a_step_out_of_nothing_refuses(self):
+        dotted = (os.path.join("sub", "."), os.path.join("sub", ".."),
+                  os.path.join("gone", "..", "sub"))
+        for made in (False, True):
+            if made:
+                os.mkdir(os.path.join(self.repo, "sub"))
+            for name in dotted:
+                before = snapshot(self.repo)
+                code, out, err = self.run_cli("init", "--ledger", name)
+                self.assertEqual(code, 2, (name, out))
+                self.assertTrue(err.startswith("decisions: no ledger: --ledger "), err)
+                self.assertEqual(snapshot(self.repo), before, name)
+                self.assertFalse(os.path.isfile(os.path.join(self.repo, "sub")), name)
+                self.assertFalse(os.path.lexists(self.ledger), name)
+        self.assertEqual(self.run_cli("init")[0], 0)
+        self.assertEqual(self.run_cli("show", "1", "--ledger", dotted[0])[0], 2)
+        os.mkdir(os.path.join(self.repo, "docs"))
+        code, _, err = self.run_cli("render", "--lint", "--ledger",
+                                    os.path.join("docs", "..", "DECISIONS.md"))
+        self.assertEqual(code, 0, err)
