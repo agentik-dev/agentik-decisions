@@ -148,8 +148,8 @@ class Pick(Base):
         self.commit()
         empty = tempfile.mkdtemp()
         self.addCleanup(os.rmdir, empty)
-        with mock.patch.dict(os.environ, {"PATH": empty}), \
-                mock.patch("decisions.answer.head_block", side_effect=AssertionError("git")):
+        # d42 R3: `answer` runs no git for any block, so `head_block` is gone
+        with mock.patch.dict(os.environ, {"PATH": empty}):
             code, out, err = self.answer(*PICK)
         self.assertEqual(code, 0, err)
         self.assertIn("answer: 9, Pin", out)
@@ -193,34 +193,32 @@ class Asked(Base):
         self.assertEqual(code, 0, err)
 
     def test_a_block_with_no_base_line(self):
-        """Line 8: HEAD's rule for a block with none; `ask` stamps one HEAD holds, never
-        one HEAD lacks."""
+        """Line 8, rewritten by d42 (rulings 3 to 5): a block with no base line is not
+        asked, stamped or written, HEAD holding it or not, and `--pick` is refused."""
         self.restamp(unstamp=True)
         self.commit()
         self.new("Pin it again")
         self.restamp(unstamp=True)
         self.assertEqual(self.bases(), [])
-        code, out, err = self.ask("9", "10", env={})
-        self.assertEqual(code, 0)
-        self.assertEqual(err.count("\n"), 1, err)
-        self.assertIn("the questions stay as written", err)
-        self.assertEqual([q["header"] for q in json.loads(out)[0]["questions"]],
-                         ["Decision 9", "Decision 10"])
-        blocks = {b.number: b for b in questions.parse(self.read(self.questions)).blocks}
-        self.assertEqual(blocks[9].base, questions.digests(blocks[9].text))
-        self.assertIsNone(blocks[10].base)
-        self.swap(FOLLOW, "%s %s" % (FOLLOW, TYPED), once=False)
-        self.refused(PICK, "%s %s" % (FOLLOW, TYPED))
         before = sha(self.questions)
         code, out, err = self.ask("9", "10", env={})
-        self.assertEqual(err.splitlines()[0], WARNING.rstrip("\n"))
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "".join(
+            "ask: question %d has no base line, or more than one, so its lines cannot be told "
+            "from typed ones; run agentik decisions answer %d --other for it first; not "
+            "asked\n" % (n, n) for n in (9, 10)))
+        self.assertEqual(json.loads(out), [])
         self.assertEqual(sha(self.questions), before)
-        self.answered("%s %s" % (FOLLOW, TYPED))
+        code, out, err = self.answer(*PICK)
+        self.assertEqual(code, 2, err)
+        self.assertIn("has no base line, or more than one", err)
+        self.assertEqual(sha(self.questions), before)
 
     def test_a_failed_stamp_warns_and_exits_0(self):
-        """Ruling 6: a base line that cannot be written is a warning, exit 0."""
-        self.restamp(unstamp=True)
-        self.commit()
+        """Ruling 6: a base line that cannot be written is a warning, exit 0; d42: the
+        block's base holds a digest of a line deleted since, so `ask` stamps it again."""
+        base = self.bases()[0]
+        self.swap(base, base[:-len(" -->")] + " deadbeef -->")
         before = sha(self.questions)
         with mock.patch("os.replace", side_effect=PermissionError(1, "Operation not permitted")):
             code, out, err = self.ask("9", env={})

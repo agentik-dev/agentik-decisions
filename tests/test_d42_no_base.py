@@ -43,6 +43,11 @@ class NoBase(Base):
         rest = [line for line in lines if line not in block.stray]
         return " ".join(list(block.stray) + rest + ([block.answer] if block.answer else []))
 
+    def open_nine(self):
+        """Question 9's open block, or None; its heading may sit in an Answered line."""
+        return next((b for b in questions.parse(self.read(self.questions)).blocks
+                     if b.number == 9), None)
+
     def no_base_pick(self):
         before = sha(self.ledger), sha(self.questions)
         code, out, err = self.answer(*PICK)
@@ -59,7 +64,7 @@ class NoBase(Base):
         code, out, err = self.answer(*OTHER)
         self.assertEqual(code, 0, err)
         text = self.read(self.questions)
-        self.assertNotIn("## 9.", text)
+        self.assertIsNone(self.open_nine())
         self.assertIn("- 9. Pin the interpreter: Other: Follow, but later; the owner's line: "
                       "%s (2026-09-28; chat)\n" % expected, text)
 
@@ -208,5 +213,5 @@ class NoGit(NoBase):
                     self.assertEqual(self.ask("9", env={})[0], 0)
                     self.answer(*PICK)
                     self.answer(*OTHER)
-                self.assertNotIn("## 9.", self.read(self.questions))
+                self.assertIsNone(self.open_nine())
                 self.assertFalse(os.path.exists(log), scene)
