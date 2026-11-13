@@ -38,7 +38,7 @@ Front matter, a title and prose may come first; then three sections, in this ord
 - The old gate named by hand: replaced by make (entry 5), 2026-09-05.
 ```
 
-- `## In force` holds `### Every session` first when present, then one `### <area>` subsection per area; every entry in force sits under a subsection.
+- `## In force` holds `### Every session` first when present, then one `### <area>` per area; every entry in force sits in one.
 - An entry in force is one line: its number, its title in bold ending with a period, or with `?` or `!` and no period, one paragraph, and a closing parenthetical that opens with a date, then a `;` or a `,` and its source.
 - A Proposed line is one sentence ending in `(proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`; only the owner's answer moves it into force.
 - A Superseded line holds a date and names its fate: `replaced by`, `merged into` or `lapsed with`, in any case; unnumbered lines are legal.
@@ -79,8 +79,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
-| `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step with its items, S3, S4; `S4?` has no level; a closed item only counts; writes nothing |
-| `backlog --check --order FILE [REPO...] [--write] [--json]` | each row's `state` cell held against git in its repo, read with `git -C` and never written: `building <row>` landed (a merge on main's first-parent line that opens `Merge <row>`, or of the branch's tip) or its branch gone, `done <date> <sha>` off that line, `waiting: owner <n>` answered, `waiting: row <n>` gone from the table, `waiting: <repo> <branch>` as `building`; `hq` and `suite` rows are read in FILE's checkout, a row of a REPO not named or absent is skipped and named; exit 1 on a stale cell; `--write` alone writes: each landed `building` row leaves the table whole, its line appended to `history/handoff-done.md` as `<#> <item>, done <date> <sha>` |
+| `backlog [REPO...] [--order FILE] [--check [--write]] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step, its items, S3, S4; `S4?` unlevelled; a closed item only counts; `--check`: state vs git, 1 if stale; only `--write` writes |
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md` |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
@@ -176,7 +175,7 @@ Exit codes:
 | code | meaning |
 |---|---|
 | 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze`, `audit` and `expire` whenever a view printed or a move was made; `answer` whose block write failed after both files were written, with its warning |
-| 1 | `render`: a lint problem, with `--check` a stale block or an absent tree's file, or under `--ceiling` a file over its ceiling; `backlog --check`: a stale state cell left |
+| 1 | `render`: a lint problem, with `--check` a stale block or an absent tree's file, or under `--ceiling` a file over its ceiling |
 | 2 | usage, an unknown verb, entry or area, an unreadable ledger or file, a `new`, `answer` or `expire` refusal, a `render` target that is the ledger or holds another ledger's block, a `--scope tree` file it did not write or ledger with no tree section, a `--fold-tails` whose ledger HEAD does not hold, an `ask` for an unknown N or under a held lock, a failed `doctor` check, a REPO not a directory, or an `analyze` window or argument it cannot read; a `warn` never changes the exit |
 
 ## The plugin
@@ -221,7 +220,7 @@ The tool reads no configuration file: the ledger is `--ledger` or `DECISIONS.md`
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
 - `design/d18-one-flow.md`: one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
 - `history/`: the older designs and packets.
-- `history/sittings/`: one charter per working session; each handover lists the choices made inside the design.
+- `history/sittings/`: one charter per working session, its handover the choices made inside the design.
 
 ## Tests
 
@@ -265,7 +264,7 @@ make check
 `scripts/{hygiene,bounded,agentik}` are agentik-commons' copies, pinned by `scripts/vendored.sha256`; `scripts/doclint` (charters, packets, links) is byte-identical across them, pinned in the Makefile.
 `scripts/hygiene` keeps only generic patterns; the private ones (a person, a private repo, a host, a domain) live outside it, in `$AGENTIK_HYGIENE_PRIVATE` or `~/.config/agentik/hygiene-private.tsv`, `group<TAB>regex` rows.
 Without it the scan warns once and runs the generic groups; `--require-private` exits 2.
-`scripts/bounded` holds `make check` to one run per tree, a 840 s wall, and no start above a load of 4 per core.
+`scripts/bounded` holds `make check` to one run per tree, an 840 s wall, no start above a load of 4 per core.
 Each README is rendered from its source, and the sidecar `design/readme/rendered.sha256` holds the two hashes `make check` reads.
 
 | id | range | role |
