@@ -109,8 +109,12 @@ def _gate_line(target):
     home = os.path.expanduser("~").rstrip(os.sep)
     spelled = os.path.abspath(target)
     # d39 R7: the owner's folders are tested on the spelled path first, so the owner's file
-    # that is a link into a checkout (a dotfiles one) stays the owner's.
-    if _owners(spelled) and not GATE_EXEMPT.intersection(spelled.split(os.sep)[:-1]):
+    # that is a link into a checkout (a dotfiles one) stays the owner's; the spelled pair
+    # alone (r1 F2), so a config folder that links into a checkout does not take a file
+    # spelled inside that checkout.
+    owners = (_owner_folder(), os.path.join(home, ".claude"))
+    if any(spelled.startswith(os.path.abspath(f).rstrip(os.sep) + os.sep) for f in owners) \
+            and not GATE_EXEMPT.intersection(spelled.split(os.sep)[:-1]):
         return os.path.join(_owner_folder(), GATES), (
             "~/" + spelled[len(home) + 1:] if spelled.startswith(home + os.sep) else spelled)
     real = os.path.realpath(target)
