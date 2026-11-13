@@ -223,7 +223,8 @@ def is_tree_file(text, begin, end):
 def named_ledger(text, target, begin, end):
     """The real path of the ledger the block in `text` names as its source, or None when
     it names none: a tree file's `Each is an entry of` path, else the `Generated from`
-    path, resolved against `target`'s folder when it is relative."""
+    path, resolved against the folder of the file `target` is, through any link, when it
+    is relative (dc1 r2 F1: a link's own folder may hold another ledger, or none)."""
     inside = block_lines(text, begin, end)
     if not inside:
         return None
@@ -233,7 +234,7 @@ def named_ledger(text, target, begin, end):
         if found:
             name = os.path.expanduser(found.group(1))
             if not os.path.isabs(name):
-                name = os.path.join(os.path.dirname(os.path.abspath(target)), name)
+                name = os.path.join(os.path.dirname(os.path.realpath(target)), name)
             return os.path.realpath(name)
     return None
 

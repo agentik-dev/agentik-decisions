@@ -619,8 +619,11 @@ def cmd_render(args, path, out, err):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
-    if args.into:
-        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin
+    away = os.path.dirname(os.path.realpath(target)) != \
+        os.path.realpath(os.path.dirname(target))
+    if args.into or away:
+        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin;
+        # dc1 r2 F1: one that is a link to a file in another folder is not beside it
         refuse_another(old, target, path)
         if is_tree_file(old, BEGIN, END):
             # d36 r1 F4: the repo's block never takes the place of a tree's block

@@ -309,3 +309,39 @@ class ReviewOne(Base):
             self.assertEqual(code, 0, err)
             for path in (self.ledger, self.claude, self.gates):
                 os.unlink(path)
+
+
+class ReviewTwo(Base):
+    """Review 2's findings, each in its reproduction's shape."""
+
+    def top_holds_entry_one(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write("hand line\n")
+        for argv in (["init"], NEW, ANSWER):
+            code, _, err = self.run_cli(*argv)
+            self.assertEqual(code, 0, (argv, err))
+        self.assertIn("1. **Indent.**", self.read(self.claude))
+        os.mkdir(os.path.join(self.repo, "x"))
+        os.symlink(os.path.join("..", "CLAUDE.md"), os.path.join(self.repo, "x", "CLAUDE.md"))
+        return os.path.join("x", "DECISIONS.md")
+
+    def test_r2_f1_init_over_a_linked_claude_md_refuses(self):
+        named = self.top_holds_entry_one()
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("init", "--ledger", named)
+        self.assertEqual(code, 2, out)
+        self.assertIn("another ledger's block", err)
+        self.assertEqual(snapshot(self.repo), before)
+        self.assertFalse(os.path.lexists(os.path.join(self.repo, named)))
+        self.assertEqual(self.run_cli("render", "--check")[0], 0)
+
+    def test_r2_f1_render_over_a_linked_claude_md_refuses(self):
+        named = self.top_holds_entry_one()
+        with open(os.path.join(self.repo, named), "w", encoding="utf-8") as handle:
+            handle.write(EMPTY)
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("render", "--ledger", named)
+        self.assertEqual(code, 2, out)
+        self.assertIn("another ledger's block", err)
+        self.assertEqual(snapshot(self.repo), before)
+        self.assertEqual(self.run_cli("render", "--check")[0], 0)
