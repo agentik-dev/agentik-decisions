@@ -168,7 +168,9 @@ class Reds(Orchard):
                                9: None})
 
     def test_a_repo_is_a_name_of_the_tables_repo_column(self):
-        got, _ = self.reds((1, "suite", "waiting: pear p9-none"), (2, "suite", "building pear g2"))
+        # d43 R2: a REPO named is a name too, so `pear` is named by none here.
+        got, _ = self.reds((1, "suite", "waiting: pear p9-none"), (2, "suite", "building pear g2"),
+                           repos=[])
         self.assertEqual(got, {1: None, 2: "stale: branch gone"})
 
     def test_the_text_view_prints_one_line_a_red(self):

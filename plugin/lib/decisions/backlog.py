@@ -464,6 +464,7 @@ SHA_WORD = re.compile(r"^[0-9a-fA-F]{7,40}$")
 NAME_END = r"(?![\w/+@-]|\.\w)"
 SKIP_WHY = "repo not named or absent"
 NO_MAIN = "no main branch, unreadable"
+UNREAD_WHY = "unread (waiting names no owner, row or repo)"
 WORD = re.compile(r"^`([^`]+)`[:.,]?$")
 
 
@@ -478,7 +479,8 @@ def branch_word(word):
 def reference(cell, names):
     """R1: the reference a state cell's first words make (free text may follow after `;`):
     `waiting:` on `owner <n>`, `row <n>`, `the owner:` (tried first) or `<repo> <branch>`
-    with `<repo>` one of `names`, the table's repo column; `building [<repo>] <branch>`;
+    with `<repo>` one of `names`, the table's repo column and the short names of the REPOs
+    named that are checkouts (d43 R2); `building [<repo>] <branch>`;
     `done <date> <sha>`; `watch:`; else its first word."""
     head = cell.split(";", 1)[0].strip()
     raw = head.split()
@@ -606,7 +608,6 @@ def answered(path):
 def checked(path, steps, repos, home):
     """R2 to R4: one result a table row of FILE at `path`."""
     rows = [s for s in steps if "state" in s]
-    names = set(s["repo"] for s in rows if s["repo"])
     numbers = set(s["n"] for s in rows)
     homes = (HOME_CELL, SUITE) + ((short_name(home),) if home else ())
     by_name = {}
@@ -614,6 +615,8 @@ def checked(path, steps, repos, home):
         if os.path.isdir(repo) and git_top(repo):
             real = os.path.realpath(repo)  # r1 F1: `.`, `pear/` and a link name the repo
             by_name.setdefault(short_name(real), real)
+    # d43 R2: a `<repo>` is a name of the repo column or of a REPO named that is a checkout.
+    names = set(s["repo"] for s in rows if s["repo"]) | set(by_name)
     gits = {}
 
     def checkout(name):
@@ -724,6 +727,10 @@ def cmd_check(args, out, err):
         if skipped:
             lines.append("skipped (%s): %s" % (why, ", ".join(
                 "%d %s" % (r["n"], r["reference"].get("repo") or r["repo"]) for r in skipped)))
+    unread = [str(r["n"]) for r in results
+              if r["reference"]["kind"] == "waiting" and r["reference"].get("on") is None]
+    if unread:  # d43 R3: named, never red, no part of the stale count
+        lines.append("%s: %s" % (UNREAD_WHY, ", ".join(unread)))
     lines.append("checked %d rows of %s: %d stale" % (len(results), os.path.basename(path),
                                                        len(left)))
     out.write("\n".join(lines) + "\n")
