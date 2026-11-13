@@ -19,7 +19,7 @@ from .common import VERSION, Refusal, git_top
 from .doctor import PLUGIN
 from .ledger import IN_FORCE_CAP, locate
 from .rows import ROOT
-from .speak import respeak_root
+from .speak import RENDER, newest_root, respeak_root
 from .tree import CEILINGS
 
 __all__ = ["cmd_describe", "describe", "config", "settings", "SUMMARIES", "USAGE"]
@@ -58,7 +58,10 @@ SUMMARIES = {
 }
 FIXED = "The figure is the tool's own; a release changes it."
 FLAG = "The flag holds for that one run and is saved nowhere."
-VARIABLE = "The variable holds for that one run and is saved nowhere."
+# Review 1 R1-F2: a variable that names no renderer is the env layer's value, the tool then
+# uses none, and the note says so.
+VARIABLE = ("The variable holds for that one run and is saved nowhere; a RESPEAK_ROOT without "
+            "%s gives no renderer, and `ask` keeps its text." % RENDER)
 ENV = "RESPEAK_ROOT"
 PATHS = ("ledger", "respeak.root", "rows.root")
 # The plug's other reads (READS' argvs), by verb: the schema each answers.
@@ -90,14 +93,17 @@ def describe():
             "verbs": verbs(parser, list(names)), "reads": READS}
 
 
-def _setting(key, kind, value, default=None, layer="default", command=None, note=None):
+def _setting(key, kind, value, default=None, layer="default", command=None, note=None,
+             values=None):
     return {"key": key, "value": value, "default": default,
             "type": "path" if key in PATHS else "integer",
             "choices": None, "summary": SUMMARIES[key],
             "source": {"layer": layer, "path": None, "line": None},
             "change": {"kind": kind, "command": command, "path": None, "block": None,
                        "note": FIXED if kind == "fixed" else note},
-            "live": True, "values": [] if value is None else [{"layer": layer, "value": value}]}
+            "live": True,
+            "values": values if values is not None else
+            [] if value is None else [{"layer": layer, "value": value}]}
 
 
 def _top(cwd):
@@ -114,14 +120,20 @@ def settings(cwd, env):
     except Refusal:
         found = None
     home = env.get("HOME") or os.path.expanduser("~")
-    respeak = respeak_root(env, os.path.join(home, ".claude", "plugins", "cache"))
+    cache = os.path.join(home, ".claude", "plugins", "cache")
+    # the contract's §4: each layer that sets the key, lowest first; the variable sets it
+    # whenever it is not empty, as `respeak_root` reads it, whether or not it names a renderer
+    shipped, named = newest_root(cache), env.get(ENV) or None
+    layered = ([{"layer": "default", "value": shipped}] if shipped else []) + (
+        [{"layer": "env", "value": named}] if named else [])
     top = _top(cwd)
     days = _subparsers(_parser()[1]).choices["expire"].get_default("days")
     rows = [_setting("ledger", "launch", found, command="agentik decisions --ledger VALUE show 1",
                      note=FLAG),
-            _setting("respeak.root", "launch", respeak,
-                     layer="env" if respeak and env.get(ENV) else "default",
-                     command="%s=VALUE agentik decisions ask" % ENV, note=VARIABLE),
+            _setting("respeak.root", "launch", respeak_root(env, cache),
+                     layer="env" if named else "default",
+                     command="%s=VALUE agentik decisions ask" % ENV, note=VARIABLE,
+                     values=layered),
             _setting("rows.root", "launch", os.path.join(top, ROOT) if top else None,
                      command="agentik decisions rows --root VALUE", note=FLAG),
             _setting("expire.days", "launch", days, days,

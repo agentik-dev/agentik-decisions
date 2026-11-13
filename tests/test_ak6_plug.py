@@ -205,6 +205,48 @@ class Config(Plug):
         self.assertIsNone(found["value"])
         self.assertEqual(found["source"]["layer"], "default")
 
+    def respeak(self, value=None, cwd=None):
+        """`respeak.root`'s value, source layer and values, the variable `value` (None: unset)."""
+        env = self.env if value is None else dict(self.env, RESPEAK_ROOT=value)
+        got = self.config("respeak.root", cwd=cwd, env=env)
+        found, = got["settings"]
+        self.assertEqual(found["source"]["path"], found["source"]["line"])   # both null
+        self.assertIsNone(found["default"])
+        present = next(x for x in got["layers"] if x["name"] == "env")["present"]
+        return (found["value"], found["source"]["layer"],
+                [(v["layer"], v["value"]) for v in found["values"]], present)
+
+    def test_respeak_root_names_the_highest_layer_and_each_layer(self):
+        """Review 1 R1-F2: the contract's §4 `source` (the highest layer that sets the key) and
+        `values` (each layer that sets it, lowest first, `default` among them where there is
+        one), with the plugin cache installed and the variable unset, unusable or usable."""
+        cache = os.path.join(self.home, ".claude", "plugins", "cache", "m", "respeak", "1.0.0")
+        rr = os.path.join(self.t, "rr")
+        none = os.path.join(self.t, "none")
+        for root in (cache, rr):
+            self.put(os.path.join(root, "scripts", "respeak-render.sh"), "#!/bin/sh\n")
+        default = ("default", cache)
+        self.assertEqual(self.respeak(), (cache, "default", [default], False))           # (a)
+        self.assertEqual(self.respeak(none), (None, "env", [default, ("env", none)], True))  # (b)
+        self.assertEqual(self.respeak(rr), (rr, "env", [default, ("env", rr)], True))    # (c)
+        # set and empty: the tool reads it as unset, so the env layer sets nothing (N2)
+        self.assertEqual(self.respeak(""), (cache, "default", [default], False))
+        # a relative path is read from the cwd, and printed as given (N1)
+        self.assertEqual(self.respeak("rr", cwd=self.t),
+                         ("rr", "env", [default, ("env", "rr")], True))
+        self.assertEqual(self.respeak("rr"), (None, "env", [default, ("env", "rr")], True))
+        shutil.rmtree(os.path.join(self.home, ".claude"))   # no cache installed
+        self.assertEqual(self.respeak(rr), (rr, "env", [("env", rr)], True))
+        self.assertEqual(self.respeak(none), (None, "env", [("env", none)], True))
+        self.assertEqual(self.respeak(), (None, "default", [], False))
+
+    def test_respeak_root_says_what_a_root_without_the_renderer_does(self):
+        found, = self.config("respeak.root", env=dict(
+            self.env, RESPEAK_ROOT=os.path.join(self.t, "none")))["settings"]
+        self.assertEqual(found["change"]["command"], "RESPEAK_ROOT=VALUE agentik decisions ask")
+        self.assertIn("RESPEAK_ROOT", found["change"]["note"])
+        self.assertIn("keeps its text", found["change"]["note"])
+
     def test_a_keyed_read(self):
         got = self.config("expire.days")
         self.assertEqual([s["key"] for s in got["settings"]], ["expire.days"])
