@@ -156,3 +156,52 @@ class Lint(Home):
         self.assertEqual(self.lint()[1], [])
         self.put(self.owner, "~/work/orchard/pear/x\n")
         self.assertEqual(len(self.lint()[1]), 1)
+
+
+class Round1(Home):
+    """d38 r1: F1, a NUL in a list changes neither `--lint`'s exit nor raises; F2, a list
+    that cannot be written is one warning and the render's own exit; the symlink note, the
+    checkout is found from the target's real path."""
+
+    def put(self, path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+    def test_f1_a_nul_in_either_list_drops_that_line_only(self):
+        before = self.render("--lint")[0]
+        self.put(self.owner, b"~/work/orchard/pear/x\x00y\n~/work/orchard/pear/z\n")
+        self.put(os.path.join(self.repo, ".claude", GATES), b"/abs\x00x\nCLAUDE.md\n")
+        code, _, err = self.render("--lint")
+        self.assertEqual(code, before, err)
+        warned = [l for l in err.splitlines() if GATES in l]
+        self.assertEqual(len(warned), 1, err)
+        self.assertIn("pear/z", warned[0])
+
+    def test_f2_a_folder_list_that_cannot_be_made_warns_and_exits_0(self):
+        folder = os.path.join(self.home, "work", "blocked")
+        self.put(os.path.join(folder, ".claude"), b"")
+        target = os.path.join(folder, "CLAUDE.md")
+        code, out, err = self.render("--into", target)
+        self.assertEqual(code, 0, err)
+        self.assertIn("render: wrote", out)
+        self.assertTrue(os.path.exists(target))
+        warned = [l for l in err.splitlines() if "warning" in l]
+        self.assertEqual(len(warned), 1, err)
+        self.assertIn(os.path.join("blocked", ".claude", GATES), warned[0])
+
+    def test_f2_a_checkout_list_that_cannot_be_made_warns_and_exits_0(self):
+        self.put(os.path.join(self.repo, ".claude"), b"")
+        code, _, err = self.render()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len([l for l in err.splitlines() if "warning" in l]), 1, err)
+
+    def test_a_link_into_a_checkout_lists_at_its_top_level(self):
+        os.makedirs(os.path.join(self.repo, "sub"))
+        link = os.path.join(self.home, "link")
+        os.symlink(os.path.join(self.repo, "sub"), link)
+        code, _, err = self.render("--into", os.path.join(link, "CLAUDE.md"))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(lines(os.path.join(self.repo, ".claude", GATES)), ["sub/CLAUDE.md"])
+        self.assertFalse(os.path.exists(os.path.join(self.repo, "sub", ".claude")))
+        self.assertFalse(os.path.exists(self.owner))
