@@ -210,3 +210,28 @@ class Command(Base):
         code, out, _ = self.run_cli("--help")
         self.assertIn("init", out.split("Verbs", 1)[1])
         self.assertIn(",init,", out)
+
+
+class ReviewOne(Base):
+    """Review 1's findings, each in its reproduction's shape."""
+
+    def test_f1_another_ledgers_block_is_refused(self):
+        os.mkdir(os.path.join(self.repo, "docs"))
+        other = os.path.join(self.repo, "docs", "DECISIONS.md")
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write("hand line\n")
+        with open(other, "w", encoding="utf-8") as handle:
+            handle.write(EMPTY)
+        for argv in (NEW, ANSWER, ["render", "--into", self.claude]):
+            code, _, err = self.run_cli(*(argv + ["--ledger", other]))
+            self.assertEqual(code, 0, (argv, err))
+        self.assertIn("1. **Indent.**", self.read(self.claude))
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 2, out)
+        self.assertIn("another ledger's block", err)
+        self.assertTrue(err.startswith("decisions: init: "), err)
+        self.assertEqual(snapshot(self.repo), before)
+        code, _, err = self.run_cli("render", "--check", "--ledger", other, "--into",
+                                    self.claude)
+        self.assertEqual(code, 0, err)

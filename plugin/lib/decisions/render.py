@@ -481,17 +481,17 @@ def warn(err, lines):
         err.write("render: warning: %s\n" % line)
 
 
-def refuse_another(text, target, path):
+def refuse_another(text, target, path, verb="render"):
     """d36 ruling 4: refuse a target whose generated block names another ledger. A named
     path that holds no ledger now is this ledger before its repo moved, so the block is
-    refreshed as at the pin (d36 r1 F1)."""
+    refreshed as at the pin (d36 r1 F1). `verb` names the act refused (`init`, dc1 r1 F1)."""
     named = named_ledger(text, target, BEGIN, END)
     if named is None or not os.path.isfile(named) or named == os.path.realpath(path) \
             or canonical(named) == canonical(path):
         return
-    raise Refusal("render: the block in %s was generated from %s, not from %s, and render "
+    raise Refusal("%s: the block in %s was generated from %s, not from %s, and %s "
                   "never writes over another ledger's block; nothing written"
-                  % (display(target), real_tilde(named), real_tilde(path)))
+                  % (verb, display(target), real_tilde(named), real_tilde(path), verb))
 
 
 def other_tree(folder):

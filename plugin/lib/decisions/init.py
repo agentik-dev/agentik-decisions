@@ -1,13 +1,15 @@
 """`init` (dc1): an empty ledger where `locate` finds none, and its block in the CLAUDE.md
 beside it, written by `render`'s own `block` and `apply`; both files go on the edit-gates
-list, and the run says so. It refuses, writing nothing, where a ledger already is and
-outside a git work tree with no `--ledger`."""
+list, and the run says so. It refuses, writing nothing, where a ledger already is,
+outside a git work tree with no `--ledger`, and where the CLAUDE.md holds a block another
+ledger rendered."""
 
 import os
 
 from .common import Refusal, disk_text, keeps_crlf, read_text, write_text
 from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, load, where
-from .render import TARGET, apply, block, gate_said, growth, is_ledger, list_gate
+from .render import (TARGET, apply, block, gate_said, growth, is_ledger, list_gate,
+                     refuse_another)
 
 __all__ = ["cmd_init", "EMPTY"]
 
@@ -27,6 +29,7 @@ def cmd_init(args, out, err):
                       % display(path))
     old = read_text(target) if os.path.exists(target) else ""
     apply(old, "", display(target))  # markers that are not one block refuse before a write
+    refuse_another(old, target, path, "init")  # d36 ruling 4 (dc1 r1 F1)
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(path, EMPTY)
     out.write("init: wrote %s: # Decisions and its three sections, empty\n" % display(path))
