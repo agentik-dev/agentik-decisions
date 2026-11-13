@@ -80,11 +80,12 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step with its items, S3, S4; `S4?` has no level; a closed item only counts; writes nothing |
+| `backlog --check --order FILE [REPO...] [--write] [--json]` | each row's `state` cell held against git in its repo, read with `git -C` and never written: `building <row>` landed (a merge on main's first-parent line that opens `Merge <row>`, or of the branch's tip) or its branch gone, `done <date> <sha>` off that line, `waiting: owner <n>` answered, `waiting: row <n>` gone from the table, `waiting: <repo> <branch>` as `building`; `hq` and `suite` rows are read in FILE's checkout, a row of a REPO not named or absent is skipped and named; exit 1 on a stale cell; `--write` alone writes: each landed `building` row leaves the table whole, its line appended to `history/handoff-done.md` as `<#> <item>, done <date> <sha>` |
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md` |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
-| `--version` | `agentik-decisions 0.21.6`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.21.7`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -175,7 +176,7 @@ Exit codes:
 | code | meaning |
 |---|---|
 | 0 | the answer; `find` with no match too; `backlog` whenever its files could be read; `analyze`, `audit` and `expire` whenever a view printed or a move was made; `answer` whose block write failed after both files were written, with its warning |
-| 1 | `render`: a lint problem, with `--check` a stale block or an absent tree's file, or under `--ceiling` a file over its ceiling |
+| 1 | `render`: a lint problem, with `--check` a stale block or an absent tree's file, or under `--ceiling` a file over its ceiling; `backlog --check`: a stale state cell left |
 | 2 | usage, an unknown verb, entry or area, an unreadable ledger or file, a `new`, `answer` or `expire` refusal, a `render` target that is the ledger or holds another ledger's block, a `--scope tree` file it did not write or ledger with no tree section, a `--fold-tails` whose ledger HEAD does not hold, an `ask` for an unknown N or under a held lock, a failed `doctor` check, a REPO not a directory, or an `analyze` window or argument it cannot read; a `warn` never changes the exit |
 
 ## The plugin
@@ -274,7 +275,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.21.6`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.21.7`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|

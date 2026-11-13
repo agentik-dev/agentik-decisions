@@ -3,11 +3,13 @@ order (design d23 sections 1 to 4); its items are column-0 bullets and the rows 
 a table under NICE_HEADER (d26, agentik-hq design/05 section 2).
 
     decisions backlog [REPO...] [--order FILE] [--json]
+    decisions backlog --check --order FILE [REPO...] [--write] [--json]
 
 REPO is a directory, by default the git top level of the working directory (or
 the working directory outside a work tree). The verb reads the two files and
 nothing else: it writes nothing, takes no lock, runs no model, renders nothing
-through respeak and ignores `--ledger`. `--order FILE` (d26) reads FILE as the one
+through respeak and ignores `--ledger`; `--check` (d39, below) reads git too, and
+`--check --write` alone writes, HANDOFF.md and its done file. `--order FILE` (d26) reads FILE as the one
 HANDOFF.md of every REPO, each REPO taking only the steps whose `repo` cell is its
 directory name less `agentik-`, or `suite`; a table with no `repo` column gives every
 REPO every step. An item's level is the session plugin's
