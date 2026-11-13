@@ -391,12 +391,16 @@ def where(ledger=None, cwd=None):
     """The ledger's place, there or not: `ledger` when named, else DECISIONS.md at the git
     top of `cwd`; outside a git work tree with none named, a refusal."""
     cwd = os.getcwd() if cwd is None else cwd
-    if ledger and ledger.endswith(tuple(filter(None, (os.sep, os.altsep)))):
-        # dc1 r1 F4: --ledger names the ledger's file, never a folder
-        raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
-                      % (shlex.quote(ledger), shlex.quote(ledger + NAME)))
     if ledger:
-        return os.path.abspath(os.path.join(cwd, os.path.expanduser(ledger)))
+        seps = tuple(filter(None, (os.sep, os.altsep)))
+        raw = os.path.expanduser(ledger)
+        full = os.path.abspath(os.path.join(cwd, raw.rstrip("".join(seps)) or raw))
+        if raw.endswith(seps) and not os.path.isfile(full):
+            # dc1 r1 F4: --ledger names the ledger's file, never a folder; r2 F3: a slash
+            # after an existing ledger's name reads that ledger, as before r1
+            raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
+                          % (shlex.quote(ledger), shlex.quote(ledger + NAME)))
+        return full
     top = git_top(cwd)
     if not top:
         raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger" % cwd)

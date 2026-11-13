@@ -401,3 +401,19 @@ class ReviewTwo(Base):
             self.assertEqual(code, 0, (argv, err))
         self.assertIn("holds no GENERATED markers", err)
         self.assertEqual(self.read(self.claude), self.FENCED)
+
+    def test_r2_f3_a_trailing_slash_on_an_existing_ledger_reads_it(self):
+        self.assertEqual(self.run_cli("init")[0], 0)
+        for argv in (["render", "--lint"], ["render"], ["doctor"]):
+            plain = self.run_cli(*(argv + ["--ledger", "DECISIONS.md"]))
+            slash = self.run_cli(*(argv + ["--ledger", "DECISIONS.md" + os.sep]))
+            self.assertEqual(slash[0], plain[0], (argv, slash))
+            self.assertNotIn("names a folder", slash[1] + slash[2])
+        code, out, err = self.run_cli("render", "--ledger", "DECISIONS.md" + os.sep)
+        self.assertEqual(code, 0, err)
+        self.assertIn("render: CLAUDE.md is fresh", out)
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("init", "--ledger", "DECISIONS.md" + os.sep)
+        self.assertEqual(code, 2, out)
+        self.assertIn("already", err)
+        self.assertEqual(snapshot(self.repo), before)
