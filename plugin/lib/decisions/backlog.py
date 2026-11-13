@@ -486,6 +486,8 @@ def reference(cell, names):
     if head.startswith("waiting:"):
         rest = head[len("waiting:"):].strip()
         w = rest.split()
+        if w:
+            w[0] = w[0].rstrip(",.")  # r2 F1: `waiting: pear, p2` and `waiting: owner, 4`
         n = w[1].rstrip(",.") if len(w) >= 2 else ""
         if rest.startswith("the owner:"):
             return {"kind": "waiting", "on": "the owner"}
