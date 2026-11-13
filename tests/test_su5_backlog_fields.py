@@ -61,7 +61,8 @@ class Fields(Orchard):
         named = [self.pear] if repos is None else list(repos)
         argv = (["--order", self.handoff] if ordered else []) + named + ["--json"]
         data = json.loads(self.run_cli(*argv))
-        self.assertEqual(set(data), {"repos", "skipped"})  # R6: no new top-level key
+        # R6: no new top-level key but ak6 R8's two, first
+        self.assertEqual(list(data), ["schema", "ok", "repos", "skipped"])
         view = {os.path.basename(r["repo"]): r for r in data["repos"]}["pear"]
         return {s["n"]: s for s in view["steps"]}
 
@@ -150,7 +151,8 @@ class Fields(Orchard):
                                "--json"], out=out, err=err)
         self.assertIn(code, (0, 1), err.getvalue())
         data = json.loads(out.getvalue())
-        self.assertEqual(set(data), {"handoff", "checkout", "rows", "stale", "written"})
+        self.assertEqual(list(data), ["schema", "ok", "handoff", "checkout", "rows", "stale",
+                                      "written"])  # ak6 R8: the plug's two keys first
         self.assertEqual(len(data["rows"]), 4)
         for row in data["rows"]:
             self.assertEqual(set(row), {"n", "repo", "cell", "reference", "checked_in", "red",

@@ -16,8 +16,11 @@ file absent or its problems as a fail)
 and respeak (design d23 section 6: `ok` with the root `speak.respeak_root`
 finds, else a warn, since only `ask` renders through it and keeps its text
 without it).
-Exit 0 with no `fail`, 2 otherwise; a `warn` never changes it. `--json` prints
-{"checks": [{name, status, detail}], "provider": "none"|"session <v>, profile <p>"}.
+Exit 0 with no `fail`, 2 otherwise; a `warn` never changes it. `--json` prints the
+plug's doctor read (packet ak6): {"schema": "agentik.doctor/1", "ok": true, "tool":
+"decisions", "failed", "warned", "checks": [{name, status, detail, remedy}], "provider":
+"none"|"session <v>, profile <p>"}; `ok` says the read ran, `failed` counts the fails. A
+remedy is one command, set only where a constant or the detail names it (`remedy`).
 """
 
 import json
@@ -36,7 +39,7 @@ from .speak import respeak_root
 
 __all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "first_path", "MARKETPLACE",
            "PLUGIN", "TOOL", "OLD_MARKETPLACE", "OLD_PLUGIN", "ALIAS", "SESSION_STATE",
-           "PROVIDER_RANGE"]
+           "PROVIDER_RANGE", "remedy"]
 
 MARKETPLACE = "agentik"
 PLUGIN = "decisions@agentik"
@@ -50,6 +53,10 @@ ALIAS = "decisions"
 SESSION_STATE = ("agentik-session", "claude-code-session")
 MARKETPLACE_HINT = "claude plugin marketplace add agentik-dev/agentik-commons"
 PLUGIN_HINT = "claude plugin install decisions@agentik"
+LINT_HINT = "agentik decisions render --lint"
+# ak6: the launcher's mend in every case, since `make install` works only in a checkout and a
+# launcher of another version cannot mend itself.
+INSTALL_HINT = "/decisions:install-cli"
 MIN_PYTHON = (3, 9)    # the plugin's floor (hq entry 6, design/04 §2)
 # `pyenv install --list` waits on pyenv's rehash lock under load (ADV6-6).
 PYENV_TIMEOUT = 10
@@ -284,8 +291,7 @@ def check_ledger(ledger, cwd):
     except Refusal as exc:
         return "fail", str(exc)
     if problems:
-        return "fail", "%s: %d lint problems (agentik decisions render --lint)" % (
-            found.path, len(problems))
+        return "fail", "%s: %d lint problems (%s)" % (found.path, len(problems), LINT_HINT)
     return "ok", "%s: %d entries, lint clean" % (found.path, len(found.entries))
 
 
@@ -312,11 +318,29 @@ def run_checks(cwd=None, env=None, ledger=None):
     return checks, summary
 
 
+def remedy(name, status, detail):
+    """ak6 R8: the one command that mends a check, or None."""
+    if status == "ok":
+        return None
+    if name == "tool":
+        return INSTALL_HINT
+    if name == "marketplace" and MARKETPLACE_HINT in detail:
+        return MARKETPLACE_HINT
+    if name == "plugin" and PLUGIN_HINT in detail:
+        return PLUGIN_HINT
+    if name == "ledger" and status == "fail" and detail.endswith("(%s)" % LINT_HINT):
+        return LINT_HINT
+    return None
+
+
 def cmd_doctor(args, out, err):
     checks, provider = run_checks(ledger=getattr(args, "ledger", None))
     if getattr(args, "json", False):
-        out.write(json.dumps({"checks": [{"name": n, "status": s, "detail": d}
-                                         for n, s, d in checks],
+        statuses = [status for _, status, _ in checks]
+        out.write(json.dumps({"schema": "agentik.doctor/1", "ok": True, "tool": "decisions",
+                              "failed": statuses.count("fail"), "warned": statuses.count("warn"),
+                              "checks": [{"name": n, "status": s, "detail": d,
+                                          "remedy": remedy(n, s, d)} for n, s, d in checks],
                               "provider": provider}, indent=2) + "\n")
     else:
         for name, status, detail in checks:
