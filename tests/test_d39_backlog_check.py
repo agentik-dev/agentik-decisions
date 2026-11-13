@@ -334,3 +334,82 @@ class OwnerLink(Home):
         self.assertEqual(lines(self.owner), ["~/.claude/CLAUDE.md"])
         self.assertFalse(os.path.exists(os.path.join(dots, ".claude", GATES)))
         self.assertTrue(os.path.islink(target))
+
+
+class Round1(Orchard):
+    """d39 r1: F1 a REPO by its real path, F3 no `main` is skipped, F5 a branch word's
+    backticks and trailing mark, F4 the table's lines numbered one way."""
+
+    ROWS = ((1, "pear", "building p2-done"), (2, "pear", "building p9-none"),
+            (3, "pear", "building p1-live"))
+
+    def test_f1_a_repo_is_named_by_its_real_path(self):
+        plain = self.reds(*self.ROWS)
+        link = os.path.join(self.tmp, "fruit")
+        os.symlink(self.pear, link)
+        for spelled in (self.pear + os.sep, link):
+            self.assertEqual(self.reds(*self.ROWS, repos=[spelled]), plain, spelled)
+        here = os.getcwd()
+        self.addCleanup(os.chdir, here)
+        os.chdir(self.pear)
+        self.assertEqual(self.reds(*self.ROWS, repos=["."]), plain)
+        self.assertEqual(plain[1], 1)
+
+    def test_f3_a_repo_with_no_main_is_skipped_never_red_nor_moved(self):
+        kiwi = os.path.join(self.tmp, "kiwi")
+        os.makedirs(kiwi)
+        git(kiwi, "init", "-q")
+        git(kiwi, "symbolic-ref", "HEAD", "refs/heads/trunk")
+        commit(kiwi, "start.txt")
+        git(kiwi, "checkout", "-q", "-b", "feat")
+        git(kiwi, "checkout", "-q", "-b", "f1")
+        commit(kiwi, "f1.txt")
+        git(kiwi, "checkout", "-q", "feat")
+        git(kiwi, "merge", "-q", "--no-ff", "-m", "Merge f1: the kiwi", "f1")
+        self.put(self.done, DONE_HEAD)
+        self.table((3, "kiwi", "building f1"))
+        snap = self.bytes_of(self.handoff, self.done)
+        code, out, err = self.check("--json", "--write", repos=[kiwi])
+        self.assertEqual(code, 0, out + err)
+        row = json.loads(out)["rows"][0]
+        self.assertIsNone(row["red"])
+        self.assertTrue(row["skipped"])
+        self.assertEqual(self.bytes_of(self.handoff, self.done), snap)
+        code, out, _ = self.check(repos=[kiwi])
+        self.assertIn("3 kiwi", [l for l in out.splitlines() if l.startswith("skipped")][0])
+
+    def test_f5_a_branch_word_loses_backticks_and_one_trailing_mark(self):
+        got, _ = self.reds((1, "pear", "building `p1-live`"), (2, "pear", "building p1-live: its review"),
+                           (3, "pear", "building `p2-done`."), (4, "suite", "waiting: pear `p1-live`,"),
+                           (5, "suite", "waiting: pear p2-done:"))
+        landed = "stale: landed %s %s" % (self.p2_merge[:7], DATE)
+        self.assertEqual(got, {1: None, 2: None, 3: landed, 4: None, 5: landed})
+
+    def test_f4_a_form_feed_or_a_line_separator_above_the_table_moves_the_row(self):
+        self.put(self.done, DONE_HEAD)
+        self.table((7, "pear", "building p1-live"), (8, "pear", "building p2-done"))
+        with open(self.handoff, encoding="utf-8", newline="") as handle:
+            text = handle.read()
+        text = text.replace("# Handoff\n", "# Handoff\n\nA\fpage, a line, a\rreturn.\n")
+        self.put(self.handoff, text)
+        code, out, err = self.check("--write")
+        self.assertEqual(code, 0, out + err)
+        with open(self.handoff, encoding="utf-8", newline="") as handle:
+            after = handle.read()
+        row = [l for l in text.split("\n") if l.startswith("| 8 |")][0] + "\n"
+        self.assertEqual(after, text.replace(row, ""))
+
+
+class Round1Owner(Home):
+    """d39 r1 F2: a config folder that is itself a link into a checkout does not pull a file
+    spelled inside that checkout into the owner's list (as at 9dd7af4)."""
+
+    def test_f2_a_file_spelled_in_the_checkout_stays_the_checkouts(self):
+        dots = os.path.join(self.home, "work", "dots")
+        os.makedirs(os.path.join(dots, ".git"))
+        os.makedirs(os.path.join(dots, "claude"))
+        os.symlink(os.path.join(dots, "claude"), os.path.join(self.home, ".claude"))
+        code, _, err = self.render("--into", os.path.join(dots, "claude", "CLAUDE.md"))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(lines(os.path.join(dots, ".claude", GATES)), ["claude/CLAUDE.md"])
+        self.assertFalse(os.path.exists(os.path.join(dots, "claude", GATES)))
