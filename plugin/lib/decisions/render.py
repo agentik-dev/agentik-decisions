@@ -54,7 +54,7 @@ from .common import (GIT_TIMEOUT, Refusal, bounded, disk_text, held, keeps_crlf,
 from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_parenthetical,
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
-from .tree import (SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
+from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
                    named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
@@ -314,17 +314,21 @@ def head_holds(path, data):
     name in another case, a link, an index told not to look."""
     real = os.path.realpath(path)
     where, name = os.path.dirname(real), os.path.basename(real)
+    # git's repository variables are dropped from each child (n43), so HEAD is the repository
+    # that holds the file, whatever a hook or a caller exports
+    env = {key: value for key, value in os.environ.items() if key not in REPO_VARIABLES}
     try:
         code, out = bounded(["git", "rev-parse", "--verify", "-q", "HEAD^{commit}"],
-                            GIT_TIMEOUT, cwd=where)
+                            GIT_TIMEOUT, cwd=where, env=env)
         sha = out.strip()
         if code != 0 or not sha:
             return None
         blob = subprocess.run(["git", "cat-file", "blob", "%s:./%s" % (sha, name)],
-                              cwd=where, capture_output=True, timeout=GIT_TIMEOUT)
+                              cwd=where, env=env, capture_output=True, timeout=GIT_TIMEOUT)
         if blob.returncode != 0 or blob.stdout != data:
             return None
-        code, out = bounded(["git", "rev-parse", "--short", sha], GIT_TIMEOUT, cwd=where)
+        code, out = bounded(["git", "rev-parse", "--short", sha], GIT_TIMEOUT, cwd=where,
+                            env=env)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return out.strip() if code == 0 and out.strip() else None
