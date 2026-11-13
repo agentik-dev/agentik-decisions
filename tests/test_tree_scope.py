@@ -185,7 +185,8 @@ class ScopeTree(Tree):
         self.assertEqual(code, 0, err)
         self.assertIn("render: wrote ", out)
         self.assertEqual(self.read(self.target), TREE_FILE)
-        self.assertEqual(sorted(os.listdir(self.folder)), ["CLAUDE.md", "orchard-hq"])
+        # d38 R1: the folder's own edit-gates list names its CLAUDE.md
+        self.assertEqual(sorted(os.listdir(self.folder)), [".claude", "CLAUDE.md", "orchard-hq"])
         code, out, err = self.render("--scope", "tree", "--check")
         self.assertEqual(code, 0, out + err)
         self.assertEqual(self.render("--scope", "tree")[1].count("is fresh"), 1)

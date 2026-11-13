@@ -10,8 +10,10 @@ ledger without the section, and a target that exists and is not a tree's file th
 wrote; `--check` exits 1 when that file is absent or differs. Either scope refuses a target
 whose block names another ledger. `--check` and `--lint` print the file's loaded bytes
 beside its ceiling (`tree.CEILINGS`), and exit 1 over it only under `--ceiling`; `--lint`
-warns on stderr, its exit unchanged, on a title outside the ten and on a rule word in a
-hand-written line outside the block.
+warns on stderr, its exit unchanged, on a title outside the ten, on a rule word in a
+hand-written line outside the block, and (d38) on a line of the ledger's checkout's
+edit-gates list that reaches outside the checkout or of the owner's list that a checkout's
+or a folder's list owns.
 
 The lint runs first in every mode, over the ledger and the OPEN-QUESTIONS.md
 beside it: each problem prints `file:line: message` and the exit is 1. `--lint` stops there,
@@ -43,6 +45,7 @@ stays fresh until `render` shortens it.
 import difflib
 import os
 import subprocess
+import sys
 
 from . import questions
 from .ask import LOCK, NEW_WAIT
@@ -64,9 +67,9 @@ TARGET = "CLAUDE.md"
 
 GATES = "edit-gates"
 GATE_EXEMPT = frozenset({"tests", "testdata", "fixtures"})
-GATES_HEAD = ("# The edit gates (hq design/09 section 7.2): the files below are refused to an edit\n"
-              "# tool and a shell write; change one through the instruct skill. A path or glob a\n"
-              "# line; `agentik decisions render` and `answer` add the files they write.\n")
+GATES_HEAD = ("# The edit gates: the files below are refused to an edit tool and a shell write;\n"
+              "# change one through the instruct skill. A path or glob a line; `agentik\n"
+              "# decisions render` and `answer` add the files they write.\n")
 
 
 def _checkout_top(path):
@@ -81,36 +84,137 @@ def _checkout_top(path):
         folder = up
 
 
-def list_gate(target):
-    """g2b: name `target` once in its scope's edit-gates list, so the session plugin's gate
-    refuses an edit of it: a file in a checkout in that checkout's `.claude/edit-gates`,
-    relative to its top level; a file in no checkout (the global file, a tree folder's file)
-    in the user's, in `CLAUDE_CONFIG_DIR`, else `~/.claude`, as `~/` under the home folder.
-    Never a file under a `tests`, `testdata` or `fixtures` folder. Returns the list written,
-    or None."""
-    target = os.path.abspath(target)
-    top = _checkout_top(target)
+def _owner_folder():
+    """The owner's config folder: `CLAUDE_CONFIG_DIR`, else `~/.claude`."""
+    moved = os.environ.get("CLAUDE_CONFIG_DIR")
+    return os.path.abspath(os.path.expanduser(moved) if moved else
+                           os.path.join(os.path.expanduser("~"), ".claude"))
+
+
+def _owners(path):
+    """`path` lies under the owner's config folder, or under `~/.claude` when it moved."""
+    return any(_below(path, f) for f in (_owner_folder(),
+                                         os.path.join(os.path.expanduser("~"), ".claude")))
+
+
+def _below(path, folder):
+    """`path` is strictly below `folder`, by its spelling or by both real paths."""
+    pairs = ((os.path.abspath(path), os.path.abspath(folder)),
+             (os.path.realpath(path), os.path.realpath(folder)))
+    return any(p.startswith(f.rstrip(os.sep) + os.sep) for p, f in pairs)
+
+
+def _gate_line(target):
+    """(list, line) for `target` by `list_gate`'s layers, or None for an exempt file."""
+    real = os.path.realpath(target)
+    top = _checkout_top(real)  # r1: a link into a checkout is that checkout's file
+    target = real if top is not None else os.path.abspath(target)
+    top = top if top is not None else _checkout_top(target)
+    home = os.path.expanduser("~").rstrip(os.sep)
+    folder = os.path.dirname(target)
     if top is not None:
         parts = os.path.relpath(target, top).split(os.sep)
         if GATE_EXEMPT.intersection(parts[:-1]):
             return None
-        gates, line = os.path.join(top, ".claude", GATES), "/".join(parts)
-    else:
-        if GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
-            return None
-        home = os.path.expanduser("~").rstrip(os.sep)
-        moved = os.environ.get("CLAUDE_CONFIG_DIR")
-        folder = os.path.expanduser(moved) if moved else os.path.join(home, ".claude")
-        gates = os.path.join(folder, GATES)
-        line = ("~/" + target[len(home) + 1:] if target.startswith(home + os.sep)
-                else target)
-    old = read_text(gates) if os.path.exists(gates) else None
-    if old is not None and line in (l.strip() for l in old.splitlines()):
+        return os.path.join(top, ".claude", GATES), "/".join(parts)
+    if GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
         return None
-    text = GATES_HEAD if old is None else (old if old.endswith("\n") or not old else old + "\n")
-    os.makedirs(os.path.dirname(gates), exist_ok=True)
-    write_text(gates, text + line + "\n")
-    return gates
+    if not _owners(target) and _below(folder, home):
+        return os.path.join(folder, ".claude", GATES), os.path.basename(target)
+    return os.path.join(_owner_folder(), GATES), (
+        "~/" + target[len(home) + 1:] if target.startswith(home + os.sep) else target)
+
+
+def list_gate(target, err=None, verb="render"):
+    """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
+    gate refuses an edit of it: a file in a checkout (found from its real path) in that
+    checkout's `.claude/edit-gates`, relative to its top level; else a file under the owner's
+    config folder (or `~/.claude`) in the owner's list, as `~/` under the home folder; else
+    a file whose folder is below the home folder (a tree folder's) in that folder's
+    `.claude/edit-gates`, by its name; else the owner's list, absolute. Never a file under a
+    `tests`, `testdata` or `fixtures` folder. Never raises: a list it cannot write is one
+    warning on `err` (r1 F2). Returns the list written, or None."""
+    gates = target
+    try:
+        found = _gate_line(target)
+        if found is None:
+            return None
+        gates, line = found
+        old = read_text(gates) if os.path.exists(gates) else None
+        if old is not None and line in (l.strip() for l in old.splitlines()):
+            return None
+        text = GATES_HEAD if old is None else (old if old.endswith("\n") or not old
+                                               else old + "\n")
+        os.makedirs(os.path.dirname(gates), exist_ok=True)
+        write_text(gates, text + line + "\n")
+        return gates
+    except (OSError, ValueError, Refusal) as why:
+        (err or sys.stderr).write("%s: warning: %s is not listed: %s cannot be written (%s)\n"
+                                  % (verb, display(target), display(gates), why))
+        return None
+
+
+def _list_lines(gates):
+    """(number, line) of each non-comment line of the list `gates`; none when it is absent."""
+    try:
+        text = read_text(gates) if os.path.isfile(gates) else ""
+    except (OSError, Refusal):
+        return []
+    return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
+            if l.strip() and not l.strip().startswith("#") and "\0" not in l]
+
+
+def _checkout_warning(gates, top, up, n, line, keep):
+    first = os.path.join(up, line.split("/")[0])
+    if line.startswith(("/", "~", "..")):
+        return ["%s:%d: `%s` reaches outside the checkout; %s"
+                % (real_tilde(gates), n, line, keep)]
+    if line.split("/")[0] not in ("", ".") and first != top and os.path.isdir(first) \
+            and not os.path.lexists(os.path.join(top, line.split("/")[0])):
+        return ["%s:%d: `%s` names %s, a folder beside the checkout; %s"
+                % (real_tilde(gates), n, line, real_tilde(first), keep)]
+    return []
+
+
+def _lower_layer(line, home):
+    """The checkout or the listed folder below the home folder that owns an owner's line."""
+    full = home + line[1:] if line.startswith("~/") else line
+    if not full.startswith("/") or _owners(full):
+        return None
+    layer, folder = _checkout_top(full), os.path.dirname(full)
+    while layer is None and _below(folder, home):
+        if os.path.isfile(os.path.join(folder, ".claude", GATES)):
+            layer = folder
+        folder = os.path.dirname(folder)
+    return layer
+
+
+def gate_warnings(path):
+    """d38 R2, for `--lint`: a line of the ledger's checkout's list that is absolute, starts
+    with `~` or `..`, or whose first segment names a folder beside the checkout; a `/` or
+    `~/` line of the owner's list, outside its config folder, that lies in a checkout or
+    under a folder below the home folder that holds its own list."""
+    found, top = [], _checkout_top(os.path.abspath(path))
+    keep = "a checkout's list holds its own files, relative to its top level"
+    if top is not None:
+        gates, up = os.path.join(top, ".claude", GATES), os.path.dirname(top)
+        for n, line in _list_lines(gates):
+            try:
+                found.extend(_checkout_warning(gates, top, up, n, line, keep))
+            except (OSError, ValueError):
+                continue  # r1 F1: a path call that fails drops this line's check only
+    home = os.path.expanduser("~").rstrip(os.sep)
+    owner = os.path.join(_owner_folder(), GATES)
+    for n, line in _list_lines(owner):
+        try:
+            layer = _lower_layer(line, home)
+        except (OSError, ValueError):
+            continue  # r1 F1
+        if layer is not None:
+            found.append("%s:%d: `%s` lies under %s, a layer with a list of its own; the "
+                         "owner's list holds the user-scoped files" % (real_tilde(owner), n,
+                                                                      line, real_tilde(layer)))
+    return found
 
 
 def short_tail(text):
@@ -369,6 +473,7 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
                              real_tilde(os.path.dirname(folder))))
     if args.lint:
         warn(err, title_warnings(ledger))
+        warn(err, gate_warnings(path))
         out.write("render: the block for %s is %d B; it is loaded on every turn\n"
                   % (display(target), block_bytes(text) or 0))
         return 1 if measure(out, target, text, ledger, True) and ceiling else 0
@@ -401,11 +506,11 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
         return 1 if stale or (over and ceiling) else 0
     if old == text:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target)
+        list_gate(target, err)
         return 0
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(target, text)
-    list_gate(target)
+    list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
     return 0
 
@@ -425,6 +530,7 @@ def cmd_render(args, path, out, err):
         os.path.join(os.path.dirname(path), TARGET)
     if args.lint:
         warn(err, title_warnings(ledger))
+        warn(err, gate_warnings(path))
         # d32: the measure, the bytes of the block render would write there, CRLF counted
         # when the target keeps it; a target render refuses gets no size (F4)
         try:
@@ -468,11 +574,11 @@ def cmd_render(args, path, out, err):
         return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target)
+        list_gate(target, err)
         return 0
     crlf = keeps_crlf(target)
     write_text(target, new)
-    list_gate(target)
+    list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     return 0
 
