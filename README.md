@@ -138,7 +138,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
-`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line HEAD's copy of the block lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; with no copy in HEAD it exits 2: commit first.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line its base line (`new` and `ask` write it) lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; a block with none reads HEAD.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
