@@ -28,12 +28,16 @@ INSTRUCT = "/decisions:instruct"
 
 
 def snapshot(root):
-    """Every file under `root`, `.git` aside, by its path and bytes."""
+    """Every file under `root`, `.git` aside, by its path and bytes; a link to nothing by
+    what it names."""
     found = {}
     for folder, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d != ".git"]
         for name in files:
             path = os.path.join(folder, name)
+            if not os.path.exists(path):
+                found[os.path.relpath(path, root)] = "-> " + os.readlink(path)
+                continue
             with open(path, "rb") as handle:
                 found[os.path.relpath(path, root)] = handle.read()
     return found
@@ -283,3 +287,25 @@ class ReviewOne(Base):
         code, out, _ = self.run_cli("init", "--help")
         self.assertIn("never a folder", out)
 
+    def test_f5_init_and_the_no_ledger_line_agree(self):
+        for kind, make, remove in (
+                ("a link to nothing", lambda: os.symlink("gone.md", self.ledger), os.unlink),
+                ("a folder", lambda: os.mkdir(self.ledger), os.rmdir)):
+            make()
+            code, _, shown = self.run_cli("show", "1")
+            self.assertEqual(code, 2)
+            self.assertIn(kind, shown)
+            self.assertIn(INIT, shown)
+            before = snapshot(self.repo)
+            code, out, err = self.run_cli("init")
+            self.assertEqual(code, 2, out)
+            self.assertIn(kind, err)
+            self.assertNotIn("already", err)
+            self.assertIn("move it away", shown)
+            self.assertIn("move it away", err)
+            self.assertEqual(snapshot(self.repo), before, kind)
+            remove(self.ledger)
+            code, _, err = self.run_cli("init")
+            self.assertEqual(code, 0, err)
+            for path in (self.ledger, self.claude, self.gates):
+                os.unlink(path)

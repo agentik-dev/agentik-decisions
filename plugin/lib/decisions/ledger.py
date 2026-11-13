@@ -421,6 +421,10 @@ def locate(ledger=None, cwd=None):
     """The ledger's path, by `where`; a refusal when no file is there, naming `init`."""
     path = where(ledger, cwd)
     if not os.path.isfile(path):
+        way = in_the_way(path)
+        if way:
+            # dc1 r1 F5: what stands there, so the act it names can run
+            raise Refusal("no ledger: %s; then `agentik decisions init` makes one" % way)
         # dc1 R5: the refusal names the next act
         raise Refusal("no ledger at %s; `agentik decisions init%s` makes one"
                       % (path, " --ledger %s" % shlex.quote(ledger) if ledger else ""))
