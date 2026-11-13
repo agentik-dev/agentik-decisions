@@ -13,7 +13,9 @@ through respeak and ignores `--ledger`; `--check` (d39, below) reads git too, an
 HANDOFF.md of every REPO, each REPO taking only the steps whose `repo` cell is its
 directory name less `agentik-`, or `suite`; a table with no `repo` column gives every
 REPO every step. An item's level is the session plugin's
-S1 to S4; an unlevelled item is placed as S4 and printed `S4?`. Exit 0 whenever
+S1 to S4; an unlevelled item is placed as S4 and printed `S4?`. In `--json` each step
+holds `level`, a table row's `level` cell when it is S1 to S4, else null, and `state`, its
+state cell read as {cell, word, rest, on, n, text}, null for a `N. ` step (su5). Exit 0 whenever
 the files could be read; 2 for usage, a REPO that is not a directory, or a file
 unreadable or not UTF-8.
 """
@@ -249,9 +251,10 @@ def nice_items(text):
 
 def build_order(text):
     """(order, steps): order is {line, heading, open} or None; steps in file order,
-    each {n, line, title, done, spans, repo}. The first step shape found in the section, a
+    each {n, line, title, done, spans, repo, level}. The first step shape found in the section, a
     `N. ` item or a numbered table row, wins; the other is ignored. A row's repo is its
-    cell under the `repo` column of the header above its table's separator, else None."""
+    cell under the `repo` column of the header above its table's separator, else None; its
+    level (su5 R2) its cell under the `level` column when it is S1 to S4, else None."""
     rows = gathered(text)
     marker = next((n for n, kind, payload, _ in rows if kind == "prose"
                    and payload.strip() == MARKER), None)
@@ -286,16 +289,18 @@ def build_order(text):
             lead = (joined[:cut] if cut >= 0 else joined)[:LEAD]
             steps.append({"n": number, "line": n, "title": trimmed(title)[:TITLE],
                           "done": bool(DONE.search(lead)), "spans": spans(joined),
-                          "repo": None})
+                          "repo": None, "level": None})
         elif kind == "row":
             title = payload[1] if len(payload) > 1 else ""
             column = header.index("repo") if header and "repo" in header else None
             repo = None if column is None else (payload[column] if column < len(payload) else "")
             state = header.index("state") if header and "state" in header else -1
+            at = header.index("level") if header and "level" in header else None
+            level = payload[at] if at is not None and at < len(payload) else ""
             steps.append({"n": int(payload[0]), "line": n, "title": trimmed(title)[:TITLE],
                           "done": payload[-1].startswith("done"),
                           "spans": spans(" | ".join(payload)), "repo": repo,
-                          "item": title,
+                          "item": title, "level": level if CELL_LEVEL.match(level) else None,
                           "state": payload[state] if state < len(payload) else ""})
     heading = rows[start]
     order = {"line": heading[0], "heading": heading[2][1],
@@ -370,11 +375,30 @@ def view(repo, ordered=None):
             "closed": closed}
 
 
-def as_json(v):
+def cell_state(cell, names):
+    """su5 R3: a state cell as {cell, word, rest, on, n, text}: its first word less one
+    trailing `:`, what follows it, what `reference` reads of a `waiting` cell, and the words
+    after `the owner:` for that form, else after the cell's first `;`."""
+    split = cell.split(None, 1)
+    word = (split[0][:-1] if split[0].endswith(":") else split[0]) if split else None
+    ref = reference(cell, names) if word == "waiting" else {}
+    on = ref.get("on")
+    after = ("the owner:" if on == "the owner" else ";")
+    return {"cell": cell, "word": word, "rest": split[1].strip() if len(split) > 1 else "",
+            "on": on, "n": ref.get("n"),
+            "text": cell.split(after, 1)[1].strip() if after in cell else ""}
+
+
+def as_json(v, names=()):
+    """One repo's view as JSON; `names`, the repo names `reference` takes (su5 R4), joined
+    by the repo cells of the view's own steps."""
     keys = ("rank", "line", "title", "level", "placed_as", "level_from", "after_step", "span")
+    names = set(names) | set(s["repo"] for s in v["steps"] if s["repo"])
     return {"repo": v["repo"], "nice": v["nice"], "handoff": v["handoff"], "order": v["order"],
-            "steps": [{k: s[k] for k in ("n", "line", "title", "done") + (
-                ("repo",) if v["ordered"] else ())} for s in v["steps"]],
+            "steps": [dict({k: s[k] for k in ("n", "line", "title", "done") + (
+                ("repo",) if v["ordered"] else ())}, level=s["level"],
+                state=cell_state(s["state"], names) if "state" in s else None)
+                for s in v["steps"]],
             "items": [dict({k: i[k] for k in keys}, **({"id": i["id"]} if "id" in i else {}))
                       for kind, i in v["rows"] if kind == "item"],
             "closed": v["closed"]}
@@ -437,7 +461,10 @@ def cmd_backlog(args, out, err):
         else:
             views.append(v)
     if getattr(args, "json", False):
-        out.write(json.dumps({"repos": [as_json(v) for v in views], "skipped": skipped},
+        # su5 R4: the table's repo cells and each REPO's short name, a checkout or not
+        names = set(short_name(r) for r in repos) | set(
+            s["repo"] for s in (ordered[2] if ordered else []) if s["repo"])
+        out.write(json.dumps({"repos": [as_json(v, names) for v in views], "skipped": skipped},
                              indent=2) + "\n")
         return 0
     blocks_out = ["\n".join(as_text(v)) for v in views]
