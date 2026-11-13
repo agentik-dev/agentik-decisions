@@ -63,9 +63,11 @@ Cases in `tests/test_rw2_rows.py` on `Orchard`, made-up rows; each red at the pi
 
 ## 4. Findings that name this row: ledger, NICE, forks
 
-Not built: `rows close`, a cut builder's charter read, `covers`, `agentik rows`, the gate's files, any write. No fork. Version `0.21.15`, last under `plugin/`, where `acf8870` put it.
+Not built: `rows close`, a cut builder's charter read, `covers`, `agentik rows`, the gate's files, any write. No fork. Version `0.21.17`, last under `plugin/`, where `acf8870` put it.
 
-Review 1, ruled fix, mended here: F1 words and options in any order (`parse_known_args`; other verbs as before); F2 the land command `shlex.quote`d; F3 each text line through speak's escape and control filters; F4 a stage by its opening words; F5 a cell is its row's second cell; L1 an unreadable record skips its row. L3 to L11: NICE n89 to n93.
+Review 1, ruled fix, mended here: F1 words and options in any order (`parse_known_args`; other verbs as before); F2 the land command `shlex.quote`d; F3 each text line through speak's escape and control filters; F4 a stage by its opening words; F5 a cell is its row's second cell; L1 an unreadable record skips its row. L3 to L11: NICE n95 to n99.
+
+Phase 2: main merged at `d1de117` (su5, in1), both verbs kept; NICE n100, n101 filed, 14 oldest S4 rows to `history/NICE-overflow.md`; 0.21.17 last.
 
 ## 5. Forbidden reads
 
