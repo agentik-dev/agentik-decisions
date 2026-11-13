@@ -392,7 +392,8 @@ class Backlog(Hermetic):
 
     def test_json_fields(self):
         data = self.view(fixture("numbered"))
-        self.assertEqual(set(data), {"repos", "skipped"})
+        # ak6 R8: the plug's two keys first, the pin's two after
+        self.assertEqual(list(data), ["schema", "ok", "repos", "skipped"])
         repo = data["repos"][0]
         self.assertEqual(set(repo), {"repo", "nice", "handoff", "order", "steps", "items",
                                      "closed"})

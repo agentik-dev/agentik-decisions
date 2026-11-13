@@ -14,7 +14,7 @@ import decisions
 from tests.hermetic import REPO, SAMPLE, Hermetic
 
 VERBS = ("show", "find", "new", "ask", "answer", "render", "init", "doctor", "backlog", "questions",
-         "expire", "analyze", "audit", "rows", "install-cli")
+         "expire", "analyze", "audit", "rows", "describe", "install-cli")
 DROPPED = ("scope", "rule", "against", "supersede", "convert", "stats", "check",
            "index")
 

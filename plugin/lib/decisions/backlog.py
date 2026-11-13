@@ -30,6 +30,8 @@ from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, git
 
 __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
+# ak6 R8: the plug's status read; both of `cmd_backlog`'s JSON forms open with it and `ok`.
+SCHEMA = "agentik.decisions.backlog/1"
 NICE = "NICE_TO_HAVE.md"
 HANDOFF = "HANDOFF.md"
 PREFIX_NAME = "agentik-"
@@ -464,7 +466,8 @@ def cmd_backlog(args, out, err):
         # su5 R4: the table's repo cells and each REPO's short name, a checkout or not
         names = set(short_name(r) for r in repos) | set(
             s["repo"] for s in (ordered[2] if ordered else []) if s["repo"])
-        out.write(json.dumps({"repos": [as_json(v, names) for v in views], "skipped": skipped},
+        out.write(json.dumps({"schema": SCHEMA, "ok": True,
+                              "repos": [as_json(v, names) for v in views], "skipped": skipped},
                              indent=2) + "\n")
         return 0
     blocks_out = ["\n".join(as_text(v)) for v in views]
@@ -738,7 +741,7 @@ def cmd_check(args, out, err):
     left = [r for r in results if r["red"] and r["n"] not in written]
     if getattr(args, "json", False):
         keys = ("n", "repo", "cell", "reference", "checked_in", "red", "skipped")
-        out.write(json.dumps({"handoff": path, "checkout": home,
+        out.write(json.dumps({"schema": SCHEMA, "ok": True, "handoff": path, "checkout": home,
                               "rows": [dict({k: r[k] for k in keys},
                                             written=r["n"] in written) for r in results],
                               "stale": len(left), "written": written}, indent=2) + "\n")
