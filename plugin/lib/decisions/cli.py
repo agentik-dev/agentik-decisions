@@ -37,6 +37,12 @@ Verbs
                                   once HEAD holds the ledger
     doctor [--json]               the interpreter, the tool, the plugin, the
                                   provider, the ledger and respeak
+    rows [check] [--json] [--root DIR] [REPO...]
+                                  each build row's stage, read from its folder
+                                  under DIR (history/rows at the git top) and
+                                  from git, with its next act; `check` walks
+                                  open and closed rows for contradictions;
+                                  writes nothing
     install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
                                   its `decisions` link and the `agentik` door
                                   under P (default ~/.local): 0, or 1 it could not
@@ -82,8 +88,8 @@ Verbs
                                   no ledger; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog`, `expire` and `analyze` read no ledger and ignore it, and
-`questions` ignores it, reading the DECISIONS.md beside each REPO's file.
+working directory; `backlog`, `expire`, `analyze` and `rows` read no ledger and ignore it,
+and `questions` ignores it, reading the DECISIONS.md beside each REPO's file.
 `--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -99,7 +105,7 @@ Exit codes
        render`)
     1  `render`: a lint problem, with --check a stale block or an absent tree's
        file, or under --ceiling a file over its ceiling; `backlog --check`: a
-       stale state cell left
+       stale state cell left; `rows check`: a stale row
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
@@ -131,6 +137,7 @@ from .doctor import cmd_doctor
 from .ledger import locate
 from .lookup import cmd_find, cmd_show
 from .render import cmd_render
+from .rows import cmd_rows
 
 __all__ = ["build_parser", "main", "alias_note", "VERBS", "ALIAS", "NOTE"]
 
@@ -293,6 +300,16 @@ def build_parser():
                             "an `instruct:` subject, in REPO or the working directory's repo")
     audit.add_argument("--json", action="store_true")
 
+    rows = subs.add_parser("rows", parents=[ledger],
+                           help="each build row's stage from its records and git; writes nothing")
+    rows.add_argument("words", nargs="*", metavar="[check] REPO",
+                      help="`check` first walks open and closed rows for contradictions; "
+                           "then each repo's directory a row's repo cell may name")
+    rows.add_argument("--root", default=None, metavar="DIR",
+                      help="the folder of row folders; the default is history/rows at the "
+                           "working directory's git top, whose git top is the home")
+    rows.add_argument("--json", action="store_true")
+
     install = subs.add_parser("install-cli",
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
@@ -321,7 +338,14 @@ def main(argv=None, out=None, err=None):
     try:
         # argparse prints --help and its usage errors itself: into `out` and `err`.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            args = build_parser().parse_args(argv)
+            parser = build_parser()
+            # rw2 review 1 F1: `rows` takes its words and options in any order; every
+            # other verb's leftover words are refused as `parse_args` refuses them.
+            args, extra = parser.parse_known_args(argv)
+            if extra and args.verb == "rows" and not any(w.startswith("-") for w in extra):
+                args.words = list(args.words or []) + extra
+            elif extra:
+                parser.error("unrecognized arguments: %s" % " ".join(extra))
     except SystemExit as exc:
         return 2 if exc.code else 0
     if not args.verb:
@@ -345,6 +369,9 @@ def main(argv=None, out=None, err=None):
         if args.verb == "analyze":
             # `analyze` reads git and NICE_TO_HAVE.md, never a ledger.
             return cmd_analyze(args, out, err)
+        if args.verb == "rows":
+            # `rows` reads row folders and git, never a ledger.
+            return cmd_rows(args, out, err)
         if args.verb == "audit" and getattr(args, "edits", None) is not None:
             # d37: `audit --edits` reads git's history, never a ledger
             return cmd_edits(args, out, err)
@@ -366,4 +393,4 @@ VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
          "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
          "analyze": cmd_analyze, "audit": cmd_audit,
-         "install-cli": cmd_install_cli}
+         "rows": cmd_rows, "install-cli": cmd_install_cli}
