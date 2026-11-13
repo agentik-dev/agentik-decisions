@@ -36,6 +36,8 @@ NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 FROM_HANDOFF = re.compile(r"^HANDOFF ([0-9]+)\b")
 FROM_NICE = re.compile(r"^(\S+) (n[0-9]+(?:, ?n[0-9]+)*)\b")
 PHASE_2 = "phase 2"
+# Review 1 F4: R3's four stages, read by a cell's opening words.
+STAGE = re.compile(r"^(first build|fix of review [0-9]+|phase 2|cut)(?![\w-])")
 GATE_STATUS = "agentik session gate status"
 # R6: a row's keys, in this order.
 KEYS = ("row", "repo", "level", "from", "depends_on", "waits", "state", "stale", "branch",
@@ -71,7 +73,8 @@ def table(text):
             continue
         if all(re.match(r"^:?-+:?$", c) for c in cells):
             continue
-        found.setdefault(cells[0].lower(), " | ".join(cells[1:]).strip())
+        # review 1 F5: the value is the second cell, whatever columns follow
+        found.setdefault(cells[0].lower(), cells[1] if len(cells) > 1 else "")
     return found
 
 
@@ -84,6 +87,12 @@ def first(value):
 def sha_of(value):
     word = first(value)
     return word if SHA_WORD.match(word) else None
+
+
+def stage_of(value):
+    """Review 1 F4: the stage by its opening words, else the cell as written."""
+    m = STAGE.match(value)
+    return m.group(1) if m else value
 
 
 def gate_of(value):
@@ -144,7 +153,7 @@ def records(folder):
         build, review = BUILD.match(name), REVIEW.match(name)
         if build and os.path.isfile(path):
             t = table(read_text(path))
-            builds.append({"n": int(build.group(1)), "file": name, "stage": t.get("stage", ""),
+            builds.append({"n": int(build.group(1)), "file": name, "stage": stage_of(t.get("stage", "")),
                            "head": sha_of(t.get("head", "")), "gate": gate_of(t.get("gate", ""))})
         elif review and os.path.isfile(path):
             t = table(read_text(path))
