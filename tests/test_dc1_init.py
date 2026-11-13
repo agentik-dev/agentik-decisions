@@ -267,3 +267,19 @@ class ReviewOne(Base):
             self.assertIn("its own CLAUDE.md", err)
             self.assertEqual(snapshot(self.repo), before, name)
 
+    def test_f4_a_folder_named_by_ledger_is_refused(self):
+        os.mkdir(os.path.join(self.repo, "docs"))
+        for name in ("sub/", "docs", "docs/"):
+            before = snapshot(self.repo)
+            code, out, err = self.run_cli("init", "--ledger", name)
+            self.assertEqual(code, 2, (name, out))
+            self.assertIn("folder", err)
+            self.assertEqual(snapshot(self.repo), before, name)
+            self.assertFalse(os.path.lexists(os.path.join(self.repo, "sub")))
+        code, _, err = self.run_cli("show", "1", "--ledger", "sub/")
+        self.assertEqual(code, 2)
+        self.assertNotIn("init --ledger sub/", err)
+        self.assertIn("sub/DECISIONS.md", err)
+        code, out, _ = self.run_cli("init", "--help")
+        self.assertIn("never a folder", out)
+

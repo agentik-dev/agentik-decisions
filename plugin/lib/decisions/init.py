@@ -7,7 +7,7 @@ ledger rendered."""
 import os
 
 from .common import Refusal, commit_texts, disk_text, keeps_crlf, read_text
-from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, parse, where
+from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, in_the_way, parse, where
 from .render import (TARGET, apply, block, gate_said, growth, is_ledger, list_gate,
                      refuse_another)
 
@@ -19,7 +19,9 @@ EMPTY = "# Decisions\n\n## %s\n\n## %s\n\n## %s\n" % (IN_FORCE, PROPOSED, SUPERS
 def cmd_init(args, out, err):
     path = where(getattr(args, "ledger", None), os.getcwd())
     if os.path.lexists(path):
-        raise Refusal("init: a ledger is already at %s; nothing written" % path)
+        way = in_the_way(path)  # dc1 r1 F4, F5: a folder or a link to nothing is said
+        raise Refusal("init: %s; nothing written" % way if way else
+                      "init: a ledger is already at %s; nothing written" % path)
     folder = os.path.dirname(path)
     if not os.path.isdir(folder):
         raise Refusal("init: %s is no folder; nothing written" % folder)

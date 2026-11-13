@@ -32,8 +32,9 @@ import shlex
 from .common import Refusal, git_top, read_text
 from . import questions
 
-__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "where", "display", "check_entry",
-           "lint", "repeats", "sentences", "dropped", "unclosed", "final_parenthetical",
+__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "where", "in_the_way", "display",
+           "check_entry", "lint", "repeats", "sentences", "dropped", "unclosed",
+           "final_parenthetical",
            "bold_title", "NAME", "IN_FORCE", "is_every", "is_tree", "ordered", "TITLES",
            "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "TREE_SESSION", "IN_FORCE_CAP", "LEGACY"]
 
@@ -390,12 +391,30 @@ def where(ledger=None, cwd=None):
     """The ledger's place, there or not: `ledger` when named, else DECISIONS.md at the git
     top of `cwd`; outside a git work tree with none named, a refusal."""
     cwd = os.getcwd() if cwd is None else cwd
+    if ledger and ledger.endswith(tuple(filter(None, (os.sep, os.altsep)))):
+        # dc1 r1 F4: --ledger names the ledger's file, never a folder
+        raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
+                      % (shlex.quote(ledger), shlex.quote(ledger + NAME)))
     if ledger:
         return os.path.abspath(os.path.join(cwd, os.path.expanduser(ledger)))
     top = git_top(cwd)
     if not top:
         raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger" % cwd)
     return os.path.join(top, NAME)
+
+
+def in_the_way(path):
+    """What stands at `path` when it is there and no ledger's file, in words, else None:
+    `init` refuses with it, and `locate`'s refusal says the same (dc1 r1 F4, F5)."""
+    if os.path.isdir(path):
+        kind = "a folder"
+    elif os.path.islink(path) and not os.path.exists(path):
+        kind = "a link to nothing"
+    elif os.path.lexists(path) and not os.path.isfile(path):
+        kind = "no regular file"
+    else:
+        return None
+    return "%s is %s, not a ledger; move it away or name a file with --ledger" % (path, kind)
 
 
 def locate(ledger=None, cwd=None):

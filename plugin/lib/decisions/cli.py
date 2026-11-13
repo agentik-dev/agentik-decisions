@@ -155,7 +155,8 @@ NOTE = "decisions: renamed; use 'agentik decisions \u2026' (ends 2026-12-31)\n"
 def build_parser():
     ledger = argparse.ArgumentParser(add_help=False)
     ledger.add_argument("--ledger", default=argparse.SUPPRESS,
-                        help="the ledger; the default is DECISIONS.md at the git top level")
+                        help="the ledger's file, never a folder; the default is DECISIONS.md "
+                             "at the git top level")
     parser = argparse.ArgumentParser(prog="agentik decisions", description=__doc__, parents=[ledger],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version="agentik-decisions %s" % VERSION)
