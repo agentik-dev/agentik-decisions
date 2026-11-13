@@ -13,12 +13,15 @@ resolved file, under the session's new state folder else its old one: in range,
 none, out of range or unparsable), ledger (the DECISIONS.md `--ledger` names
 or the git top holds: lint clean, absent at the git top as a warn, a named
 file absent or its problems as a fail)
-and respeak (design d23 section 6: `ok` with the root `speak.respeak_root`
-finds, else a warn, since only `ask` renders through it and keeps its text
-without it).
+and respeak (design d23 section 6, packet fk4: `ok` with the root
+`speak.respeak_source` finds, by `RESPEAK_ROOT`, the suite's sources or the
+installed file, else a warn, since only `ask` renders through it and keeps its
+text without it; a source other than the variable or `respeak@agentik` leaves
+its id and root out of the detail and gives them in the check's `source`).
 Exit 0 with no `fail`, 2 otherwise; a `warn` never changes it. `--json` prints the
 plug's doctor read (packet ak6): {"schema": "agentik.doctor/1", "ok": true, "tool":
-"decisions", "failed", "warned", "checks": [{name, status, detail, remedy}], "provider":
+"decisions", "failed", "warned", "checks": [{name, status, detail, remedy}] (respeak's also
+`source`), "provider":
 "none"|"session <v>, profile <p>"}; `ok` says the read ran, `failed` counts the fails. A
 remedy is one command, set only where a constant or the detail names it (`remedy`).
 """
@@ -35,7 +38,7 @@ import time
 
 from .common import VERSION, Refusal, bounded
 from .ledger import lint, locate
-from .speak import respeak_root
+from .speak import respeak_source
 
 __all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "first_path", "MARKETPLACE",
            "PLUGIN", "TOOL", "OLD_MARKETPLACE", "OLD_PLUGIN", "ALIAS", "SESSION_STATE",
@@ -54,6 +57,11 @@ SESSION_STATE = ("agentik-session", "claude-code-session")
 MARKETPLACE_HINT = "claude plugin marketplace add agentik-dev/agentik-commons"
 PLUGIN_HINT = "claude plugin install decisions@agentik"
 LINT_HINT = "agentik decisions render --lint"
+# fk4 R6: where the owner says which respeak stands when several are installed
+SOURCES_HINT = "agentik config suite.sources.respeak"
+RESPEAK_ABSENT = ("respeak not found (RESPEAK_ROOT or an installed plugin); optional: "
+                  "`ask` keeps its text unrendered, every other verb runs the same")
+NOT_CHECKED = "not checked: say which with the suite's sources"
 # ak6: the launcher's mend in every case, since `make install` works only in a checkout and a
 # launcher of another version cannot mend itself.
 INSTALL_HINT = "/decisions:install-cli"
@@ -297,24 +305,55 @@ def check_ledger(ledger, cwd):
     return "ok", "%s: %d entries, lint clean" % (found.path, len(found.entries))
 
 
-def check_respeak(env):
-    """ok: the respeak root `ask` would use; warn: none, and `ask` keeps its text."""
-    root = respeak_root(env, os.path.join(_home(env), ".claude", "plugins", "cache"))
+def respeak_line(found):
+    """fk4 R6: (status, detail, source) of what `speak.respeak_source` found; `source`
+    is None by the variable or for `respeak@agentik`, else its five keys."""
+    root, kind, by = found["root"], found["kind"], found["by"]
+    if by == "variable":
+        return (("ok", "%s (RESPEAK_ROOT gave it)" % root, None) if root
+                else ("warn", RESPEAK_ABSENT, None))
+    if kind == "own" and root:
+        return "ok", root, None
+    source = {key: found[key] for key in ("kind", "plugin", "root", "version", "declared")}
+    declared = found["declared"]
     if root:
-        return "ok", root
-    return "warn", ("respeak not found (RESPEAK_ROOT or an installed plugin); optional: "
-                    "`ask` keeps its text unrendered, every other verb runs the same")
+        return "ok", ("a folder a line of the suite's sources names" if kind == "folder" else
+                      "the one respeak plugin installed" if by == "file" else
+                      "the respeak plugin the suite's sources name"), source
+    if kind == "undecided":
+        count = len(found["seen"])
+        if by == "file":
+            return "warn", "%d respeak plugins installed; %s" % (count, NOT_CHECKED), source
+        return "warn", ("%d respeak plugins installed and none said; `ask` keeps its text "
+                        "unrendered (%s)" % (count, SOURCES_HINT)), source
+    if kind in ("plugin", "folder") and declared:
+        return "warn", ("the sources line at %s:%d names %s; `ask` keeps its text unrendered"
+                        % (declared["path"], declared["line"],
+                           "a folder that is gone" if kind == "folder"
+                           else "a plugin that is not installed")), source
+    return "warn", RESPEAK_ABSENT, source
 
 
-def run_checks(cwd=None, env=None, ledger=None):
-    """[(name, status, detail)] and the provider summary."""
+def check_respeak(env, into=None):
+    """ok: the respeak root `ask` would use; warn: none, and `ask` keeps its text. With
+    `into`, `into["respeak"]` takes the check's `source` (R6)."""
+    status, detail, source = respeak_line(
+        respeak_source(env, os.path.join(_home(env), ".claude", "plugins", "cache")))
+    if into is not None:
+        into["respeak"] = source
+    return status, detail
+
+
+def run_checks(cwd=None, env=None, ledger=None, sources=None):
+    """[(name, status, detail)] and the provider summary; `sources`, a dict, takes each
+    check's `source` where it has one (fk4: respeak's)."""
     cwd = os.getcwd() if cwd is None else cwd
     env = os.environ if env is None else env
     provider = read_provider(env)
     checks = [("python",) + check_python(env), ("tool",) + check_tool(env),
               ("marketplace",) + check_marketplace(env), ("plugin",) + check_plugin(env),
               ("provider",) + check_provider(provider), ("ledger",) + check_ledger(ledger, cwd),
-              ("respeak",) + check_respeak(env)]
+              ("respeak",) + check_respeak(env, sources)]
     summary = ("session %s, profile %s" % (provider["version"], provider["profile"])
                if provider["status"] == "in-range" else "none")
     return checks, summary
@@ -332,20 +371,27 @@ def remedy(name, status, detail):
         return PLUGIN_HINT
     if name == "ledger" and status == "fail" and detail.endswith("(%s)" % LINT_HINT):
         return LINT_HINT
+    if name == "respeak" and detail.endswith("(%s)" % SOURCES_HINT):
+        return SOURCES_HINT
     return None
 
 
 def cmd_doctor(args, out, err):
-    checks, provider = run_checks(ledger=getattr(args, "ledger", None))
+    sources = {}
+    checks, provider = run_checks(ledger=getattr(args, "ledger", None), sources=sources)
     if getattr(args, "json", False):
         statuses = [status for _, status, _ in checks]
+        rows = []
+        for n, s, d in checks:
+            rows.append({"name": n, "status": s, "detail": d, "remedy": remedy(n, s, d)})
+            if n in sources:
+                rows[-1]["source"] = sources[n]
         out.write(json.dumps({"schema": "agentik.doctor/1", "ok": True, "tool": "decisions",
                               "failed": statuses.count("fail"), "warned": statuses.count("warn"),
-                              "checks": [{"name": n, "status": s, "detail": d,
-                                          "remedy": remedy(n, s, d)} for n, s, d in checks],
-                              "provider": provider}, indent=2) + "\n")
+                              "checks": rows, "provider": provider}, indent=2) + "\n")
     else:
         for name, status, detail in checks:
-            out.write("%s %s: %s\n" % (status, name, detail))
+            root = (sources.get(name) or {}).get("root")
+            out.write("%s %s: %s%s\n" % (status, name, detail, " at %s" % root if root else ""))
     return 2 if any(status == "fail" for _, status, _ in checks) else 0
 

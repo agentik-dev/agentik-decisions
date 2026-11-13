@@ -273,7 +273,9 @@ class Doctor(Plug):
                          (statuses.count("fail"), statuses.count("warn")))
         checks = {c["name"]: c for c in got["checks"]}
         for check in got["checks"]:
-            self.assertEqual(list(check), ["name", "status", "detail", "remedy"])
+            # fk4 R6: respeak's check also gives its `source`
+            self.assertEqual(list(check), ["name", "status", "detail", "remedy"] + (
+                ["source"] if check["name"] == "respeak" else []))
             if check["status"] == "ok":
                 self.assertIsNone(check["remedy"], check)
         self.assertEqual(checks["marketplace"]["remedy"], doctor.MARKETPLACE_HINT)
