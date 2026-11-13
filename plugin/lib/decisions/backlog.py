@@ -464,6 +464,7 @@ SHA_WORD = re.compile(r"^[0-9a-fA-F]{7,40}$")
 NAME_END = r"(?![\w/+@-]|\.\w)"
 SKIP_WHY = "repo not named or absent"
 NO_MAIN = "no main branch, unreadable"
+UNREAD_WHY = "unread (waiting names no owner, row or repo)"
 WORD = re.compile(r"^`([^`]+)`[:.,]?$")
 
 
@@ -478,7 +479,8 @@ def branch_word(word):
 def reference(cell, names):
     """R1: the reference a state cell's first words make (free text may follow after `;`):
     `waiting:` on `owner <n>`, `row <n>`, `the owner:` (tried first) or `<repo> <branch>`
-    with `<repo>` one of `names`, the table's repo column; `building [<repo>] <branch>`;
+    with `<repo>` one of `names`, the table's repo column and the short names of the REPOs
+    named that are checkouts (d43 R2); `building [<repo>] <branch>`;
     `done <date> <sha>`; `watch:`; else its first word."""
     head = cell.split(";", 1)[0].strip()
     raw = head.split()
@@ -560,12 +562,18 @@ class Git(object):
 
 def building_red(git, branch):
     """R3: `stale: landed <sha> <date>` for the newest merge on main's first-parent line whose
-    subject opens `merge <branch>` or `Merge <branch>`, or whose second parent is the branch's
-    tip; else `stale: branch gone` when the branch is absent; else None."""
+    second parent is the branch's tip, or whose subject opens `merge <branch>` or `Merge
+    <branch>` (d43 R1: when the branch is gone or its tip is an ancestor of that second
+    parent; a branch built on or cut again since is live); else `stale: branch gone` when the
+    branch is absent; else None. A fast-forward or a squash is never read as a landing."""
     named = re.compile(r"^[mM]erge %s%s" % (re.escape(branch), NAME_END))
     tip = git.tip(branch)
     for sha, parents, date, subject in git.line():
-        if len(parents) > 1 and (named.match(subject) or (tip and parents[1] == tip)):
+        if len(parents) < 2:
+            continue
+        if (tip is not None and parents[1] == tip) or (named.match(subject) and (
+                tip is None or git.run("merge-base", "--is-ancestor", tip, parents[1])
+                is not None)):
             return "stale: landed %s %s" % (sha[:7], date), sha, date
     return ("stale: branch gone" if tip is None else None), None, None
 
@@ -600,7 +608,6 @@ def answered(path):
 def checked(path, steps, repos, home):
     """R2 to R4: one result a table row of FILE at `path`."""
     rows = [s for s in steps if "state" in s]
-    names = set(s["repo"] for s in rows if s["repo"])
     numbers = set(s["n"] for s in rows)
     homes = (HOME_CELL, SUITE) + ((short_name(home),) if home else ())
     by_name = {}
@@ -608,6 +615,8 @@ def checked(path, steps, repos, home):
         if os.path.isdir(repo) and git_top(repo):
             real = os.path.realpath(repo)  # r1 F1: `.`, `pear/` and a link name the repo
             by_name.setdefault(short_name(real), real)
+    # d43 R2: a `<repo>` is a name of the repo column or of a REPO named that is a checkout.
+    names = set(s["repo"] for s in rows if s["repo"]) | set(by_name)
     gits = {}
 
     def checkout(name):
@@ -718,6 +727,10 @@ def cmd_check(args, out, err):
         if skipped:
             lines.append("skipped (%s): %s" % (why, ", ".join(
                 "%d %s" % (r["n"], r["reference"].get("repo") or r["repo"]) for r in skipped)))
+    unread = [str(r["n"]) for r in results
+              if r["reference"]["kind"] == "waiting" and r["reference"].get("on") is None]
+    if unread:  # d43 R3: named, never red, no part of the stale count
+        lines.append("%s: %s" % (UNREAD_WHY, ", ".join(unread)))
     lines.append("checked %d rows of %s: %d stale" % (len(results), os.path.basename(path),
                                                        len(left)))
     out.write("\n".join(lines) + "\n")
