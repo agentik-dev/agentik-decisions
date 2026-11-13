@@ -5,14 +5,14 @@
 | from | the hq's coordinator, 2026-11-13, brief rw2 |
 | pin | main at `39acf99` (0.21.14). Version 0.21.15. Worktree `.claude/worktrees/rw2-rows`, branch `rw2-rows` |
 | wall | this worktree; no push, `--amend`, rebase, merge, install or bare `make`; no test reads live state |
-| may touch | `plugin/lib/decisions/rows.py` (new), `plugin/lib/decisions/cli.py`; `tests/test_rw2_rows.py` (new), `tests/test_cli.py`; the version places, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
+| may touch | `plugin/lib/decisions/rows.py` (new), `plugin/lib/decisions/cli.py`; `tests/test_rw2_rows.py` (new), `tests/test_cli.py`; `NICE_TO_HAVE.md`; the version places, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
 | verify | the gate queue's `make check`, once, last |
 | acceptance | §3; `python -m unittest tests.test_rw2_rows tests.test_cli` |
 | budget | about 90 tool calls |
 
 ## 1. What the source says: the code at the pin
 
-The owner's words: none; hq design/16 §4 items 5 and 6. Cited: hq entries 6 (`/usr/bin/python3`, a 3.9 floor, the standard library alone), 9 (six verbs; `rows` stands beside them) and 37 (made-up names). The baseline, measured at `39acf99`: every line red, as §3 says.
+The owner's words: none; hq design/16 §4 items 5 and 6. Cited: hq entries 6 (a 3.9 floor, stdlib alone), 9 and 37. The baseline at `39acf99`: §3.
 
 ## 2. Rulings
 
@@ -51,7 +51,7 @@ The owner's words: none; hq design/16 §4 items 5 and 6. Cited: hq entries 6 (`/
 
 ## 3. Interfaces: the acceptance list
 
-Cases in `tests/test_rw2_rows.py` on `Orchard` (a home, the repo `pear`), with made-up rows. Each is red at the pin: `rows`, with `check` or `--json` or neither, prints argparse's `invalid choice: 'rows'` on stderr, nothing on stdout, exit 2.
+Cases in `tests/test_rw2_rows.py` on `Orchard`, made-up rows; each red at the pin: `invalid choice: 'rows'`, exit 2.
 
 1. One row through every word, `--json` at each step: `briefed`; `waits` behind an open `p0-cart`; `building`; `built` (the act names review 1 and its slice); `to rule`; `to fix`; `built` at `build-2.md`; `reviewed` (the act `merge.txt`, and phase 2 once main moves); still `reviewed` at a `phase 2` build with main merged in; `ready` at `merge.txt` (the command holds the tip and the file); `landed` at a `--no-ff` merge `Merge <branch>: ...`; `pushed` once `refs/remotes/origin/main` is main.
 2. Cells as hands write them (a head in backticks with prose after it, a gate with a note, a `branch` cell) give the same words; `gate` reads `{"id", "exit": 0}`, null `exit` for `running`, null for `none:`. Two commits past the head and one dirty path: `past` 2, `dirty` 1.
@@ -61,11 +61,11 @@ Cases in `tests/test_rw2_rows.py` on `Orchard` (a home, the repo `pear`), with m
 6. A row holds exactly R6's keys. The text view prints R8's lines. No root: exit 2, and R6's error under `--json`. `--help` lists `rows`.
 7. A read leaves the home and `pear`, `.git` included, byte for byte as they were.
 
-The phase ends at the commits with `make check` green through the gate queue, once, last. No push, no landing, no install.
-
 ## 4. Findings that name this row: ledger, NICE, forks
 
-Not built: `rows close` and the read of a cut builder's charter: a later row; until it the done cell is typed by hand. `covers`, the name `agentik rows`, a read of the gate's files, any write. No fork for the owner. Version `0.21.15`, alone in the last commit under `plugin/`, in each place d43's `acf8870` changed.
+Not built: `rows close`, a cut builder's charter read, `covers`, `agentik rows`, the gate's files, any write. No fork. Version `0.21.15`, last under `plugin/`, where `acf8870` put it.
+
+Review 1, ruled fix, mended here: F1 words and options in any order (`parse_known_args`; other verbs as before); F2 the land command `shlex.quote`d; F3 each text line through speak's escape and control filters; F4 a stage by its opening words; F5 a cell is its row's second cell; L1 an unreadable record skips its row. L3 to L11: NICE n89 to n93.
 
 ## 5. Forbidden reads
 
