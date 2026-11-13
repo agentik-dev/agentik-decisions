@@ -438,3 +438,152 @@ class ReviewTwo(Base):
         code, _, err = self.run_cli("render", "--lint", "--ledger",
                                     os.path.join("docs", "..", "DECISIONS.md"))
         self.assertEqual(code, 0, err)
+
+
+MARK_BEGIN = BLOCK.splitlines()[0]
+MARK_END = BLOCK.splitlines()[-1]
+
+
+def outside_closed_fences(text):
+    """(BEGIN lines, END lines) of `text` outside a closed code fence, by a scan of its own:
+    fence lines pair up in turn by their mark, and a last one with no partner is no fence."""
+    lines = text.splitlines()
+    spans, held = [], {}
+    for i, line in enumerate(lines):
+        stripped = line.lstrip(" ")
+        if len(line) - len(stripped) <= 3 and stripped[:3] in ("```", "~~~"):
+            mark = stripped[0]
+            if mark in held:
+                spans.append((held.pop(mark), i))
+            elif not held:
+                held[mark] = i
+    inside = {i for a, b in spans for i in range(a, b + 1)}
+    return ([i for i, l in enumerate(lines) if l.strip() == MARK_BEGIN and i not in inside],
+            [i for i, l in enumerate(lines) if l.strip() == MARK_END and i not in inside])
+
+
+class ReviewThree(Base):
+    """R3-F1: a code fence that never closes fences nothing, so the block below it is seen."""
+
+    OPEN = "# Hand\n```\nnever closed\n"
+    FOUR = "# Hand\n````\n```\n````\n"
+    TILDE = "# Hand\n~~~\nnever closed\n"
+    OPEN_PAIR = "# Hand\n```\n" + MARK_BEGIN + "\nan example\n" + MARK_END + "\nnever closed\n"
+    CLOSED_PAIR = "# Hand\n```\n" + MARK_BEGIN + "\nan example\n" + MARK_END + "\n```\ntext\n"
+    COMMENT = "# Hand\n<!-- never closed\nmore\n"
+
+    def put(self, hand, real=True):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(hand + ("\n" + BLOCK if real else ""))
+        with open(self.ledger, "w", encoding="utf-8") as handle:
+            handle.write(EMPTY)
+
+    def kept_whole(self, hand):
+        """`render` twice: the second says fresh, the bytes are the same, one block shows."""
+        self.put(hand)
+        first = self.run_cli("render")
+        self.assertEqual(first[0], 0, first)
+        once = self.read(self.claude)
+        code, out, err = self.run_cli("render")
+        self.assertEqual(code, 0, err)
+        self.assertIn("render: CLAUDE.md is fresh", out)
+        self.assertEqual(self.read(self.claude), once)
+        begins, ends = outside_closed_fences(once)
+        self.assertEqual((len(begins), len(ends)), (1, 1), once)
+        self.assertEqual(once, hand + "\n" + BLOCK)
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 2, out)
+        self.assertIn("already", err)
+        self.assertEqual(snapshot(self.repo), before)
+        # init where the ledger is gone: the one block is found, not another appended
+        os.remove(self.ledger)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.claude), once)
+
+    def test_r3_f1_an_open_backtick_fence_hides_nothing(self):
+        self.kept_whole(self.OPEN)
+
+    def test_r3_f1_a_four_backtick_fence_over_one_three_backtick_line(self):
+        self.kept_whole(self.FOUR)
+
+    def test_r3_f1_an_open_tilde_fence_hides_nothing(self):
+        self.kept_whole(self.TILDE)
+
+    def test_r3_f1_hand_text_alone_gets_one_block_from_init_and_render(self):
+        for hand in (self.OPEN, self.FOUR, self.TILDE):
+            for name in os.listdir(self.repo):
+                if name != ".git":
+                    path = os.path.join(self.repo, name)
+                    subprocess.run(["rm", "-rf", path])
+            with open(self.claude, "w", encoding="utf-8") as handle:
+                handle.write(hand)
+            code, out, err = self.run_cli("init")
+            self.assertEqual(code, 0, err)
+            once = self.read(self.claude)
+            self.assertEqual(once, hand + "\n" + BLOCK)
+            code, out, err = self.run_cli("render")
+            self.assertEqual(code, 0, err)
+            self.assertIn("render: CLAUDE.md is fresh", out)
+            self.assertEqual(self.read(self.claude), once)
+
+    def test_r3_f1_an_open_fence_over_an_example_pair_and_a_block_refuses(self):
+        # as at 10f2c5d: no fence is open, so two blocks stand and nothing is written
+        self.put(self.OPEN_PAIR)
+        before = snapshot(self.repo)
+        for argv in (["render"], ["render", "--check"]):
+            code, out, err = self.run_cli(*argv)
+            self.assertEqual(code, 2, (argv, out))
+            self.assertIn("not one BEGIN before one END", err)
+            self.assertEqual(snapshot(self.repo), before)
+        self.assertEqual(outside_closed_fences(self.read(self.claude)),
+                         ([2, 7], [4, 9]))
+
+    def test_r3_f1_a_closed_fence_with_an_example_pair_stays_an_example(self):
+        self.kept_whole(self.CLOSED_PAIR)
+        self.assertEqual(self.read(self.claude).count(MARK_BEGIN), 2)
+
+    def test_r3_f1_an_unclosed_html_comment_over_the_block_is_as_at_10f2c5d(self):
+        # 10f2c5d: `markers` had no comment, the block was seen, `render` read it fresh;
+        # `outside_lines` skips a line in an open comment and reads the same block
+        self.kept_whole(self.COMMENT)
+        from decisions.tree import markers, outside_lines
+        text = self.read(self.claude)
+        self.assertEqual(markers(text.splitlines(), MARK_BEGIN, MARK_END), ([4], [6]))
+        self.assertEqual(outside_lines(text, MARK_BEGIN, MARK_END), [(1, "# Hand")])
+
+    def test_r3_f1_outside_lines_reads_an_open_fence_as_none(self):
+        from decisions.tree import outside_lines
+        hand = "# Hand\n```\nnever closed\n"
+        self.assertEqual([n for n, _ in outside_lines(hand + "\n" + BLOCK, MARK_BEGIN,
+                                                      MARK_END)], [1, 2, 3])
+        closed = "# Hand\n```\nshown\n```\nafter\n"
+        self.assertEqual([n for n, _ in outside_lines(closed + "\n" + BLOCK, MARK_BEGIN,
+                                                      MARK_END)], [1, 5])
+
+    def test_r3_f1_backstop_refuses_a_text_that_holds_not_one_block(self):
+        import decisions.init
+        import decisions.render
+        self.put("# Hand\n", real=False)
+        real = decisions.render.apply
+
+        def twice(text, generated, target=None):
+            return real(text, generated, target) + generated
+
+        for module, argv in ((decisions.render, ["render"]), (decisions.init, ["init"])):
+            if argv == ["init"]:
+                os.remove(self.ledger)
+            before = snapshot(self.repo)
+            held = module.apply
+            module.apply = lambda text, generated, target=None: (
+                twice(text, generated, target) if generated else real(text, generated, target))
+            try:
+                code, out, err = self.run_cli(*argv)
+            finally:
+                module.apply = held
+            self.assertEqual(code, 2, (argv, out))
+            self.assertIn("CLAUDE.md: its block could not be placed", err)
+            self.assertIn("a code fence left open above it", err)
+            self.assertIn("nothing written", err)
+            self.assertEqual(snapshot(self.repo), before, argv)
