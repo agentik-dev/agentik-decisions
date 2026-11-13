@@ -3,7 +3,7 @@
 | item | value |
 |---|---|
 | from | the management sitting's coordinator, 2026-11-12, brief d39 (hq `history/sessions/BRIEF-2026-11-12-decisions-d39-backlog-check.md`); design of record hq design/14 §3.2, §3.3, §4 item 1, §5. A packet: it adds a flag |
-| pin | main at `9dd7af4` (0.21.6, d38's merge). Version 0.21.7. Worktree `.claude/worktrees/d39-backlog-check`, branch `d39-backlog-check`; nothing linked from main |
+| pin | main at `9dd7af4` (0.21.6, d38's merge). Version 0.21.7, 0.21.8 after r1. Worktree `.claude/worktrees/d39-backlog-check`, branch `d39-backlog-check`; nothing linked from main |
 | wall | this worktree; no push, `--amend`, rebase, merge or install; no bare `make` (the gate queue only); no test reads live state, a real HANDOFF or a real repo, or writes outside its temp home |
 | may touch | `plugin/lib/decisions/backlog.py`, `cli.py` (the two flags and the usage lines), `render.py` (R7, `_gate_line` only); `tests/test_d39_backlog_check.py` (new); `plugin/skills/decisions/SKILL.md`, `plugin/commands/backlog.md`; the four version places, `tests/test_plugin.py`, `README.md` and `design/readme/{source.md,rendered.sha256}`; this packet and the sitting's record |
 | verify | the gate queue's `make check`, once, last |
