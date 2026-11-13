@@ -23,6 +23,8 @@ PARTS = (["--title", "Pin the interpreter", "--stands", "The tool runs  under\n3
          + ["--recommend", "Pin 3.12. Revisit when 3.13 ships."])
 PROPOSED = ("9. **Pin the interpreter.** Pin 3.12. (proposed 2026-09-28; OPEN-QUESTIONS.md)")
 QUESTION = ("## 9. Pin the interpreter\n\n"
+            "<!-- decisions: base 75ee29fd 5eeabd69 eef8ab7e bd063aab d468fa17 c72740b5 "
+            "874c4fcc -->\n\n"
             "**Where things stand.** The tool runs under 3.12.\n\n"
             "**The choice.** Pin 3.12, or follow the newest?\n\n"
             "**What each answer sets in motion.**\n\n"
@@ -69,6 +71,15 @@ class Base(Hermetic):
     def write(self, path, text):
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
+
+    def restamp(self, unstamp=False):
+        """Every block of the questions file with its base line from its text as it
+        stands, as if `new` had written it so (d41), or with none when `unstamp`."""
+        text = self.read(self.questions)
+        for block in reversed(decisions.questions.parse(text).blocks):
+            text = decisions.questions.replace_block(
+                text, block, block.text if unstamp else decisions.questions.stamped(block.text))
+        self.write(self.questions, text)
 
 
 class New(Base):
