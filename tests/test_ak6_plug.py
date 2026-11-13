@@ -493,5 +493,36 @@ class Unrunnable(Plug):
         self.assertEqual((got["ledger"], got["rows.root"]), (None, None))
 
 
+class Deep(Plug):
+    """Review 2 R2-F1: a plugins file or the session's resolved file nested past the decoder's
+    depth (1,000 under 3.9, 100,000 under 3.12) is a `warn` check, never a traceback."""
+
+    def test_a_file_nested_too_deep(self):
+        session = "s-deep"
+        resolved = os.path.join(self.env["XDG_STATE_HOME"], "agentik-session", "sessions",
+                                session, "resolved.json")
+        plugins = os.path.join(self.home, ".claude", "plugins")
+        cases = ((os.path.join(plugins, "known_marketplaces.json"), "marketplace"),
+                 (os.path.join(plugins, "installed_plugins.json"), "plugin"),
+                 (resolved, "provider"))
+        env = dict(self.env, CLAUDE_CODE_SESSION_ID=session)
+        for path, name in cases:
+            for depth in (1000, 100000):
+                with self.subTest(file=os.path.basename(path), depth=depth):
+                    self.put(path, "[" * depth + "]" * depth)
+                    run = self.run_d("doctor", "--json", env=env)
+                    self.assertNotIn(b"Traceback", run.stderr)
+                    self.assertTrue(run.stdout.endswith(b"}\n"), run.stdout + run.stderr)
+                    got = json.loads(run.stdout.decode("utf-8"))
+                    self.assertEqual(list(got)[:3], ["schema", "ok", "tool"])
+                    self.assertEqual(run.returncode, 2 * bool(got["failed"]))
+                    check = next(c for c in got["checks"] if c["name"] == name)
+                    self.assertEqual(check["status"], "warn", check)
+                    text = self.run_d("doctor", env=env)
+                    self.assertNotIn(b"Traceback", text.stderr)
+                    self.assertEqual(text.returncode, run.returncode)
+                self.put(path, "{}")
+
+
 if __name__ == "__main__":
     unittest.main()

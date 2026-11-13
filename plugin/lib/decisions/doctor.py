@@ -188,7 +188,8 @@ def _plugins_json(env, name):
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle), path
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError, MemoryError):
+        # ak6 review 2 R2-F1: a file nested past the decoder's depth is unreadable, no traceback
         return None, path
 
 
@@ -261,7 +262,8 @@ def read_provider(env):
         plugin, version = provider["plugin"], str(provider["version"])
         profile = provider.get("profile")
         inside = plugin == "session" and in_range(version)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError,
+            MemoryError) as exc:
         return {"status": "unparsable", "version": None, "profile": None, "path": path,
                 "detail": "unparsable %s: %s" % (path, exc)}
     if not inside:
