@@ -31,7 +31,7 @@ class BuiltOn(Orchard):
         snap = self.bytes_of(self.handoff, self.done)
         code, out, err = self.check("--write")
         self.assertEqual(code, 0, out + err)
-        self.assertNotIn("stale", out)
+        self.assertEqual(out, "checked 1 rows of HANDOFF.md: 0 stale\n")
         self.assertEqual(self.bytes_of(self.handoff, self.done), snap)
 
     def test_2_merged_by_name_deleted_and_cut_again_is_clean(self):

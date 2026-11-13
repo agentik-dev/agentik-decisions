@@ -560,12 +560,18 @@ class Git(object):
 
 def building_red(git, branch):
     """R3: `stale: landed <sha> <date>` for the newest merge on main's first-parent line whose
-    subject opens `merge <branch>` or `Merge <branch>`, or whose second parent is the branch's
-    tip; else `stale: branch gone` when the branch is absent; else None."""
+    second parent is the branch's tip, or whose subject opens `merge <branch>` or `Merge
+    <branch>` (d43 R1: when the branch is gone or its tip is an ancestor of that second
+    parent; a branch built on or cut again since is live); else `stale: branch gone` when the
+    branch is absent; else None. A fast-forward or a squash is never read as a landing."""
     named = re.compile(r"^[mM]erge %s%s" % (re.escape(branch), NAME_END))
     tip = git.tip(branch)
     for sha, parents, date, subject in git.line():
-        if len(parents) > 1 and (named.match(subject) or (tip and parents[1] == tip)):
+        if len(parents) < 2:
+            continue
+        if (tip is not None and parents[1] == tip) or (named.match(subject) and (
+                tip is None or git.run("merge-base", "--is-ancestor", tip, parents[1])
+                is not None)):
             return "stale: landed %s %s" % (sha[:7], date), sha, date
     return ("stale: branch gone" if tip is None else None), None, None
 
