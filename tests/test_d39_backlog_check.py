@@ -413,3 +413,14 @@ class Round1Owner(Home):
         self.assertEqual(code, 0, err)
         self.assertEqual(lines(os.path.join(dots, ".claude", GATES)), ["claude/CLAUDE.md"])
         self.assertFalse(os.path.exists(os.path.join(dots, "claude", GATES)))
+
+
+class Round2(Orchard):
+    """d39 r2 F1: the first word after `waiting:` loses a trailing `,` or `.` again."""
+
+    def test_r2_f1_a_comma_after_the_first_waiting_word(self):
+        got, code = self.reds((1, "suite", "waiting: pear, p2-done"), (2, "hq", "waiting: owner, 4"),
+                              (3, "suite", "waiting: row. 30"), (9, "pear", "open"))
+        landed = "stale: landed %s %s" % (self.p2_merge[:7], DATE)
+        self.assertEqual(got, {1: landed, 2: "answered", 3: "resolved", 9: None})
+        self.assertEqual(code, 1)
