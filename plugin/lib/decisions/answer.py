@@ -495,7 +495,7 @@ def cmd_answer(args, path, out, err):
             preview(ledger_text, new_ledger, path, target, out)
             return 0
         commit_texts([(path_q, new_q), (path, new_ledger)])
-        list_gate(path)
+        list_gate(path, err, "answer")
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
         out.write("replaced: %s\n" % replaced)
@@ -626,6 +626,6 @@ def rewrite_block(path, target, out, err):
     if new != old:
         was, crlf = disk_text(target), keeps_crlf(target)
         write_text(target, new)
-        list_gate(target)
+        list_gate(target, err, "answer")
         out.write("answer: rewrote the block in %s: %s\n" % (display(target),
                                                              growth(was, new, crlf)))

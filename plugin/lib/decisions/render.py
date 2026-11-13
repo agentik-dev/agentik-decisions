@@ -45,6 +45,7 @@ stays fresh until `render` shortens it.
 import difflib
 import os
 import subprocess
+import sys
 
 from . import questions
 from .ask import LOCK, NEW_WAIT
@@ -103,38 +104,54 @@ def _below(path, folder):
     return any(p.startswith(f.rstrip(os.sep) + os.sep) for p, f in pairs)
 
 
-def list_gate(target):
-    """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
-    gate refuses an edit of it: a file in a checkout in that checkout's `.claude/edit-gates`,
-    relative to its top level; else a file under the owner's config folder (or `~/.claude`)
-    in the owner's list, as `~/` under the home folder; else a file whose folder is below
-    the home folder (a tree folder's) in that folder's `.claude/edit-gates`, by its name;
-    else the owner's list, absolute. Never a file under a `tests`, `testdata` or `fixtures`
-    folder. Returns the list written, or None."""
-    target = os.path.abspath(target)
-    top = _checkout_top(target)
+def _gate_line(target):
+    """(list, line) for `target` by `list_gate`'s layers, or None for an exempt file."""
+    real = os.path.realpath(target)
+    top = _checkout_top(real)  # r1: a link into a checkout is that checkout's file
+    target = real if top is not None else os.path.abspath(target)
+    top = top if top is not None else _checkout_top(target)
     home = os.path.expanduser("~").rstrip(os.sep)
     folder = os.path.dirname(target)
     if top is not None:
         parts = os.path.relpath(target, top).split(os.sep)
         if GATE_EXEMPT.intersection(parts[:-1]):
             return None
-        gates, line = os.path.join(top, ".claude", GATES), "/".join(parts)
-    elif GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
+        return os.path.join(top, ".claude", GATES), "/".join(parts)
+    if GATE_EXEMPT.intersection(target.split(os.sep)[:-1]):
         return None
-    elif not _owners(target) and _below(folder, home):
-        gates, line = os.path.join(folder, ".claude", GATES), os.path.basename(target)
-    else:
-        gates = os.path.join(_owner_folder(), GATES)
-        line = ("~/" + target[len(home) + 1:] if target.startswith(home + os.sep)
-                else target)
-    old = read_text(gates) if os.path.exists(gates) else None
-    if old is not None and line in (l.strip() for l in old.splitlines()):
+    if not _owners(target) and _below(folder, home):
+        return os.path.join(folder, ".claude", GATES), os.path.basename(target)
+    return os.path.join(_owner_folder(), GATES), (
+        "~/" + target[len(home) + 1:] if target.startswith(home + os.sep) else target)
+
+
+def list_gate(target, err=None, verb="render"):
+    """g2b, d38: name `target` once in its layer's edit-gates list, so the session plugin's
+    gate refuses an edit of it: a file in a checkout (found from its real path) in that
+    checkout's `.claude/edit-gates`, relative to its top level; else a file under the owner's
+    config folder (or `~/.claude`) in the owner's list, as `~/` under the home folder; else
+    a file whose folder is below the home folder (a tree folder's) in that folder's
+    `.claude/edit-gates`, by its name; else the owner's list, absolute. Never a file under a
+    `tests`, `testdata` or `fixtures` folder. Never raises: a list it cannot write is one
+    warning on `err` (r1 F2). Returns the list written, or None."""
+    gates = target
+    try:
+        found = _gate_line(target)
+        if found is None:
+            return None
+        gates, line = found
+        old = read_text(gates) if os.path.exists(gates) else None
+        if old is not None and line in (l.strip() for l in old.splitlines()):
+            return None
+        text = GATES_HEAD if old is None else (old if old.endswith("\n") or not old
+                                               else old + "\n")
+        os.makedirs(os.path.dirname(gates), exist_ok=True)
+        write_text(gates, text + line + "\n")
+        return gates
+    except (OSError, ValueError, Refusal) as why:
+        (err or sys.stderr).write("%s: warning: %s is not listed: %s cannot be written (%s)\n"
+                                  % (verb, display(target), display(gates), why))
         return None
-    text = GATES_HEAD if old is None else (old if old.endswith("\n") or not old else old + "\n")
-    os.makedirs(os.path.dirname(gates), exist_ok=True)
-    write_text(gates, text + line + "\n")
-    return gates
 
 
 def _list_lines(gates):
@@ -144,7 +161,32 @@ def _list_lines(gates):
     except (OSError, Refusal):
         return []
     return [(n, l.strip()) for n, l in enumerate(text.splitlines(), 1)
-            if l.strip() and not l.strip().startswith("#")]
+            if l.strip() and not l.strip().startswith("#") and "\0" not in l]
+
+
+def _checkout_warning(gates, top, up, n, line, keep):
+    first = os.path.join(up, line.split("/")[0])
+    if line.startswith(("/", "~", "..")):
+        return ["%s:%d: `%s` reaches outside the checkout; %s"
+                % (real_tilde(gates), n, line, keep)]
+    if line.split("/")[0] not in ("", ".") and first != top and os.path.isdir(first) \
+            and not os.path.lexists(os.path.join(top, line.split("/")[0])):
+        return ["%s:%d: `%s` names %s, a folder beside the checkout; %s"
+                % (real_tilde(gates), n, line, real_tilde(first), keep)]
+    return []
+
+
+def _lower_layer(line, home):
+    """The checkout or the listed folder below the home folder that owns an owner's line."""
+    full = home + line[1:] if line.startswith("~/") else line
+    if not full.startswith("/") or _owners(full):
+        return None
+    layer, folder = _checkout_top(full), os.path.dirname(full)
+    while layer is None and _below(folder, home):
+        if os.path.isfile(os.path.join(folder, ".claude", GATES)):
+            layer = folder
+        folder = os.path.dirname(folder)
+    return layer
 
 
 def gate_warnings(path):
@@ -157,26 +199,17 @@ def gate_warnings(path):
     if top is not None:
         gates, up = os.path.join(top, ".claude", GATES), os.path.dirname(top)
         for n, line in _list_lines(gates):
-            first = os.path.join(up, line.split("/")[0])
-            if line.startswith(("/", "~", "..")):
-                found.append("%s:%d: `%s` reaches outside the checkout; %s"
-                             % (real_tilde(gates), n, line, keep))
-            elif line.split("/")[0] not in ("", ".") and first != top \
-                    and os.path.isdir(first) and not os.path.lexists(
-                        os.path.join(top, line.split("/")[0])):
-                found.append("%s:%d: `%s` names %s, a folder beside the checkout; %s"
-                             % (real_tilde(gates), n, line, real_tilde(first), keep))
+            try:
+                found.extend(_checkout_warning(gates, top, up, n, line, keep))
+            except (OSError, ValueError):
+                continue  # r1 F1: a path call that fails drops this line's check only
     home = os.path.expanduser("~").rstrip(os.sep)
     owner = os.path.join(_owner_folder(), GATES)
     for n, line in _list_lines(owner):
-        full = home + line[1:] if line.startswith("~/") else line
-        if not full.startswith("/") or _owners(full):
-            continue
-        layer, folder = _checkout_top(full), os.path.dirname(full)
-        while layer is None and _below(folder, home):
-            if os.path.isfile(os.path.join(folder, ".claude", GATES)):
-                layer = folder
-            folder = os.path.dirname(folder)
+        try:
+            layer = _lower_layer(line, home)
+        except (OSError, ValueError):
+            continue  # r1 F1
         if layer is not None:
             found.append("%s:%d: `%s` lies under %s, a layer with a list of its own; the "
                          "owner's list holds the user-scoped files" % (real_tilde(owner), n,
@@ -473,11 +506,11 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
         return 1 if stale or (over and ceiling) else 0
     if old == text:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target)
+        list_gate(target, err)
         return 0
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(target, text)
-    list_gate(target)
+    list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
     return 0
 
@@ -541,11 +574,11 @@ def cmd_render(args, path, out, err):
         return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target)
+        list_gate(target, err)
         return 0
     crlf = keeps_crlf(target)
     write_text(target, new)
-    list_gate(target)
+    list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     return 0
 
