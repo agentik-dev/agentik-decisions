@@ -20,7 +20,9 @@ A block's base line (d41), `<!-- decisions: base D D ... -->`, its own paragraph
 the heading, holds one D per non-blank line from the heading to the line above
 **Your answer:**, in order: the first 8 hex digits of the sha256 of the line, its runs
 of whitespace one space. `new` and `ask` write it, so a line whose digest it lacks was
-typed since; a block with none is read against git's HEAD as before (d35). A second
+typed since. A block has a base only when exactly one line above its answer line has
+that exact shape (d42): with none, or with two or more, it has none, each such line
+stays in its text as any line does, and every line of it is the owner's. A second
 base line in a block is a problem; a block with none is not.
 """
 
@@ -79,9 +81,10 @@ BASE = re.compile(r"^<!-- decisions: base((?: [0-9a-f]{8})+) -->$")
 # joined by one space (d28), or None when the line is absent; stray: every other
 # non-blank line above that line, in order, which no part takes: a part is a label's
 # or the **Report.** bold line and the lines under it to a blank, or an option line
-# under the third label (d30 ruling 5); base: the digests of its first base line, a
-# tuple, or None when it holds none (d41). A base line is no part, no stray line and
-# no typed text, and `text` leaves it out with the blank lines after it.
+# under the third label (d30 ruling 5); base: the digests of its base line, a tuple, or
+# None when it holds none or more than one (d41, d42 ruling 2). The one base line is no
+# part, no stray line and no typed text, and `text` leaves it out with the blank lines
+# after it; with none or more than one, a line of that shape is a line like any other.
 Block = collections.namedtuple("Block",
                                "number title start stop text labels options parts answer "
                                "stray base")
@@ -185,6 +188,8 @@ def base_rows(lines, start, stop):
 
 def make_block(number, title, start, stop, lines):
     bases = base_rows(lines, start, stop)
+    # d42 ruling 2: the base line is the block's only when it is the one line of its shape
+    bases = bases if len(bases) == 1 else []
     body = [i for i in range(start + 1, stop) if lines[i].strip() and i not in bases]
     end = body[-1] + 1 if body else start + 1
     labels, options, parts, answer, current, third = [], [], {}, None, None, False
