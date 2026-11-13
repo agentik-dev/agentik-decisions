@@ -174,6 +174,25 @@ class Json(Read):
         self.assertEqual(repo["answered"], 2)
         self.assertEqual(repo["decided"], {"count": 3, "newest": "2026-10-02"})
 
+    def decided(self, *bullets):
+        text = "\n## Decided without asking\n\n" + "".join("- %s\n" % b for b in bullets)
+        self.write(self.file, self.clean.rstrip("\n") + "\n" + text)
+        return self.one()[0]["decided"]
+
+    def test_f1_no_calendar_date(self):
+        got = self.decided("Kept the gate red (2025-13-45; chat)",
+                           "Moved the trough (2025-01-01; chat)")
+        self.assertEqual(got, {"count": 2, "newest": "2025-01-01"})
+
+    def test_f1_cut_from_a_longer_run(self):
+        got = self.decided("Fed the goats (12026-01-011; chat)")
+        self.assertEqual(got, {"count": 1, "newest": None})
+
+    def test_f1_no_such_day(self):
+        got = self.decided("Kept the gate red (2025-02-30; chat)",
+                           "Moved the trough (2025-01-01; chat)")
+        self.assertEqual(got, {"count": 2, "newest": "2025-01-01"})
+
     def test_5_many(self):
         nowhere = os.path.join(self.home, "nowhere")
         got = self.questions(self.pear, self.quince, nowhere, self.bare, "--json")

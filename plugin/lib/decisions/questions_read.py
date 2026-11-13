@@ -17,6 +17,7 @@ whenever the read ran; `render --lint` stays the check.
 import datetime
 import json
 import os
+import re
 
 from . import answer, ledger, questions
 from .common import Refusal, git_top
@@ -28,6 +29,7 @@ NO_DIR, NO_FILE, UNREADABLE = "not a directory", "no OPEN-QUESTIONS.md", "unread
 TYPED_ON = "typed on the answer line"
 TYPED_ABOVE = "typed above the answer line"
 NO_BASE = "no base line, or more than one"
+STAMP = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 
 
 def today():
@@ -91,6 +93,15 @@ def bullets(rows):
     return [text for _n, text in rows if text.startswith("- ")]
 
 
+def is_day(stamp):
+    """True when `stamp` names a day of the calendar (F1)."""
+    try:
+        datetime.date.fromisoformat(stamp)
+    except ValueError:
+        return False
+    return True
+
+
 def read_repo(repo):
     """(the repo's object, None) or (None, why it is skipped)."""
     if not os.path.isdir(repo):
@@ -107,7 +118,7 @@ def read_repo(repo):
     dates = proposed_dates(os.path.join(repo, ledger.NAME))
     decided = bullets(parsed.decided)
     now = today()
-    stamps = [d for line in decided for d in ledger.DATE.findall(line) if d <= now]
+    stamps = [d for line in decided for d in STAMP.findall(line) if is_day(d) and d <= now]
     return {"repo": repo, "file": os.path.realpath(path),
             "questions": [question(b, parsed.problems, dates) for b in parsed.blocks],
             "answered": len(bullets(parsed.answered)),
