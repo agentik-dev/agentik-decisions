@@ -2,25 +2,19 @@
 
 | item | value |
 |---|---|
-| from | the management sitting's coordinator, 2026-11-13, brief rw2 (hq design/16 §4 items 5 and 6) |
-| pin | main at `39acf99` (0.21.14). Version 0.21.15. Worktree `.claude/worktrees/rw2-rows`, branch `rw2-rows`; nothing linked from main |
-| wall | this worktree; no push, `--amend`, rebase, merge or install; no bare `make` (the gate queue only); no test reads live state, a real row folder or a real repo |
-| may touch | `plugin/lib/decisions/rows.py` (new), `plugin/lib/decisions/cli.py`; `tests/test_rw2_rows.py` (new), `tests/test_cli.py`; the version places (`common.py`'s `VERSION` alone in it), `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
+| from | the hq's coordinator, 2026-11-13, brief rw2 |
+| pin | main at `39acf99` (0.21.14). Version 0.21.15. Worktree `.claude/worktrees/rw2-rows`, branch `rw2-rows` |
+| wall | this worktree; no push, `--amend`, rebase, merge, install or bare `make`; no test reads live state |
+| may touch | `plugin/lib/decisions/rows.py` (new), `plugin/lib/decisions/cli.py`; `tests/test_rw2_rows.py` (new), `tests/test_cli.py`; the version places, `README.md`, `design/readme/{source.md,rendered.sha256}`; this packet; the charter |
 | verify | the gate queue's `make check`, once, last |
-| acceptance | the list below; `PYTHONPATH=plugin/lib:. python -m unittest tests.test_rw2_rows tests.test_cli` |
+| acceptance | §3; `python -m unittest tests.test_rw2_rows tests.test_cli` |
 | budget | about 90 tool calls |
 
-The baseline, measured at `39acf99`: `agentik-decisions rows`, `rows check` and `rows --json` each print argparse's `invalid choice: 'rows'` on stderr, nothing on stdout, exit 2.
+## 1. What the source says: the code at the pin
 
-## The owner's words
+The owner's words: none; hq design/16 §4 items 5 and 6. Cited: hq entries 6 (`/usr/bin/python3`, a 3.9 floor, the standard library alone), 9 (six verbs; `rows` stands beside them) and 37 (made-up names). The baseline, measured at `39acf99`: every line red, as §3 says.
 
-None bind this row: it is hq design/16's row rw2 (§4 items 5 and 6).
-
-## The ledger
-
-The repo keeps none. Cited: hq entries 6 (`/usr/bin/python3`, a 3.9 floor, the standard library alone), 9 (six verbs; `rows` stands beside them) and 37 (made-up names).
-
-## Rulings
+## 2. Rulings
 
 - R1, the verb. `agentik-decisions rows [check] [--json] [--root DIR] [REPO...]` in a new module, `plugin/lib/decisions/rows.py`. `check` is a word, not a flag: the first positional, when it is exactly that. In `cli.py`: its paragraph and parser directly before `install-cli`'s, `"rows"` before `"install-cli"` in `VERBS`, a branch in `main` before `locate`; `tests/test_cli.py` follows. Not touched: `__init__.py`, `backlog.py` (another row's), `common.py` but its version.
 - R2, the root. DIR holds one folder a row; the default is `history/rows` under the working directory's git top. DIR's git top is the home. No DIR: exit 2. A row is a folder holding `row.md`. Nothing is written or fetched: git is read through `backlog.Git`, and `status` runs with `--no-optional-locks`.
@@ -55,7 +49,7 @@ The repo keeps none. Cited: hq entries 6 (`/usr/bin/python3`, a 3.9 floor, the s
 - R8, the exits and text. `rows` exits 0 with contradictions shown. A line a row: `<row>  <level> <repo>  <word>  tip <sha7> +<past>  dirty <n>  gate <id> exit <code>  next: <command or text>`, a part with nothing to say left out; under it `  stale: <what>`; then `skipped (<why>): <repo>: <rows>`; `no open rows under <root>` when none. `rows check` walks open and closed rows and prints `<row>  stale: <what>`, the skipped lines and `checked <n> rows under <root>: <m> stale`; exit 1 when m is above 0. An unfinished row is never a red. Its `--json` adds `checked` and a top-level `stale` (`[{"row", "what"}]`).
 - R9, the records: `--help`, lines within 100 characters. No command page. No README row: its source is 4 B under its cap.
 
-## Acceptance
+## 3. Interfaces: the acceptance list
 
 Cases in `tests/test_rw2_rows.py` on `Orchard` (a home, the repo `pear`), with made-up rows. Each is red at the pin: `rows`, with `check` or `--json` or neither, prints argparse's `invalid choice: 'rows'` on stderr, nothing on stdout, exit 2.
 
@@ -69,18 +63,14 @@ Cases in `tests/test_rw2_rows.py` on `Orchard` (a home, the repo `pear`), with m
 
 The phase ends at the commits with `make check` green through the gate queue, once, last. No push, no landing, no install.
 
-## Not built
+## 4. Findings that name this row: ledger, NICE, forks
 
-`rows close` and the read of a cut builder's charter: a later row; until it the done cell is typed by hand. `covers`, the name `agentik rows`, a read of the gate's files, any write.
+Not built: `rows close` and the read of a cut builder's charter: a later row; until it the done cell is typed by hand. `covers`, the name `agentik rows`, a read of the gate's files, any write. No fork for the owner. Version `0.21.15`, alone in the last commit under `plugin/`, in each place d43's `acf8870` changed.
 
-No fork for the owner.
-
-Version: `0.21.15`, alone in the last commit under `plugin/`, in each place d43's commit `acf8870` changed (the README and its source by hand, the sidecar re-stamped). At a phase 2 the coordinator names the next version.
-
-## Forbidden reads
+## 5. Forbidden reads
 
 No transcript, no live state root, no gate ledger, no file under `~/.claude`, no real row folder in a test.
 
-## Report
+## 6. Report
 
 The hand-back to the hq's coordinator, at most 45 lines.

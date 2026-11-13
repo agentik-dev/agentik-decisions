@@ -247,3 +247,145 @@ class Text(Rows):
         self.assertIn("--root DIR", out.getvalue())
         for text in (out.getvalue(), decisions.cli.__doc__):
             self.assertTrue(all(len(l) <= 100 for l in text.splitlines()))
+
+
+class Stale(Rows):
+    """Acceptance 3: each contradiction of R7, one at a time, red and then mended."""
+
+    def red_then_mended(self, line, mend):
+        code, out = self.checked()
+        self.assertEqual(code, 1, out)
+        self.assertIn(line, out.splitlines())
+        self.assertIn(": 1 stale", out)
+        self.assertEqual(self.rows()[0], 0)
+        mend()
+        code, out = self.checked()
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.endswith(": 0 stale\n"), out)
+
+    def test_a_head_off_the_branch(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        self.row("p4-crate")
+        self.build("p4-crate", 1, self.side[:7])
+        self.red_then_mended("p4-crate  stale: head %s of build-1.md is not on p4-crate"
+                             % self.side[:7], lambda: self.build("p4-crate", 1, tip))
+
+    def test_a_slice_end_off_the_branch(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        self.row("p4-crate")
+        self.build("p4-crate", 1, tip)
+        self.review("p4-crate", 1, "%s..%s" % (tip[:7], self.side[:7]))
+        self.red_then_mended(
+            "p4-crate  stale: slice end %s of review-1.md is not on p4-crate" % self.side[:7],
+            lambda: self.review("p4-crate", 1, "%s..%s" % (self.base("p4-crate")[:7], tip[:7])))
+
+    def test_a_level_against_the_build_order(self):
+        self.table((4, "pear", "open"))
+        self.row("p4-crate", level="S2", frm="HANDOFF 4 (the crate)")
+        self.red_then_mended("p4-crate  stale: level S2 differs from HANDOFF 4's S3",
+                             lambda: self.row("p4-crate", level="S3", frm="HANDOFF 4"))
+
+    def test_a_level_against_the_nice_rows(self):
+        self.put(os.path.join(self.pear, "NICE_TO_HAVE.md"), "# Nice\n\n"
+                 "| id | level | area | finding | evidence | from |\n|---|---|---|---|---|---|\n"
+                 "| n3 | S3 | `a.py` | A finding | x | y |\n| n5 | S2 | `b.py` | Another | x | y |\n")
+        self.row("p4-crate", level="S3", frm="pear n3, n5")
+        self.red_then_mended("p4-crate  stale: level S3 differs from pear n3, n5's S2",
+                             lambda: self.row("p4-crate", level="S3", frm="pear n3, n9"))
+
+    def test_a_branch_gone_with_no_merge(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        git(self.pear, "branch", "-q", "-D", "p4-crate")
+        self.row("p4-crate")
+        self.build("p4-crate", 1, tip)
+        self.red_then_mended("p4-crate  stale: branch p4-crate is gone and no merge names it",
+                             lambda: git(self.pear, "branch", "-q", "p4-crate", tip))
+
+    def test_a_done_sha_off_main(self):
+        self.row("p1-done", done="%s %s" % (DATE, self.side[:7]))
+        self.row("h1-done", repo="hq", done="%s `%s` (hq main)" % (DATE, self.hq_plain[:7]))
+        self.red_then_mended(
+            "p1-done  stale: done %s is not on main's first-parent line" % self.side[:7],
+            lambda: self.row("p1-done", done="%s %s" % (DATE, self.p2_merge[:7])))
+
+
+class Skipped(Rows):
+    """Acceptance 4: an absent repo, a folder that is no checkout, a REPO named."""
+
+    def test_absent_and_no_checkout(self):
+        os.makedirs(os.path.join(self.tmp, "fig"))
+        self.row("f1-fig", repo="fig")
+        self.row("m1-plum", repo="plum")
+        self.row("p4-crate")
+        lines = ["skipped (no checkout): fig: f1-fig", "skipped (absent): plum: m1-plum"]
+        code, out, _ = self.rows()
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines()[-2:], lines)
+        code, out = self.checked()
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines()[-3:-1], lines)
+        self.assertEqual(list(self.view()), ["p4-crate"])
+        _, out, _ = self.rows("--json")
+        self.assertEqual(json.loads(out)["skipped"], [
+            {"repo": "fig", "why": "no checkout", "rows": ["f1-fig"]},
+            {"repo": "plum", "why": "absent", "rows": ["m1-plum"]}])
+
+    def test_a_repo_named_skips_another(self):
+        quince = os.path.join(self.tmp, "quince")
+        os.makedirs(quince)
+        git(quince, "init", "-q")
+        commit(quince, "start.txt")
+        self.row("q1-quince", repo="quince")
+        self.row("p4-crate")
+        self.assertEqual(sorted(self.view()), ["p4-crate", "q1-quince"])
+        self.assertEqual(list(self.view(repos=[self.pear])), ["p4-crate"])
+        code, out, _ = self.rows(repos=[self.pear])
+        self.assertEqual(code, 0)
+        self.assertIn("skipped (not named): quince: q1-quince", out.splitlines())
+
+
+class Closed(Rows):
+    """Acceptance 5: a withdrawn folder is in no list; a closed one is checked, not listed."""
+
+    def test_withdrawn_and_closed(self):
+        self.row("p7-dropped", done="withdrawn: the owner chose another way")
+        self.row("p8-landed", done="landed, pushed")
+        self.row("p9-old", done="%s %s" % (DATE, self.p2_merge[:7]))
+        self.row("p4-crate")
+        self.assertEqual(list(self.view()), ["p4-crate"])
+        code, out, _ = self.rows("--json", "check")
+        got = json.loads(out)
+        self.assertEqual((code, got["checked"], got["stale"]), (0, 3, []))
+        self.assertEqual([r["row"] for r in got["rows"]], ["p4-crate"])
+        code, out = self.checked()
+        self.assertEqual(out, "checked 3 rows under %s: 0 stale\n" % os.path.realpath(self.root))
+        self.assertNotIn("p7-dropped", self.rows()[1])
+
+
+class ReadOnly(Rows):
+    """Acceptance 7: a read leaves the home and pear, `.git` included, byte for byte."""
+
+    def tree(self):
+        found = {}
+        for top in (self.hq, self.pear, os.path.join(self.tmp, "pear-crate")):
+            for folder, _, files in os.walk(top):
+                for name in files:
+                    path = os.path.join(folder, name)
+                    with open(path, "rb") as handle:
+                        found[path] = hashlib.sha256(handle.read()).hexdigest()
+        return found
+
+    def test_a_read_writes_nothing(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        self.row("p4-crate")
+        self.build("p4-crate", 1, tip)
+        self.review("p4-crate", 1, "%s..%s" % (self.base("p4-crate")[:7], tip[:7]),
+                    ruling="closed")
+        tree = os.path.join(self.tmp, "pear-crate")
+        git(self.pear, "worktree", "add", "-q", tree, "p4-crate")
+        self.put(os.path.join(tree, "crate-1.txt"), "changed\n")
+        before = self.tree()
+        for argv in ([], ["--json"], ["check"], ["--json", "check"]):
+            self.assertIn(self.rows(*argv)[0], (0, 1))
+        self.assertEqual(self.view()["p4-crate"]["dirty"], 1)
+        self.assertEqual(self.tree(), before)
