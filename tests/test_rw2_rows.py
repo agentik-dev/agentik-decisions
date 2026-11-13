@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 
 import decisions
 from decisions.rows import GATE_STATUS, KEYS, SCHEMA
@@ -389,3 +390,120 @@ class ReadOnly(Rows):
             self.assertIn(self.rows(*argv)[0], (0, 1))
         self.assertEqual(self.view()["p4-crate"]["dirty"], 1)
         self.assertEqual(self.tree(), before)
+
+
+class Review1(Rows):
+    """Review 1's mends: F1 the order of words and options, F2 a command quoted for a shell,
+    F3 no control character in the text view, F4 a stage by its opening words, F5 a cell is
+    the second cell, L1 an unreadable row.md skipped."""
+
+    def ready(self, branch):
+        """A row of `branch` under self.root that reads `ready`; its folder."""
+        tip = self.on_branch(branch, "ready-1.txt")
+        self.row("p1-ready", branch=branch)
+        self.build("p1-ready", 1, tip)
+        self.review("p1-ready", 1, "%s..%s" % (self.base(branch)[:7], tip[:7]), ruling="closed")
+        folder = os.path.join(os.path.realpath(self.root), "p1-ready")
+        self.put(os.path.join(folder, "merge.txt"), "Merge it\n")
+        return tip, folder
+
+    def pasted(self, command):
+        """The arguments a stub `agentik` gets when `command` runs under `sh -c`."""
+        bin_dir = os.path.join(self.tmp, "stub-bin")
+        work = os.path.join(self.tmp, "stub-cwd")
+        os.makedirs(work, exist_ok=True)
+        got = os.path.join(self.tmp, "stub-argv.json")
+        self.put(os.path.join(bin_dir, "agentik"), "#!/usr/bin/python3\nimport json, os, sys\n"
+                 "open(os.environ['STUB_OUT'], 'w').write(json.dumps(sys.argv[1:]))\n")
+        os.chmod(os.path.join(bin_dir, "agentik"), 0o755)
+        subprocess.run(["/bin/sh", "-c", command], cwd=work, check=True, env={
+            "PATH": bin_dir + ":/usr/bin:/bin", "STUB_OUT": got, "IFS": " "})
+        self.assertEqual(os.listdir(work), [])
+        with open(got, encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def test_f1_words_and_options_in_any_order(self):
+        self.row("p4-crate")
+        self.row("q1-quince", repo="quince")
+        forms = (["check", "--root", self.root, self.pear, "--json"],
+                 ["--root", self.root, "check", self.pear, "--json"],
+                 ["check", self.pear, "--root", self.root, "--json"])
+        seen = []
+        for form in forms:
+            out, err = io.StringIO(), io.StringIO()
+            code = decisions.main(["rows"] + form, out=out, err=err)
+            self.assertEqual(code, 0, err.getvalue())
+            seen.append(json.loads(out.getvalue()))
+        self.assertEqual(seen[0], seen[1])
+        self.assertEqual(seen[0], seen[2])
+        self.assertEqual(seen[0]["skipped"][0]["why"], "not named")
+        err = io.StringIO()
+        code = decisions.main(["analyze", "churn", "--json", self.pear], out=io.StringIO(),
+                              err=err)
+        self.assertEqual(code, 2)
+        self.assertIn("unrecognized arguments", err.getvalue())
+
+    def test_f2_the_land_command_pastes_as_four_words(self):
+        branch = "p1;echo$IFS'x\""
+        for name, view in (("my rows;$HOME 'q\"", "text"), ("rows\nwith a newline", "json")):
+            self.root = os.path.join(self.hq, name)
+            os.makedirs(self.root)
+            tip, folder = self.ready(branch)
+            if view == "json":
+                command = self.view()["p1-ready"]["next"]["command"]
+            else:
+                line = self.rows()[1].splitlines()[0]
+                command = line.split("  next: ", 1)[1]
+            self.assertEqual(self.pasted(command), [
+                "session", "gate", "land", os.path.realpath(self.pear), branch, tip,
+                os.path.join(folder, "merge.txt")])
+
+    def test_f3_no_control_character_reaches_the_text_view(self):
+        tip = self.on_branch("p2-fix", "fix-1.txt")
+        name = "p2\x1b[31m-fix"
+        self.row(name, branch="p2-fix")
+        self.build(name, 1, tip)
+        self.review(name, 1, "%s..%s" % (self.base("p2-fix")[:7], tip[:7]),
+                    blocks="F1 \x1b]0;OWNED\x07\x1b[2J\x1b[31mred\x01", ruling="fix")
+        self.row("p9-gone", branch="p9\x1b[2J-gone")
+        self.build("p9-gone", 1, tip)
+        for argv in ([], ["check"]):
+            out = self.rows(*argv)[1]
+            self.assertIn("gone", out)
+            self.assertFalse([c for c in out if c != "\n" and (ord(c) < 32 or 127 <= ord(c) < 160)],
+                             repr(out))
+        self.assertIn("\x1b", self.view()["p2\x1b[31m-fix"]["next"]["text"])
+
+    def test_f4_a_stage_by_its_opening_words(self):
+        tip, folder = self.ready("p1-ready")
+        commit(self.pear, "main-moves.txt")
+        git(self.pear, "checkout", "-q", "p1-ready")
+        git(self.pear, "merge", "-q", "--no-ff", "-m", "Merge main into p1-ready", "main")
+        git(self.pear, "checkout", "-q", "main")
+        tip2 = git(self.pear, "rev-parse", "p1-ready")
+        self.build("p1-ready", 2, "`%s`" % tip2[:7], stage="`phase 2` (main merged in)")
+        self.assertEqual(self.view()["p1-ready"]["state"], "ready")
+
+    def test_f5_a_cell_is_the_second_cell(self):
+        self.put(os.path.join(self.root, "p4-wide", "row.md"),
+                 "# Row p4-wide\n\n| item | value | note |\n|---|---|---|\n"
+                 "| repo | pear | the app |\n| level | S3 | |\n| depends_on | none | |\n"
+                 "| done | | |\n")
+        got = self.view()
+        self.assertEqual(list(got), ["p4-wide"])
+        self.assertEqual(got["p4-wide"]["repo"], "pear")
+
+    def test_l1_an_unreadable_row_is_skipped(self):
+        self.row("p4-crate")
+        os.makedirs(os.path.join(self.root, "p8-binary"))
+        with open(os.path.join(self.root, "p8-binary", "row.md"), "wb") as handle:
+            handle.write(b"# Row \xff\xfe\n")
+        code, out, _ = self.rows()
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines()[-1], "skipped (unreadable): p8-binary")
+        code, out, _ = self.rows("--json", "check")
+        got = json.loads(out)
+        self.assertEqual((code, got["checked"], got["stale"]), (0, 1, []))
+        self.assertEqual(got["skipped"], [{"repo": None, "why": "unreadable",
+                                           "rows": ["p8-binary"]}])
+        self.assertEqual([r["row"] for r in got["rows"]], ["p4-crate"])

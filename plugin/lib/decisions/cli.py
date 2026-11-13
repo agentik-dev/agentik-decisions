@@ -323,7 +323,14 @@ def main(argv=None, out=None, err=None):
     try:
         # argparse prints --help and its usage errors itself: into `out` and `err`.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            args = build_parser().parse_args(argv)
+            parser = build_parser()
+            # rw2 review 1 F1: `rows` takes its words and options in any order; every
+            # other verb's leftover words are refused as `parse_args` refuses them.
+            args, extra = parser.parse_known_args(argv)
+            if extra and args.verb == "rows" and not any(w.startswith("-") for w in extra):
+                args.words = list(args.words or []) + extra
+            elif extra:
+                parser.error("unrecognized arguments: %s" % " ".join(extra))
     except SystemExit as exc:
         return 2 if exc.code else 0
     if not args.verb:
