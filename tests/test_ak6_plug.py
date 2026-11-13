@@ -307,5 +307,149 @@ class ReadOnly(Plug):
         self.assertEqual(self.snapshot(), before)
 
 
+# The plug's reads by argv and the schema each answers; `describe --json` reads no cwd.
+READS = ((["describe", "config", "--json"], "agentik.config/1"),
+         (["describe", "config", "--json", "ledger"], "agentik.config/1"),
+         (["doctor", "--json"], "agentik.doctor/1"),
+         (["backlog", "--json"], "agentik.decisions.backlog/1"),
+         (["backlog", ".", "--json"], "agentik.decisions.backlog/1"),
+         (["rows", "--json"], "agentik.rows/1"),
+         (["questions", "--json"], "agentik.questions/1"))
+
+
+class Unrunnable(Plug):
+    """Review 1 R1-F1: a read that cannot run prints the contract's §2 object on stdout and exits
+    2, and no OSError, decode error, git or HOME ends a read in a traceback."""
+
+    def failed(self, run, schema, code):
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertNotIn(b"Traceback", run.stderr)
+        self.assertTrue(run.stdout.endswith(b"}\n"), run.stdout)
+        got = json.loads(run.stdout.decode("utf-8"))
+        self.assertEqual(list(got), ["schema", "ok", "tool", "error"])
+        self.assertEqual((got["schema"], got["ok"], got["tool"]), (schema, False, "decisions"))
+        self.assertEqual(list(got["error"]), ["code", "message", "remedy"])
+        self.assertEqual(got["error"]["code"], code)
+        self.assertRegex(got["error"]["message"], r"^[^\n]+$")
+        return got
+
+    def in_gone(self, *argv):
+        """`argv` run through the launcher in a cwd removed before the read starts."""
+        gone = os.path.join(self.t, "gone")
+        os.makedirs(gone)
+        script = 'cd "$1" && rmdir "$1" && shift && exec "$@"'
+        return subprocess.run(["/bin/sh", "-c", script, "sh", gone, D] + list(argv),
+                              cwd=self.t, env=self.env, capture_output=True, timeout=60)
+
+    def test_a_cwd_that_is_gone(self):
+        for argv, schema in READS:
+            with self.subTest(argv=argv):
+                got = self.failed(self.in_gone(*argv), schema, "no_cwd")
+                self.assertIn("working directory", got["error"]["message"])
+                self.assertIsNone(got["error"]["remedy"])
+        self.assertEqual(self.in_gone("describe", "--json").returncode, 0)
+
+    def test_a_cwd_that_cannot_be_read(self):
+        # macOS refuses getcwd in a folder of mode 000; Linux answers it: either way, no traceback
+        locked = os.path.join(self.t, "locked")
+        os.makedirs(locked)
+        self.addCleanup(os.chmod, locked, 0o755)
+        script = 'cd "$1" && chmod 000 "$1" && shift && exec "$@"'
+        run = subprocess.run(["/bin/sh", "-c", script, "sh", locked, D, "describe", "config",
+                              "--json"], cwd=self.t, env=self.env, capture_output=True, timeout=60)
+        if run.returncode == 2:
+            self.failed(run, "agentik.config/1", "no_cwd")
+        else:
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+    def nine(self, env, cwd=None):
+        got = self.config(cwd=cwd, env=env)
+        self.assertEqual([s["key"] for s in got["settings"]], NINE)
+        return {s["key"]: s["value"] for s in got["settings"]}
+
+    def test_a_home_that_is_a_file_empty_or_unset(self):
+        afile = os.path.join(self.t, "afile")
+        self.put(afile, "x")
+        bare = {k: v for k, v in self.env.items() if k != "HOME"}
+        for env in (dict(self.env, HOME=afile), dict(self.env, HOME=""), bare):
+            with self.subTest(home=env.get("HOME")):
+                self.assertEqual(self.nine(env)["ledger"],
+                                 os.path.join(self.repo, "DECISIONS.md"))
+                self.answer("describe", "--json", env=env)
+
+    def fake_git(self, body):
+        folder = os.path.join(self.t, "bin")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, "git")
+        if body is not None:
+            self.put(path, "#!/bin/sh\n" + body + "\n")
+            os.chmod(path, 0o755)
+        # PATH is that folder alone: the launcher names its interpreter by its full path
+        return dict(self.env, PATH=folder), path
+
+    def test_git_absent_failing_or_unreadable(self):
+        env, path = self.fake_git(None)
+        found = self.nine(env)
+        self.assertEqual((found["ledger"], found["rows.root"]), (None, None))
+        for name, body, mode in (("exits 128", "exit 128", 0o755),
+                                 ("prints no UTF-8", "printf '/no\\377where\\n'", 0o755),
+                                 ("not executable", "exit 0", 0o644)):
+            with self.subTest(git=name):
+                env, path = self.fake_git(body)
+                os.chmod(path, mode)
+                self.assertIsNone(self.nine(env)["ledger"])
+        os.remove(path)
+        os.makedirs(path)
+        self.assertIsNone(self.nine(env)["ledger"])
+
+    def test_a_cache_or_a_variable_that_cannot_be_read(self):
+        cache = os.path.join(self.home, ".claude", "plugins", "cache")
+        os.makedirs(cache)
+        os.chmod(cache, 0)
+        self.addCleanup(os.chmod, cache, 0o755)
+        self.assertIsNone(self.nine(self.env)["respeak.root"])
+        ledger_file = os.path.join(self.repo, "DECISIONS.md")
+        for value in (ledger_file, os.fsdecode(b"/no\xffwhere"), "x" * 5000):
+            with self.subTest(root=value[:20]):
+                self.assertIsNone(self.nine(dict(self.env, RESPEAK_ROOT=value))["respeak.root"])
+
+    def test_an_error_inside_a_read(self):
+        """Any OSError, decode error or refusal a read meets answers §2, in process."""
+        import io
+        from unittest import mock
+        from decisions import cli, common, plug
+        cases = ((mock.patch.object(plug, "locate", side_effect=PermissionError(13, "denied",
+                                                                                "/x/DECISIONS.md")),
+                  ["describe", "config", "--json"], "agentik.config/1", "unreadable"),
+                 (mock.patch.object(plug, "settings", side_effect=UnicodeDecodeError(
+                     "utf-8", b"\xff", 0, 1, "invalid start byte")),
+                  ["describe", "config", "--json"], "agentik.config/1", "bad_file"),
+                 (mock.patch.object(plug, "describe", side_effect=common.Refusal("no parser")),
+                  ["describe", "--json"], "agentik.describe/1", "refused"),
+                 (mock.patch.object(cli, "cmd_doctor", side_effect=OSError(5, "I/O error")),
+                  ["doctor", "--json"], "agentik.doctor/1", "unreadable"))
+        for patch, argv, schema, code in cases:
+            with self.subTest(argv=argv, code=code), patch:
+                out, err = io.StringIO(), io.StringIO()
+                rc = cli.main(argv, out, err)
+                run = subprocess.CompletedProcess(argv, rc, out.getvalue().encode(),
+                                                  err.getvalue().encode())
+                self.failed(run, schema, code)
+        with mock.patch.object(cli, "cmd_doctor", side_effect=OSError(5, "I/O error")):
+            with self.assertRaises(OSError):   # a read of text is no plug read: as at the pin
+                cli.main(["doctor"], io.StringIO(), io.StringIO())
+
+    def test_a_git_that_hangs(self):
+        import io
+        from unittest import mock
+        from decisions import cli, common
+        with mock.patch.object(common, "bounded",
+                               side_effect=subprocess.TimeoutExpired(["git"], 10)):
+            out = io.StringIO()
+            self.assertEqual(cli.main(["describe", "config", "--json"], out, io.StringIO()), 0)
+        got = {s["key"]: s["value"] for s in json.loads(out.getvalue())["settings"]}
+        self.assertEqual((got["ledger"], got["rows.root"]), (None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

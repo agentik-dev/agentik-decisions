@@ -7,7 +7,9 @@
 The tool keeps no settings file, so a setting is what a verb reads here: a path the verb
 would find, or a figure read from its constant and never typed again. Both reads run with
 no ledger and outside a git work tree, read no ledger's text, write nothing and exit 0;
-`describe` without `--json`, or with a word other than `config`, exits 2.
+`describe` without `--json`, or with a word other than `config`, exits 2. A read of the plug
+that cannot run (a cwd that is gone, an OSError, a decode error) prints the contract's §2
+object on stdout and exits 2, never a traceback.
 """
 
 import json
@@ -59,6 +61,9 @@ FLAG = "The flag holds for that one run and is saved nowhere."
 VARIABLE = "The variable holds for that one run and is saved nowhere."
 ENV = "RESPEAK_ROOT"
 PATHS = ("ledger", "respeak.root", "rows.root")
+# The plug's other reads (READS' argvs), by verb: the schema each answers.
+SCHEMAS = {"doctor": "agentik.doctor/1", "backlog": "agentik.decisions.backlog/1",
+           "rows": "agentik.rows/1", "questions": "agentik.questions/1"}
 
 
 def _parser():
@@ -140,11 +145,46 @@ def config(key=None, cwd=None, env=None):
             "settings": found, "warnings": []}
 
 
+def schema_of(args):
+    """The schema of the plug's read that `args` asks for, or None for any other run."""
+    if not getattr(args, "json", False):
+        return None
+    if args.verb == "describe":
+        words = list(getattr(args, "words", None) or [])
+        return "agentik.config/1" if words else "agentik.describe/1"
+    return SCHEMAS.get(args.verb)
+
+
+def failure(schema, exc):
+    """The contract's §2 object for a read stopped by `exc`: `no_cwd` when the working
+    directory cannot be read, else `refused`, `bad_file` (a decode error) or `unreadable`."""
+    try:
+        os.getcwd()
+    except OSError as gone:
+        code = "no_cwd"
+        message = ("the working directory is gone or cannot be read (%s); run the read from "
+                   "a folder that exists" % (gone.strerror or gone))
+    else:
+        code = ("refused" if isinstance(exc, Refusal) else
+                "bad_file" if isinstance(exc, UnicodeError) else "unreadable")
+        message = str(exc) or exc.__class__.__name__
+    return {"schema": schema, "ok": False, "tool": TOOL,
+            "error": {"code": code, "message": " ".join(message.split()), "remedy": None}}
+
+
+def answer_failure(schema, exc, out):
+    out.write(json.dumps(failure(schema, exc), indent=2) + "\n")
+    return 2
+
+
 def cmd_describe(args, out, err):
     words = list(getattr(args, "words", None) or [])
     if not getattr(args, "json", False) or (words and words[0] != "config") or len(words) > 2:
         err.write("decisions: %s\n" % USAGE)
         return 2
-    got = config(words[1] if len(words) > 1 else None) if words else describe()
+    try:
+        got = config(words[1] if len(words) > 1 else None) if words else describe()
+    except (Refusal, OSError, UnicodeError) as exc:
+        return answer_failure(schema_of(args), exc, out)
     out.write(json.dumps(got, indent=2) + "\n")
     return 0

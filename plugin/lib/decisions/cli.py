@@ -143,7 +143,8 @@ from .common import VERSION, Refusal
 from .doctor import cmd_doctor
 from .ledger import locate
 from .lookup import cmd_find, cmd_show
-from .plug import cmd_describe
+from .plug import answer_failure, cmd_describe
+from .plug import schema_of as plug_schema
 from .render import cmd_render
 from .rows import cmd_rows
 
@@ -401,6 +402,13 @@ def main(argv=None, out=None, err=None):
     except Refusal as exc:
         err.write("decisions: %s\n" % exc)
         return 2
+    except (OSError, UnicodeError) as exc:
+        # ak6 review 1 R1-F1: one of the plug's reads that cannot run answers the contract's
+        # §2 object, exit 2; any other run fails as it did
+        schema = plug_schema(args)
+        if schema is None:
+            raise
+        return answer_failure(schema, exc, out)
 
 
 def cmd_install_cli(args, out, err):
