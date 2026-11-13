@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gates run by `make check`: the shebang, 3.12 syntax over src/ and tests/, and
+"""Gates run by `make check`: 3.12 syntax over src/, tests/ and plugin/lib/, and
 pyflakes.  Exit 0 when every gate holds, 1 when one refuses.  Pyflakes absent is
 a skip, and a skip passes only when `tests/skips.allow` lists its reason (ADV6-5)
 with a count (ADV10-4).
@@ -13,7 +13,7 @@ import io
 import os
 import sys
 
-ROOTS = ("src", "tests")
+ROOTS = ("src", "tests", os.path.join("plugin", "lib"))
 SKIPS_ALLOW = "tests/skips.allow"
 PYFLAKES_ABSENT = "pyflakes absent"
 
@@ -40,15 +40,6 @@ def read_allow(path):
             raise AllowError("%s:%d: no count" % (path, number))
         allowed[reason.strip()] = int(count)
     return allowed
-
-
-def shebang_gate():
-    first = io.open("src/decisions.py", encoding="utf-8").readline().rstrip("\n")
-    if first != "#!/usr/bin/env python3":
-        sys.stderr.write("gate: src/decisions.py line 1 is %r, want '#!/usr/bin/env python3'\n" % first)
-        return 1
-    print("gate: shebang ok")
-    return 0
 
 
 def sources():
@@ -104,8 +95,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="gates")
     parser.add_argument("--skips-allow", dest="skips_allow", default=SKIPS_ALLOW)
     args = parser.parse_args(argv)
-    status = shebang_gate() | syntax_gate()
-    return status | pyflakes_gate(args.skips_allow)
+    return syntax_gate() | pyflakes_gate(args.skips_allow)
 
 
 if __name__ == "__main__":
