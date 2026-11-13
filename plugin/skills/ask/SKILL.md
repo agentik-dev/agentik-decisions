@@ -12,8 +12,9 @@ The owner is asked once per session, in one batch: when the sitting blocks on
 the owner, or at close.
 
 1. Each block carries a base line under its heading, `<!-- decisions: base ... -->`, which `new` and `ask` write:
-   a line whose digest it lacks is the owner's typing, committed or not, so a commit moves nothing. `ask` names
-   such a block in a warning and does not ask it: run `agentik-decisions answer N` for it first, from that text, which `answer` reads, or, when
+   a line whose digest it lacks is the owner's typing, committed or not, so a commit moves nothing; a block with
+   none, or two, is the owner's whole. `ask` names such a block in a warning and does not ask it: run
+   `agentik-decisions answer N` for it first (`--other`, then `new` when it stays open, for a block with none or two), from that text, which `answer` reads, or, when
    the words ask something back rather than answer, quote them to the owner in this sitting's ask. A line typed
    above its **Your answer:** line takes `--other`, which keeps those lines in the Answered line. The answer
    line counts too, or text under it. Text that names an option takes `--pick` with that option; `answer`
@@ -54,7 +55,7 @@ the owner, or at close.
    only on the owner's word. A line no part of its block takes, such as text typed off the
    **Your answer:** line, and a line the block's base line lacks, such as words typed
    into an option, refuse `--pick`: they are the owner's, so run `--other`, which keeps
-   them in the Answered line. When the ledger's block lives in a CLAUDE.md that is not
+   them in the Answered line, as it keeps every line of a block with none or two. When the ledger's block lives in a CLAUDE.md that is not
    beside it, pass the same `--into` that `agentik-decisions render` uses: the cross-repo
    ledger's block is in the user-level CLAUDE.md, `--into ~/.claude/CLAUDE.md`.
 4. A result with `afkTimeoutMs` is no answer: the question stays open, and it

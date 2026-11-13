@@ -336,6 +336,8 @@ class Ask(Base):
 
     def test_ask_writes_back(self):
         shutil.copy(SAMPLE_QUESTIONS, self.questions)
+        # d42: a block with no base line is not asked, so the sample's 8 gains one
+        self.restamp()
         self.new("Q one", "Q two")
         self.rendered(reword=(9, 10))
         text = self.read(self.questions)

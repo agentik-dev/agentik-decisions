@@ -3,10 +3,11 @@
     ask [N...]
 
 Skips, with one warning each, a block whose **Your answer:** line is filled in
-(`agentik decisions answer N` enters it first), a block the lint refuses, and a
-block that holds a line typed since `new` or `ask` wrote it (d41: a line whose
-digest its base line lacks; for a block with no base line that git's HEAD holds,
-a line HEAD's copy lacks), so the owner's words are never rendered over. Renders
+(`agentik decisions answer N` enters it first), a block the lint refuses, a block
+with no base line or with more than one, whose lines cannot be told from the
+owner's (d42), and a block that holds a line typed since `new` or `ask` wrote it
+(d41: a line whose digest its base line lacks), so the owner's words are never
+rendered over; it runs no git. Renders
 the asked blocks once through respeak, outside the lock, then takes
 `.new.lock`, reads both files again, and writes back each block whose text is
 unchanged since the render and whose rendering kept its headings, numbers,
@@ -14,8 +15,7 @@ bold labels, option labels, the choice's `?`, a text in each prose part, and
 no line outside a part; that block's Proposed line takes the new first
 sentence of the recommendation. Under the same lock every asked block whose text
 is unchanged since it was read leaves with its base line, computed from its text
-as `ask` leaves it, with a render or without; a block with no base line that HEAD
-lacks gains none. Both files are written or neither. Then it
+as `ask` leaves it, with a render or without. Both files are written or neither. Then it
 prints a JSON list of calls, at most four questions a call, built from the file
 as it stands. With no respeak, a failed render, or a directory it cannot
 write, the text stays, one warning goes to stderr and the exit is 0; so does a
@@ -136,10 +136,11 @@ def refresh_proposed(ledger_text, block):
     return "".join(lines)
 
 
-def write_back(path, path_q, asked, rendered, err, stamps=frozenset()):
+def write_back(path, path_q, asked, rendered, err):
     """The questions text after the write-back of every block the render kept, `rendered`
-    None when nothing was rendered, and of the base line of each block numbered in
-    `stamps` whose text is unchanged since it was read (d41 ruling 6)."""
+    None when nothing was rendered, and of the base line of each asked block whose text
+    is unchanged since it was read (d41 ruling 6; d42 ruling 5: each asked block has
+    one)."""
     fresh = {b.number: b for b in questions.parse(rendered).blocks} if rendered else {}
     with held(os.path.join(os.path.dirname(path), ask.LOCK), ask.NEW_WAIT, err):
         q_text, l_text = read_text(path_q), read_text(path)
@@ -156,12 +157,9 @@ def write_back(path, path_q, asked, rendered, err, stamps=frozenset()):
                 continue
             new = new if new is not None and new.text != old.text else None
             written = now.text if new is None else new.text
-            if old.number in stamps:
-                if new is None and now.base == questions.digests(now.text):
-                    continue
-                written = questions.stamped(written)
-            elif new is None:
+            if new is None and now.base == questions.digests(now.text):
                 continue
+            written = questions.stamped(written)
             if new is not None:
                 l_text, rewrote = refresh_proposed(l_text, new), True
             q_text = questions.replace_block(q_text, now, written)
@@ -177,23 +175,10 @@ def write_back(path, path_q, asked, rendered, err, stamps=frozenset()):
     return q_text
 
 
-def typed_since(block, path_q):
-    """(the lines of `block` typed since `new` or `ask` wrote it, whether `ask` gives it
-    a base line): those whose digest its base line lacks; for a block with none, those
-    HEAD's copy lacks, read as `answer` reads it; a block with none that HEAD lacks holds
-    none and gains none (d41 rulings 5 and 6)."""
-    if block.base is not None:
-        return answer.since(block), True
-    try:
-        return answer.since(block, answer.head_block(path_q, block.number)), True
-    except Refusal:
-        return [], False
-
-
-def skipped(block, problems, typed=()):
+def skipped(block, problems):
     """Why `block` is not asked, or None: its answer line is filled in, the lint
-    refuses it (d-n2 items 3 and 4), or it holds `typed`, lines typed since it was
-    written (d41 ruling 5)."""
+    refuses it (d-n2 items 3 and 4), it has no base line or more than one (d42 ruling
+    5), or it holds lines typed since it was written (d41 ruling 5)."""
     if block.answer:
         return ("is answered on its %s line; run `agentik decisions answer %d` for it first"
                 % (questions.ANSWER, block.number))
@@ -201,27 +186,25 @@ def skipped(block, problems, typed=()):
     refused = [m[len(head):] for n, m in problems if n == block.start + 1 and m.startswith(head)]
     if refused:
         return "fails the lint: %s" % "; ".join(refused)
-    if typed:
+    if block.base is None:
+        return ("has no base line, or more than one, so its lines cannot be told from typed "
+                "ones; run agentik decisions answer %d --other for it first" % block.number)
+    if answer.since(block):
         return ("holds lines typed since it was written; run agentik decisions answer %d "
                 "--other for it first" % block.number)
     return None
 
 
-def askable(parsed, wanted, err, warned, path_q, stamps=None):
-    """The blocks of `parsed` numbered in `wanted` that can be asked; each other one
-    is warned of once, its number kept in `warned`; the number of each asked block
-    `ask` gives a base line joins `stamps`."""
+def askable(parsed, wanted, err, warned):
+    """The blocks of `parsed` numbered in `wanted` that can be asked, each with its one
+    base line; each other one is warned of once, its number kept in `warned`."""
     asked = []
     for block in parsed.blocks:
         if block.number not in wanted:
             continue
         why = skipped(block, parsed.problems)
-        typed, stamp = ([], False) if why else typed_since(block, path_q)
-        why = why or skipped(block, parsed.problems, typed)
         if why is None:
             asked.append(block)
-            if stamp and stamps is not None:
-                stamps.add(block.number)
         elif block.number not in warned:
             warned.add(block.number)
             err.write("ask: question %d %s; not asked\n" % (block.number, why))
@@ -249,18 +232,17 @@ def cmd_ask(args, path, out, err):
     if unknown:
         raise Refusal("ask: no open question %s in %s" % (
             ", ".join(map(str, unknown)), display(path_q)))
-    warned, stamps = set(), set()
+    warned = set()
     asked = askable(parsed, set(args.numbers) or {b.number for b in parsed.blocks}, err,
-                    warned, path_q, stamps)
+                    warned)
     if asked:
         rendered, why = render(asked, path_q)
         if rendered is None:
             err.write("ask: %s; the questions stay as written\n" % why)
         # d41 ruling 6: the base lines are written with a render or without, unless the
-        # directory refused the render already
-        if rendered is not None or (stamps and os.access(os.path.dirname(path_q) or os.curdir,
-                                                          os.W_OK)):
-            text = write_back(path, path_q, asked, rendered, err, stamps)
-    asked = askable(questions.parse(text), {b.number for b in asked}, err, warned, path_q)
+        # directory refused the render already; d42: only an asked block's, each based
+        if rendered is not None or os.access(os.path.dirname(path_q) or os.curdir, os.W_OK):
+            text = write_back(path, path_q, asked, rendered, err)
+    asked = askable(questions.parse(text), {b.number for b in asked}, err, warned)
     out.write(json.dumps(payload(asked), indent=2, ensure_ascii=False) + "\n")
     return 0

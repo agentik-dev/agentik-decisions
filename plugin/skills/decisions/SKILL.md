@@ -56,9 +56,10 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
   body only: `answer` writes the bold title and the `(date; source)` tail, and
   refuses a `--text` that opens with a bold title or ends in a dated tail.
   `answer` tells the owner's lines by the base line `new` and `ask` write under
-  question N's heading, so a commit moves nothing; a block with none is read from
-  git's HEAD, and `answer` exits 2 while git holds no copy of it. A block the owner
-  typed into is answered first, as the `ask` skill's step 1 says.
+  question N's heading, so a commit moves nothing. A block with none, or with more
+  than one, is the owner's line by line: `--pick` exits 2, `ask` does not ask it, and
+  `answer N --other` keeps its every line, then `new` puts it again when it stays
+  open. A block the owner typed into is answered first, as the `ask` skill's step 1 says.
 - Put a question with `agentik-decisions new`, in four parts: where things stand, the
   choice, what each answer sets in motion, and the recommendation. Two to four
   `--option "Label: effect"` flags name the answers, the first the recommended
