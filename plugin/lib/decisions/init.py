@@ -6,8 +6,8 @@ ledger rendered."""
 
 import os
 
-from .common import Refusal, disk_text, keeps_crlf, read_text, write_text
-from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, load, where
+from .common import Refusal, commit_texts, disk_text, keeps_crlf, read_text
+from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, parse, where
 from .render import (TARGET, apply, block, gate_said, growth, is_ledger, list_gate,
                      refuse_another)
 
@@ -31,10 +31,9 @@ def cmd_init(args, out, err):
     apply(old, "", display(target))  # markers that are not one block refuse before a write
     refuse_another(old, target, path, "init")  # d36 ruling 4 (dc1 r1 F1)
     was, crlf = disk_text(target), keeps_crlf(target)
-    write_text(path, EMPTY)
+    new = apply(old, block(parse(EMPTY, display(path)), path, target), display(target))
+    commit_texts([(path, EMPTY), (target, new)])  # both or neither (dc1 r1 F2)
     out.write("init: wrote %s: # Decisions and its three sections, empty\n" % display(path))
-    new = apply(old, block(load(path), path, target), display(target))
-    write_text(target, new)
     out.write("init: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     gate_said(out, "init", [(path, list_gate(path, err, "init")),
                             (target, list_gate(target, err, "init"))])

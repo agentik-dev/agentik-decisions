@@ -235,3 +235,25 @@ class ReviewOne(Base):
         code, _, err = self.run_cli("render", "--check", "--ledger", other, "--into",
                                     self.claude)
         self.assertEqual(code, 0, err)
+
+    def test_f2_a_failed_claude_write_leaves_no_ledger(self):
+        ro = os.path.join(self.repo, "ro")
+        os.mkdir(ro)
+        with open(os.path.join(ro, "shared.md"), "w", encoding="utf-8") as handle:
+            handle.write("hand\n")
+        os.chmod(ro, 0o555)
+        self.addCleanup(os.chmod, ro, 0o755)
+        os.symlink(os.path.join("ro", "shared.md"), self.claude)
+        before = snapshot(self.repo)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 2, out)
+        self.assertIn("unwritable", err)
+        self.assertEqual(out, "")
+        self.assertFalse(os.path.lexists(self.ledger))
+        self.assertEqual(snapshot(self.repo), before)
+        os.chmod(ro, 0o755)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.ledger), EMPTY)
+        self.assertEqual(self.read(self.claude), "hand\n\n" + BLOCK)
+
