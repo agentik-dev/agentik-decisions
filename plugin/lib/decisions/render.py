@@ -140,8 +140,9 @@ def _spelled(path):
     `display` writes it."""
     real = os.path.realpath(path)
     spelled_home = os.path.expanduser("~").rstrip(os.sep)
-    real_home = os.path.realpath(spelled_home)
-    if real.startswith(real_home + os.sep):
+    # a home of `/` spells as "", and realpath("") is the working folder: no rewrite then
+    real_home = os.path.realpath(spelled_home).rstrip(os.sep) if spelled_home else ""
+    if spelled_home and real_home and real.startswith(real_home + os.sep):
         real = spelled_home + real[len(real_home):]
     return display(real)
 
@@ -200,7 +201,9 @@ def _checkout_warning(gates, top, up, n, line, keep):
                 % (real_tilde(gates), n, line.replace("\0", "\\0"), keep)]
     if "\0" in line:  # no path call takes a NUL, and a line with none is not worth a warning
         return []
-    if line.split("/")[0] not in ("", ".") and first != top and os.path.isdir(first) \
+    # a U+FFFD is a byte the list could not decode (n80), so no folder was named by it
+    if "\ufffd" not in line and line.split("/")[0] not in ("", ".") and first != top \
+            and os.path.isdir(first) \
             and not os.path.lexists(os.path.join(top, line.split("/")[0])):
         return ["%s:%d: `%s` names %s, a folder beside the checkout; %s"
                 % (real_tilde(gates), n, line, real_tilde(first), keep)]

@@ -13,7 +13,7 @@ import unittest
 from unittest import mock
 
 import decisions
-from decisions.render import GATES, head_holds, list_gate
+from decisions.render import GATES, _spelled, head_holds, list_gate
 from tests import gates
 from tests.hermetic import Hermetic
 from tests.test_d38_gate_layers import Home
@@ -178,3 +178,39 @@ class Lists(Home):
         text = err.getvalue()
         self.assertEqual(text.count("CLAUDE.md"), 1, text)
         self.assertIn("is not listed: its line cannot be resolved (too many links)", text)
+
+
+class Round1(Home):
+    """d40 r1: F1, a home folder of `/` rewrites nothing; F2, a decoded-away byte names no
+    folder beside the checkout."""
+
+    def test_f1_a_home_of_root_spells_the_paths_as_before(self):
+        top = os.path.realpath(tempfile.mkdtemp(prefix="decisions-d40-"))
+        self.addCleanup(shutil.rmtree, top, True)
+        os.makedirs(os.path.join(top, ".git"))
+        shutil.copy(os.path.join(self.repo, "DECISIONS.md"), top)
+        with open(os.path.join(top, ".claude"), "wb"):
+            pass
+        before = os.getcwd()
+        self.addCleanup(os.chdir, before)
+        os.chdir(top)
+        with mock.patch.dict(os.environ, {"HOME": "/"}):
+            self.assertEqual(_spelled(os.path.join(top, "CLAUDE.md")), "CLAUDE.md")
+            code, _, err = self.render("--ledger", os.path.join(top, "DECISIONS.md"),
+                                       ledger=os.path.join(top, "DECISIONS.md"))
+        self.assertEqual(code, 0, err)
+        warned = [l for l in err.splitlines() if "warning" in l]
+        self.assertEqual(len(warned), 1, err)
+        self.assertNotIn("~/", warned[0])
+        self.assertIn("CLAUDE.md is not listed: .claude/%s cannot be written" % GATES, warned[0])
+
+    def test_f2_a_replaced_byte_names_no_folder_beside_the_checkout(self):
+        os.makedirs(os.path.join(os.path.dirname(self.repo), "pl�um"))
+        self.put(os.path.join(self.repo, ".claude", GATES), b"pl\xffum\n/ab\xffs\n")
+        code, _, err = self.render("--lint")
+        self.assertEqual(code, 0, err)
+        warned = [l for l in err.splitlines() if GATES in l]
+        self.assertEqual(len(warned), 1, warned)
+        self.assertIn("reaches outside the checkout", warned[0])
+
+    put = Lists.put
