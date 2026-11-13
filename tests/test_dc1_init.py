@@ -345,3 +345,59 @@ class ReviewTwo(Base):
         self.assertIn("another ledger's block", err)
         self.assertEqual(snapshot(self.repo), before)
         self.assertEqual(self.run_cli("render", "--check")[0], 0)
+
+    FENCED = ("# Notes\nThe tool fills a block shaped like this one:\n```\n"
+              "<!-- BEGIN GENERATED: decisions -->\nmy own example text, kept by hand\n"
+              "<!-- END GENERATED: decisions -->\n```\nLast hand line.\n")
+    TILDES = ("\nAnd in tildes:\n~~~ markdown\n<!-- BEGIN GENERATED: decisions -->\n"
+              "a second example\n<!-- END GENERATED: decisions -->\n~~~\n")
+
+    def test_r2_f4_init_reads_fenced_markers_as_no_block(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(self.FENCED)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.claude), self.FENCED + "\n" + BLOCK)
+        self.assertIn("init: wrote CLAUDE.md: 0 B to 171 B, +171 B;", out)
+
+    def test_r2_f4_render_reads_fenced_markers_as_no_block(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(self.FENCED)
+        with open(self.ledger, "w", encoding="utf-8") as handle:
+            handle.write(EMPTY)
+        code, out, err = self.run_cli("render", "--check")
+        self.assertEqual(code, 1, err)
+        self.assertNotIn("-my own example text", out)
+        code, out, err = self.run_cli("render")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.read(self.claude), self.FENCED + "\n" + BLOCK)
+        self.assertIn("render: wrote CLAUDE.md: 0 B to 171 B, +171 B;", out)
+
+    def test_r2_f4_a_real_block_beside_fenced_examples(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(self.FENCED)
+        self.assertEqual(self.run_cli("init")[0], 0)
+        with open(self.claude, "a", encoding="utf-8") as handle:
+            handle.write(self.TILDES)
+        for argv in (NEW, ANSWER):
+            code, _, err = self.run_cli(*argv)
+            self.assertEqual(code, 0, (argv, err))
+        text = self.read(self.claude)
+        self.assertTrue(text.startswith(self.FENCED), text)
+        self.assertTrue(text.endswith(self.TILDES), text)
+        self.assertIn("1. **Indent.** This repo indents with four spaces.", text)
+        self.assertEqual(self.run_cli("render", "--check")[0], 0)
+        code, out, err = self.run_cli("render", "--lint")
+        self.assertEqual(code, 0, err)
+        self.assertIn("render: the block for CLAUDE.md is 236 B", out)
+
+    def test_r2_f4_answer_makes_no_block_from_a_fenced_example(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(self.FENCED)
+        with open(self.ledger, "w", encoding="utf-8") as handle:
+            handle.write(EMPTY)
+        for argv in (NEW, ANSWER):
+            code, _, err = self.run_cli(*argv)
+            self.assertEqual(code, 0, (argv, err))
+        self.assertIn("holds no GENERATED markers", err)
+        self.assertEqual(self.read(self.claude), self.FENCED)

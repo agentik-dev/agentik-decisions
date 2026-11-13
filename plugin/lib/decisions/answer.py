@@ -98,7 +98,7 @@ from .lookup import pick_area
 from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, gate_said, growth, is_ledger,
                      list_gate, tail_note,
                      tree_file)
-from .tree import ceiling_for, loaded_bytes
+from .tree import ceiling_for, loaded_bytes, markers
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
 
@@ -568,8 +568,8 @@ def rewrite_block(path, target, out, err, command="agentik decisions render"):
     """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has
     markers; without them, a line naming `command`, which writes it (dc1 R6)."""
     old = read_text(target) if os.path.exists(target) else ""
-    lines = [line.strip() for line in old.splitlines()]
-    if BEGIN not in lines or END not in lines:
+    begins, ends = markers(old.splitlines(), BEGIN, END)  # a fenced example is none (dc1 r2 F4)
+    if not begins or not ends:
         err.write("answer: %s holds no GENERATED markers; the block is left as it is; `%s` "
                   "writes it\n" % (display(target), command))
         return

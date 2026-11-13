@@ -55,7 +55,7 @@ from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_paren
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
 from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
-                   named_ledger, rule_words, title_warnings, tree_text)
+                   markers, named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
            "tail_note", "tree_file", "list_gate", "gate_said", "BEGIN", "END", "TARGET", "GATES"]
@@ -302,8 +302,7 @@ def block_bytes(text, crlf=False):
     included, every line end CRLF when `crlf`, or None when `text` holds no such block
     (d32). A text read with its line ends kept is measured as it is on disk."""
     lines = text.splitlines(keepends=True)
-    begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
-    ends = [i for i, line in enumerate(lines) if line.strip() == END]
+    begins, ends = markers(lines, BEGIN, END)
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         return None
     return on_disk("".join(lines[begins[0]:ends[0] + 1]), crlf)
@@ -446,10 +445,10 @@ def block(ledger, path, target, tails=False):
 
 
 def apply(text, generated, target=TARGET):
-    """`text` with `generated` between the markers, or appended when they are absent."""
+    """`text` with `generated` between the markers, or appended when they are absent;
+    marker lines inside a code fence are an example, never the block (dc1 r2 F4)."""
     lines = text.splitlines(keepends=True)
-    begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
-    ends = [i for i, line in enumerate(lines) if line.strip() == END]
+    begins, ends = markers(lines, BEGIN, END)
     if not begins and not ends:
         return generated if not text.strip() else text.rstrip("\n") + "\n\n" + generated
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:

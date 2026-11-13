@@ -204,11 +204,30 @@ ENTRY_OF = re.compile(r"^Each is an entry of `([^`]+)`;")
 SOURCE = re.compile(r"^(?:<!--\s*)?Generated from `([^`]+)` by `")
 
 
+def markers(lines, begin, end):
+    """(the BEGIN rows, the END rows) of `lines`, each a list of indexes; a marker line
+    inside a code fence outside the block is an example, never a marker (dc1 r2 F4)."""
+    begins, ends, fence, inside = [], [], None, False
+    for i, line in enumerate(lines):
+        if fence is None and line.strip() == begin:
+            begins.append(i)
+            inside = True
+            continue
+        if fence is None and line.strip() == end:
+            ends.append(i)
+            inside = False
+            continue
+        opened = None if inside else FENCE.match(line)
+        if opened:
+            mark = opened.group(1)[0]
+            fence = None if fence == mark else (fence or mark)
+    return begins, ends
+
+
 def block_lines(text, begin, end):
     """The lines strictly between the one BEGIN and the one END of `text`, or None."""
     lines = text.splitlines()
-    begins = [i for i, line in enumerate(lines) if line.strip() == begin]
-    ends = [i for i, line in enumerate(lines) if line.strip() == end]
+    begins, ends = markers(lines, begin, end)
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         return None
     return lines[begins[0] + 1:ends[0]]
@@ -247,10 +266,10 @@ def outside_lines(text, begin, end):
     fence, comment = None, False
     found = []
     for n, line in enumerate(lines, 1):
-        if line.strip() == begin:
+        if fence is None and not comment and line.strip() == begin:
             inside = True
             continue
-        if line.strip() == end:
+        if fence is None and not comment and line.strip() == end:
             inside = False
             continue
         if inside:
