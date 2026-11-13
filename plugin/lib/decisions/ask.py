@@ -4,7 +4,9 @@
 
 Appends `## N. T` to the OPEN-QUESTIONS.md beside the ledger, before
 `## Decided without asking` when that heading exists, trailing text after it
-allowed, with four bold-labelled paragraphs, an optional **Report.** paragraph
+allowed, with its base line under the heading (d41: the digest of each line above
+the answer line, so `answer` and `ask` tell the owner's typed lines from the
+block's own), four bold-labelled paragraphs, an optional **Report.** paragraph
 and an empty **Your answer:** line. The third label holds the options, one
 bullet each, the first marked ` (Recommended)`. Then appends `N. **T.** <the
 recommendation's first sentence> (proposed YYYY-MM-DD; OPEN-QUESTIONS.md)`
@@ -131,7 +133,8 @@ def open_count(questions_text):
 
 
 def question(number, title, parts, options, report=None):
-    """The question's text: its heading, the four parts, the report, the answer line."""
+    """The question's text: its heading, its base line (d41), the four parts, the report,
+    the answer line."""
     pieces = ["## %d. %s" % (number, title),
               "**%s** %s" % (LABELS[0], parts["stands"]),
               "**%s** %s" % (LABELS[1], parts["choice"]),
@@ -140,7 +143,7 @@ def question(number, title, parts, options, report=None):
     if report:
         pieces.append("**Report.** %s" % report)
     pieces.append("**Your answer:**")
-    return "\n\n".join(pieces) + "\n"
+    return questions_file.stamped("\n\n".join(pieces)) + "\n"
 
 
 def insert_question(text, written):

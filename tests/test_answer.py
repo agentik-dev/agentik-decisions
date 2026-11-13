@@ -657,6 +657,7 @@ class Answer(Repo, Base):
         at = text.index(self.DEFAULT, text.index("## %d. " % number))
         self.write(self.questions, text[:at] + "".join(line + "\n" for line in lines)
                    + text[at + len(self.DEFAULT):])
+        self.restamp()
         self.commit()
         return number
 
@@ -883,6 +884,7 @@ class Answer(Repo, Base):
         at = text.index("**Your answer:**", text.index("## 10. "))
         self.write(self.questions, text[:at] + "**Report.** design/pin.md\nsection 2\n\n"
                    + text[at:])
+        self.restamp()
         block = [b for b in decisions.questions.parse(self.read(self.questions)).blocks
                  if b.number == 10][0]
         self.assertEqual(block.stray, ())

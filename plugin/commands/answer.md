@@ -17,7 +17,7 @@ change made: one that drops a sentence is refused unless `--shorter`, and
 `--add S` in its place appends S to the paragraph as it stands. `--amends M`
 writes M's tail in form T2, its first date, a count of the older amendments and
 this one whole, and prints the tail it cut as `tail was:`. A line no part of its
-block takes, and a line HEAD's copy of the block lacks, refuse `--pick`; `--other` keeps them in the Answered line; with no copy of question N in git's HEAD, it exits 2: read the block first, since a commit makes its lines the block's own and `--other` must then carry the owner's words, and commit OPEN-QUESTIONS.md.
+block takes, and a line whose digest the block's base line lacks (the `<!-- decisions: base ... -->` line `new` and `ask` write under its heading), refuse `--pick`; `--other` keeps them in the Answered line, and a commit moves nothing. A block with no base line is read from git's HEAD instead: with no copy of question N there, it exits 2: read the block first, since a commit makes its lines the block's own and `--other` must then carry the owner's words, and commit OPEN-QUESTIONS.md.
 One of `--area`, `--amends` and `--no-entry` is required. `--area A` resolves
 as `agentik-decisions show --area A` does, a unique prefix included, but among the
 headings above the legacy marker only, and `Every session` and `Every session of the tree` only by their whole names; the output names the heading it matched,

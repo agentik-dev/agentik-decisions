@@ -16,12 +16,15 @@ part of its block takes (d30: a part is a label's or the **Report.** bold line a
 the lines under it to a blank, an option line under the third label, or the
 **Your answer:** line and all under it) refuses `--pick`, after an unknown one, and
 `--other X` takes it whatever T names, as `Other: X; the owner's line: W`, W those
-lines then T. Under `.new.lock`, once block N is found, `answer` reads it from
-git's HEAD (d35): a non-blank line above its **Your answer:** line that HEAD's copy
-lacks, runs of spaces counted as one, is the owner's; it refuses `--pick` after the
-stray lines, and W takes it after them, each line once. With no copy of question N
-in HEAD (no commit there, HEAD lacks the file or the question, or git cannot read
-it), `--pick` and `--other` exit 2 and write nothing: read the block first, since a
+lines then T. Under `.new.lock`, once block N is found, a non-blank line above its
+**Your answer:** line whose digest the block's base line lacks (d41: `new` and `ask`
+write it, one digest per line, runs of spaces counted as one) is the owner's, typed
+since; it refuses `--pick` after the stray lines, a refusal that names `--other`
+alone, and W takes it after them, each line once. Such a block runs no git, so a
+commit moves nothing. A block with no base line is read from git's HEAD as before
+(d35): a line HEAD's copy lacks is the owner's, and with no copy of question N in
+HEAD (no commit there, HEAD lacks the file or the question, or git cannot read it),
+`--pick` and `--other` exit 2 and write nothing: read the block first, since a
 commit makes every line in it the block's own and `--other`'s text then carries the
 owner's words, and commit the file. With `--area A` entry N is
 written last under the `###` heading A names as `show --area` resolves it (an
@@ -269,19 +272,28 @@ def head_block(path_q, number):
                   % (number, why, name))
 
 
-def since(block, base):
-    """The owner's lines (d35 ruling 2): each non-blank line of `block` above its
-    **Your answer:** line that `base`, HEAD's copy of the block, lacks, in order, stripped.
-    Runs of spaces count as one, and each line of `base` holds one line of `block`; a line
-    deleted since the commit is none. The answer line and what is under it stay T (d28)."""
-    held_lines = collections.Counter(" ".join(line.split()) for line in base.text.splitlines())
+def since(block, base=None):
+    """The owner's lines: each non-blank line of `block` above its **Your answer:** line
+    whose digest the block's base line lacks (d41 ruling 3), or, for a block with none,
+    that `base`, HEAD's copy of the block, lacks (d35 ruling 2); in order, stripped. Runs
+    of spaces count as one, and each digest or line of the base holds one line of
+    `block`; a line deleted since is none. The answer line and what is under it stay T
+    (d28)."""
+    if block.base is not None:
+        held_lines, keyed = collections.Counter(block.base), questions.digest
+    else:
+        held_lines = collections.Counter(" ".join(line.split())
+                                         for line in base.text.splitlines())
+
+        def keyed(line):
+            return " ".join(line.split())
     lines = []
     for line in block.text.splitlines():
         if line.startswith(questions.ANSWER):
             break
-        key = " ".join(line.split())
-        if not key:
+        if not line.strip():
             continue
+        key = keyed(line)
         if held_lines[key] > 0:
             held_lines[key] -= 1
         else:
@@ -295,8 +307,9 @@ def pick(block, args, lacks=()):
     it; any other T refuses `--pick` and stays in `--other`'s label. An unknown
     `--pick` keeps its own refusal. A block with stray lines, text no part of it takes,
     refuses `--pick` and puts them before T in `--other`'s label (d30 ruling 5). So do
-    `lacks`, the block's lines HEAD's copy of it lacks, after the stray lines, each line
-    once (d35 rulings 3 and 4)."""
+    `lacks`, the block's lines typed since its base line was written (d41 ruling 4) or,
+    with none, the lines HEAD's copy of it lacks (d35 rulings 3 and 4), after the stray
+    lines, each line once."""
     typed, stray = block.answer or "", list(block.stray)
     lacks = [line for line in lacks if line not in stray]
     options = named(block, typed) if typed and not stray and not lacks else []
@@ -316,6 +329,10 @@ def pick(block, args, lacks=()):
             raise Refusal("answer: question %d holds text no part of its block takes; pass "
                           "--other, which keeps it in the Answered line, or join it to its "
                           "part; nothing written:\n%s" % (block.number, "\n".join(stray)))
+        if lacks and block.base is not None:
+            raise Refusal("answer: question %d's block holds lines typed since `new` or "
+                          "`ask` wrote it; pass --other, which keeps them in the Answered "
+                          "line; nothing written:\n%s" % (block.number, "\n".join(lacks)))
         if lacks:
             raise Refusal("answer: question %d's block holds lines that HEAD's copy of it "
                           "lacks; pass --other, which keeps them in the Answered line, or, "
@@ -418,8 +435,10 @@ def cmd_answer(args, path, out, err):
         found = next((b for b in questions.parse(old_q).blocks if b.number == number), None)
         if found is None:
             raise Refusal("answer: no open question %d in %s" % (number, display(path_q)))
-        # d35: the lines the owner typed are those HEAD's copy of block N lacks
-        label = pick(found, args, since(found, head_block(path_q, number)))
+        # d41: the lines the owner typed are those whose digest its base line lacks; a
+        # block with none reads HEAD's copy of block N as d35 does
+        label = pick(found, args, since(found) if found.base is not None
+                     else since(found, head_block(path_q, number)))
         title = found.title[:-1] if found.title.endswith(".") else found.title
         ledger = parse(ledger_text)
         proposed = next((e for e in ledger.entries

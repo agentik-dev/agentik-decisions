@@ -3,7 +3,7 @@ under `## Decided without asking` and `## Answered`, and each departure from
 the shape `new` writes (the lint's L3, design d18 section 2).
 
     # Decisions for the owner ...    the first H1
-    ## N. Title                      a block: the four bold labels in order, 2 to 4
+    ## N. Title                      a block: its base line, the four bold labels in order, 2 to 4
                                      options under the third, the first alone
                                      marked ` (Recommended)`, a **Your answer:** line
     ## Decided without asking        an optional paragraph, then `- ` bullets
@@ -15,15 +15,23 @@ an option label ignoring case. Front matter between `---` lines is skipped as
 the ledger's parser skips it, and a `## ` line inside a code fence is text. A
 `## Decided without asking` heading may carry trailing text. The text helpers
 return the file with a block replaced or removed, or an Answered line added.
+
+A block's base line (d41), `<!-- decisions: base D D ... -->`, its own paragraph under
+the heading, holds one D per non-blank line from the heading to the line above
+**Your answer:**, in order: the first 8 hex digits of the sha256 of the line, its runs
+of whitespace one space. `new` and `ask` write it, so a line whose digest it lacks was
+typed since; a block with none is read against git's HEAD as before (d35). A second
+base line in a block is a problem; a block with none is not.
 """
 
 import collections
+import hashlib
 import re
 
 from . import ledger
 
 __all__ = ["Block", "Questions", "parse", "replace_block", "remove_block", "add_answered",
-           "option_label", "is_decided", "HEAD", "DECIDED", "ANSWERED", "ANSWER", "LABELS",
+           "option_label", "is_decided", "digest", "digests", "stamped", "BASE", "HEAD", "DECIDED", "ANSWERED", "ANSWER", "LABELS",
            "RECOMMENDED", "OPEN_CAP", "OPTIONS_MIN", "OPTIONS_MAX", "TAIL", "ANSWERED_LINE", "NAME"]
 
 NAME = "OPEN-QUESTIONS.md"
@@ -60,6 +68,8 @@ TAIL = re.compile(r"%s(?:\s+and\s+%s)*[;,]\s*(?:%s\s*[;,]\s*)?(?:%s\s+%s\s*[;,]\
                   % (STAMP, STAMP, COMBINED, AMENDED, STAMP, AMENDED))
 # A fence opens and closes a code block, whose `## ` lines are text (d-n3 item 10).
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
+# d41: a block's base line, read in its exact shape above the answer line
+BASE = re.compile(r"^<!-- decisions: base((?: [0-9a-f]{8})+) -->$")
 
 # number, title; start: the heading's index, 0-based; stop: the next `## `
 # heading's index or the line count; text: the block without trailing blanks;
@@ -69,10 +79,12 @@ FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # joined by one space (d28), or None when the line is absent; stray: every other
 # non-blank line above that line, in order, which no part takes: a part is a label's
 # or the **Report.** bold line and the lines under it to a blank, or an option line
-# under the third label (d30 ruling 5).
+# under the third label (d30 ruling 5); base: the digests of its first base line, a
+# tuple, or None when it holds none (d41). A base line is no part, no stray line and
+# no typed text, and `text` leaves it out with the blank lines after it.
 Block = collections.namedtuple("Block",
                                "number title start stop text labels options parts answer "
-                               "stray")
+                               "stray base")
 # decided, answered: (1-based line, text) per non-blank line; problems: (line, message).
 Questions = collections.namedtuple("Questions", "blocks decided answered problems")
 
@@ -128,13 +140,59 @@ def headings(lines, start=0):
     return found, unclosed
 
 
+def digest(line):
+    """A line's D in a base line: the first 8 hex digits of its sha256, its runs of
+    whitespace one space (d41 ruling 1)."""
+    return hashlib.sha256(" ".join(line.split()).encode("utf-8")).hexdigest()[:8]
+
+
+def digests(text):
+    """The digests of block text `text`: one per non-blank line from its heading to the
+    line above its **Your answer:** line, a base line left out, in order."""
+    found = []
+    for line in text.splitlines():
+        line = line.rstrip()
+        if line.startswith(ANSWER):
+            break
+        if line.strip() and not BASE.match(line):
+            found.append(digest(line))
+    return tuple(found)
+
+
+def stamped(text):
+    """Block text `text` with its base line, its own paragraph under the heading; a base
+    line it held goes."""
+    lines = text.rstrip("\n").splitlines()
+    rest = [line for line in lines[1:] if not BASE.match(line.rstrip())]
+    while rest and not rest[0].strip():
+        rest.pop(0)
+    base = "<!-- decisions: base %s -->" % " ".join(digests(text))
+    return "\n".join(lines[:1] + ["", base] + ([""] + rest if rest else []))
+
+
+def base_rows(lines, start, stop):
+    """The indices of the base lines of the block from `start` to `stop`: each line of
+    the exact shape above its **Your answer:** line."""
+    rows = []
+    for i in range(start + 1, stop):
+        line = lines[i].rstrip()
+        if line.startswith(ANSWER):
+            break
+        if BASE.match(line):
+            rows.append(i)
+    return rows
+
+
 def make_block(number, title, start, stop, lines):
-    body = [i for i in range(start + 1, stop) if lines[i].strip()]
+    bases = base_rows(lines, start, stop)
+    body = [i for i in range(start + 1, stop) if lines[i].strip() and i not in bases]
     end = body[-1] + 1 if body else start + 1
     labels, options, parts, answer, current, third = [], [], {}, None, None, False
     typed, stray, report = [], [], False
     for i in range(start + 1, stop):
         line = lines[i].rstrip()
+        if i in bases:
+            continue
         if not line.strip():
             current, report = None, False
             continue
@@ -168,8 +226,16 @@ def make_block(number, title, start, stop, lines):
             stray.append(line.strip())
     if answer is not None:
         answer = " ".join(" ".join(typed).split())
-    return Block(number, title, start, stop, "\n".join(l.rstrip() for l in lines[start:end]),
-                 labels, options, parts, answer, tuple(stray))
+    kept, after_base = [], False
+    for i in range(start, end):
+        if i in bases:
+            after_base = True
+        elif not (after_base and not lines[i].strip()):
+            after_base = False
+            kept.append(lines[i].rstrip())
+    base = tuple(BASE.match(lines[bases[0]].rstrip()).group(1).split()) if bases else None
+    return Block(number, title, start, stop, "\n".join(kept), labels, options, parts, answer,
+                 tuple(stray), base)
 
 
 def check_list(rows, name, problems, tail):
@@ -230,6 +296,9 @@ def parse(text):
             labels.add(label.lower())
         if block.answer is None:
             problems.append((n, "%s: no `%s` line" % (where, ANSWER)))
+        if len(base_rows(lines, block.start, block.stop)) > 1:
+            problems.append((n, "%s: a second base line `<!-- decisions: base ... -->`; a "
+                             "block holds one" % where))
     if len(blocks) > OPEN_CAP:
         problems.append((blocks[OPEN_CAP].start + 1, "%d questions open; the cap is %d"
                          % (len(blocks), OPEN_CAP)))

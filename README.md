@@ -84,7 +84,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
-| `--version` | `agentik-decisions 0.21.11`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.21.12`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -138,7 +138,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
-`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line HEAD's copy of the block lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; with no copy in HEAD it exits 2: commit first.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line its base line (`new` and `ask` write it) lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; a block with none reads HEAD.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
@@ -274,7 +274,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.21.11`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.21.12`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|

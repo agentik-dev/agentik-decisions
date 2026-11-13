@@ -95,6 +95,7 @@ class Ask(Base):
     def test_payload_fields(self):
         self.write(self.questions, "# Decisions for the owner\n\n"
                    + QUESTION.replace("## 9.", "## 999.") + "\n## Decided without asking\n")
+        self.restamp()
         code, out, err = self.ask("999", env={})
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out), [{"questions": [{
@@ -337,14 +338,20 @@ class Ask(Base):
         shutil.copy(SAMPLE_QUESTIONS, self.questions)
         self.new("Q one", "Q two")
         self.rendered(reword=(9, 10))
-        edited = self.read(self.questions).replace(
-            "## 10. Q two\n\n**Where things stand.** The tool runs under 3.12.",
-            "## 10. Q two\n\n**Where things stand.** Edited by hand on 3.12.")
+        text = self.read(self.questions)
+        at = text.index("**Where things stand.**", text.index("## 10. Q two"))
+        edited = text[:at] + text[at:].replace("The tool runs under 3.12.",
+                                               "Edited by hand on 3.12.", 1)
         env = dict(self.env, STUB_EDIT=self.questions, STUB_EDIT_TEXT=edited)
         code, out, err = self.ask(env=env)
-        self.assertEqual((code, err), (0, ""))
+        # d41: the hand edit during the render is a line block 10's base line lacks
+        self.assertEqual((code, err), (0, "ask: question 10 holds lines typed since it was "
+                                          "written; run agentik decisions answer 10 --other "
+                                          "for it first; not asked\n"))
+        self.assertEqual([q["header"] for q in json.loads(out)[0]["questions"]],
+                         ["Decision 8", "Decision 9"])
         text = self.read(self.questions)
-        self.assertIn("## 9. Q one\n\n**Where things stand.** Today the tool runs on 3.12.", text)
+        self.assertIn("-->\n\n**Where things stand.** Today the tool runs on 3.12.", text)
         self.assertIn("**Recommendation.** Keep 3.12 pinned. Revisit when 3.13 ships.", text)
         self.assertIn("Edited by hand on 3.12.", text)
         ledger = self.read(self.ledger)
