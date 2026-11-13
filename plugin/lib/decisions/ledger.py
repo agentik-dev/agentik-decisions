@@ -27,11 +27,12 @@ each departure from the shape is one (line, message) in `Ledger.problems`.
 import collections
 import os
 import re
+import shlex
 
 from .common import Refusal, git_top, read_text
 from . import questions
 
-__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "display", "check_entry",
+__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "where", "display", "check_entry",
            "lint", "repeats", "sentences", "dropped", "unclosed", "final_parenthetical",
            "bold_title", "NAME", "IN_FORCE", "is_every", "is_tree", "ordered", "TITLES",
            "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "TREE_SESSION", "IN_FORCE_CAP", "LEGACY"]
@@ -385,19 +386,25 @@ def parse(text, path=NAME):
     return Ledger(path, entries, areas, problems, legacy)
 
 
-def locate(ledger=None, cwd=None):
-    """The ledger's path: `ledger` when named, else DECISIONS.md at the git top of `cwd`."""
+def where(ledger=None, cwd=None):
+    """The ledger's place, there or not: `ledger` when named, else DECISIONS.md at the git
+    top of `cwd`; outside a git work tree with none named, a refusal."""
     cwd = os.getcwd() if cwd is None else cwd
     if ledger:
-        path = os.path.abspath(os.path.join(cwd, os.path.expanduser(ledger)))
-    else:
-        top = git_top(cwd)
-        if not top:
-            raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger"
-                          % cwd)
-        path = os.path.join(top, NAME)
+        return os.path.abspath(os.path.join(cwd, os.path.expanduser(ledger)))
+    top = git_top(cwd)
+    if not top:
+        raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger" % cwd)
+    return os.path.join(top, NAME)
+
+
+def locate(ledger=None, cwd=None):
+    """The ledger's path, by `where`; a refusal when no file is there, naming `init`."""
+    path = where(ledger, cwd)
     if not os.path.isfile(path):
-        raise Refusal("no ledger at %s" % path)
+        # dc1 R5: the refusal names the next act
+        raise Refusal("no ledger at %s; `agentik decisions init%s` makes one"
+                      % (path, " --ledger %s" % shlex.quote(ledger) if ledger else ""))
     return path
 
 

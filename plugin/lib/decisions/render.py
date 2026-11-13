@@ -58,7 +58,7 @@ from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tre
                    named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
-           "tail_note", "tree_file", "list_gate", "BEGIN", "END", "TARGET", "GATES"]
+           "tail_note", "tree_file", "list_gate", "gate_said", "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -178,6 +178,28 @@ def list_gate(target, err=None, verb="render"):
         (err or sys.stderr).write("%s: warning: %s is not listed: %s (%s)\n"
                                   % (verb, _spelled(target), what, why))
         return None
+
+
+def gate_said(out, verb, listed):
+    """dc1 R4: one line on `out` for each list in `listed`, (target, list) pairs as
+    `list_gate` returned them, naming the files it now holds; None, a list not written,
+    says nothing."""
+    lists = []
+    for target, gates in listed:
+        if gates is None:
+            continue
+        found = next((names for g, names in lists if g == gates), None)
+        if found is None:
+            lists.append((gates, [_spelled(target)]))
+        else:
+            found.append(_spelled(target))
+    for gates, names in lists:
+        one = len(names) == 1
+        out.write("%s: %s %s now on the edit-gates list %s: a session changes %s through "
+                  "/decisions:instruct, never by its own edit; deleting %s line there lifts "
+                  "the gate\n" % (verb, " and ".join(names), "is" if one else "are",
+                                    _spelled(gates), "it" if one else "them",
+                                    "its" if one else "a file's"))
 
 
 def _list_lines(gates):
@@ -546,12 +568,13 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
         return 1 if stale or (over and ceiling) else 0
     if old == text:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target, err)
+        gate_said(out, "render", [(target, list_gate(target, err))])
         return 0
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(target, text)
-    list_gate(target, err)
+    gates = list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
+    gate_said(out, "render", [(target, gates)])
     return 0
 
 
@@ -614,12 +637,13 @@ def cmd_render(args, path, out, err):
         return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target, err)
+        gate_said(out, "render", [(target, list_gate(target, err))])
         return 0
     crlf = keeps_crlf(target)
     write_text(target, new)
-    list_gate(target, err)
+    gates = list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
+    gate_said(out, "render", [(target, gates)])
     return 0
 
 

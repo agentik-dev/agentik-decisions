@@ -1,5 +1,5 @@
-"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog,
-questions, expire, analyze and audit.
+"""agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus init, doctor,
+backlog, questions, expire, analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -35,6 +35,10 @@ Verbs
                                   --ceiling fails a file over it; --fold-tails
                                   first writes each tail in force in form T2,
                                   once HEAD holds the ledger
+    init                          an empty ledger at the git top, or at --ledger,
+                                  and its block in the CLAUDE.md beside it; both
+                                  go on the edit-gates list; refused where a
+                                  ledger is
     doctor [--json]               the interpreter, the tool, the plugin, the
                                   provider, the ledger and respeak
     rows [check] [--json] [--root DIR] [REPO...]
@@ -134,6 +138,7 @@ from .ask import cmd_new
 from .selector import cmd_ask
 from .common import VERSION, Refusal
 from .doctor import cmd_doctor
+from .init import cmd_init
 from .ledger import locate
 from .lookup import cmd_find, cmd_show
 from .render import cmd_render
@@ -238,6 +243,9 @@ def build_parser():
     mode.add_argument("--lint", action="store_true", help="the lint alone")
     mode.add_argument("--fold-tails", action="store_true",
                       help="rewrite each tail in force in form T2, then the block")
+
+    subs.add_parser("init", parents=[ledger],
+                    help="an empty ledger and its block in the CLAUDE.md beside it")
 
     doctor = subs.add_parser("doctor", parents=[ledger],
                              help="check this machine and this repo")
@@ -354,6 +362,9 @@ def main(argv=None, out=None, err=None):
     if args.verb == "install-cli":
         return cmd_install_cli(args, out, err)
     try:
+        if args.verb == "init":
+            # dc1: `init` writes the ledger `locate` would refuse as absent
+            return cmd_init(args, out, err)
         if args.verb == "doctor":
             # `doctor` finds the ledger for itself and reports its absence as a check.
             return cmd_doctor(args, out, err)
@@ -390,7 +401,7 @@ def cmd_install_cli(args, out, err):
 
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
-         "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
+         "answer": cmd_answer, "render": cmd_render, "init": cmd_init, "doctor": cmd_doctor,
          "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
          "analyze": cmd_analyze, "audit": cmd_audit,
          "rows": cmd_rows, "install-cli": cmd_install_cli}

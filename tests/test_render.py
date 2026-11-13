@@ -593,9 +593,12 @@ class TurnRender(Base):
         code, out, err = self.run_cli()
         self.assertEqual(code, 0, err)
         size = held(self.read())
-        self.assertEqual(out.replace(self.tmp + os.sep, ""),
+        # dc1 R4: the first render says the list it put the file on, in one line after
+        self.assertEqual(out.replace(self.tmp + os.sep, "").splitlines(keepends=True)[0],
                          "render: wrote CLAUDE.md: 0 B to %d B, +%d B; %s\n"
                          % (size, size, LOADED))
+        self.assertIn("/decisions:instruct", out.splitlines()[1])
+        self.assertEqual(len(out.splitlines()), 2, out)
         line = self.line("1. ")
         with open(self.ledger, encoding="utf-8") as handle:
             text = handle.read()
