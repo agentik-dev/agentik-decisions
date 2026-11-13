@@ -401,8 +401,8 @@ class Backlog(Hermetic):
         self.assertEqual(repo["nice"], os.path.join(repo["repo"], NICE))
         self.assertEqual(repo["handoff"], os.path.join(repo["repo"], "HANDOFF.md"))
         self.assertEqual(set(repo["order"]), {"line", "heading", "open"})
-        for step in repo["steps"]:
-            self.assertEqual(set(step), {"n", "line", "title", "done"})
+        for step in repo["steps"]:  # su5: a `N. ` step's level and state are null
+            self.assertEqual(set(step), {"n", "line", "title", "done", "level", "state"})
         for item in repo["items"]:
             self.assertEqual(set(item), {"rank", "line", "title", "level", "placed_as",
                                          "level_from", "after_step", "span"})
