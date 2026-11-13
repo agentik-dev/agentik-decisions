@@ -130,7 +130,7 @@ An empty part, or a title the ledger's lint cannot take, exits 2 and writes noth
 So does an option count outside 2 to 4, a label over five words or holding `(Recommended)`, a choice that does not end in `?`, or a sixth open question.
 The first label holds at most four words, since ` (Recommended)` follows it, and no label is `Other` in any case, since AskUserQuestion adds that option itself.
 
-`ask` skips, with one warning each, a block whose **Your answer:** line is filled in or has text under it, which `agentik decisions answer N` enters first, and a block the lint refuses.
+`ask` skips, with one warning each, a block with text on or under its **Your answer:** line, which `answer N` enters first, and a block the lint refuses.
 It puts the other open blocks through respeak's renderer once, with a contract that keeps headings, numbers, bold labels, option labels and ` (Recommended)` and rewrites only prose.
 It writes the rendered blocks back under `.new.lock`, both files or neither, keeping any block that lost a label, emptied a part, gained prose outside its parts, or was edited during the render, and refreshes each Proposed line.
 It then prints one AskUserQuestion call per four questions: the header `Decision N`, the question from where things stand and the choice, and each option's label and effect.
@@ -138,7 +138,7 @@ With respeak absent, a failed render, or a directory `ask` cannot write, the tex
 A sitting without AskUserQuestion runs `ask` for the render alone; the owner answers on the **Your answer:** line.
 
 `answer` takes the owner's answer to question N: `--pick` a label, ignoring case and ` (Recommended)`, or `--other` the owner's text restated.
-`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line its base line (`new` and `ask` write it) lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; a block with none reads HEAD.
+`answer` reads the owner's text on the **Your answer:** line and under it: text that names an option takes only `--pick` of it; other text, a line no part of the block takes and a line its base line (`new` and `ask` write it) lacks refuse `--pick` and stay in the Answered line under `--other`, as `Other: X; the owner's line: T`, never in the ledger; a block with none or two is all the owner's; `ask` skips it.
 One of `--area`, `--amends` and `--no-entry` is required.
 It writes entry N under the `###` area `--area` names, as `N. **Title.** P (DATE; the owner's answer to decision N, S)`, with no period after a title ending in `?` or `!`.
 `--area` resolves as `show --area` does, a unique prefix included, and the output names the heading matched; two matches exit 2, and a name no heading matches makes a new area.
