@@ -1,5 +1,5 @@
 """agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus doctor, backlog,
-expire, analyze and audit.
+questions, expire, analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -50,6 +50,12 @@ Verbs
                                   a row of a REPO absent or not named is skipped);
                                   --write moves a landed `building` row out to
                                   history/handoff-done.md
+    questions [REPO...] [--json]  each repo's OPEN-QUESTIONS.md as one read: each
+                                  question's state (open, answered or unreadable,
+                                  as `ask` judges it), its options, its Proposed
+                                  date and its block as written, the Answered and
+                                  Decided counts; a REPO with no file is skipped;
+                                  no lock, no render; writes nothing
     expire [REPO...] [--order FILE] [--days N] [--write] [--json]
                                   the closed NICE items and the S4 ones older
                                   than N days (14) on no open step; --write
@@ -76,7 +82,8 @@ Verbs
                                   no ledger; writes nothing
 
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
-working directory; `backlog`, `expire` and `analyze` read no ledger and ignore it.
+working directory; `backlog`, `expire` and `analyze` read no ledger and ignore it, and
+`questions` ignores it, reading the DECISIONS.md beside each REPO's file.
 `--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -85,7 +92,8 @@ terminal, says so in one stderr line before anything else (agentik-r1 4.3).
 
 Exit codes
     0  the answer; `find` with no match too; `backlog` whenever its files could be
-       read; `expire` whenever its view printed or its move was made; `analyze`
+       read; `questions` whenever its read ran, a lint problem or a skipped REPO
+       too; `expire` whenever its view printed or its move was made; `analyze`
        and `audit` whenever its view printed; `answer` whose block write failed
        after both files were written (a warning on stderr names `agentik decisions
        render`)
@@ -114,6 +122,7 @@ from .analyze import cmd_analyze
 from .answer import cmd_answer
 from .audit import cmd_audit, cmd_edits
 from .backlog import cmd_backlog
+from .questions_read import cmd_questions
 from .expire import cmd_expire
 from .ask import cmd_new
 from .selector import cmd_ask
@@ -242,6 +251,12 @@ def build_parser():
                          help="with --check: move each landed `building` row out to "
                               "history/handoff-done.md")
 
+    questions = subs.add_parser("questions", parents=[ledger],
+                                help="each repo's open questions as one read; writes nothing")
+    questions.add_argument("repos", nargs="*", metavar="REPO",
+                           help="a repo's directory; the default is the git top level")
+    questions.add_argument("--json", action="store_true")
+
     expire = subs.add_parser("expire", parents=[ledger],
                              help="move closed and old S4 NICE items to history/NICE-overflow.md")
     expire.add_argument("repos", nargs="*", metavar="REPO",
@@ -321,6 +336,9 @@ def main(argv=None, out=None, err=None):
         if args.verb == "backlog":
             # `backlog` reads NICE_TO_HAVE.md and HANDOFF.md, never a ledger.
             return cmd_backlog(args, out, err)
+        if args.verb == "questions":
+            # in1: `questions` reads each REPO's OPEN-QUESTIONS.md, never the --ledger path.
+            return cmd_questions(args, out, err)
         if args.verb == "expire":
             # `expire` reads and writes NICE_TO_HAVE.md, never a ledger.
             return cmd_expire(args, out, err)
@@ -346,5 +364,6 @@ def cmd_install_cli(args, out, err):
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "expire": cmd_expire, "analyze": cmd_analyze, "audit": cmd_audit,
+         "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
+         "analyze": cmd_analyze, "audit": cmd_audit,
          "install-cli": cmd_install_cli}
