@@ -9,7 +9,7 @@ import os
 from .common import Refusal, commit_texts, disk_text, keeps_crlf, read_text
 from .ledger import IN_FORCE, PROPOSED, SUPERSEDED, display, in_the_way, parse, where
 from .render import (TARGET, apply, block, gate_said, growth, is_ledger, list_gate,
-                     refuse_another)
+                     one_block, refuse_another)
 
 __all__ = ["cmd_init", "EMPTY"]
 
@@ -35,6 +35,7 @@ def cmd_init(args, out, err):
     refuse_another(old, target, path, "init")  # d36 ruling 4 (dc1 r1 F1)
     was, crlf = disk_text(target), keeps_crlf(target)
     new = apply(old, block(parse(EMPTY, display(path)), path, target), display(target))
+    one_block(new, display(target), "init")  # a text with not one block is never written
     commit_texts([(path, EMPTY), (target, new)])  # both or neither (dc1 r1 F2)
     out.write("init: wrote %s: # Decisions and its three sections, empty\n" % display(path))
     out.write("init: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))

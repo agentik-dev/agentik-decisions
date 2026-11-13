@@ -456,6 +456,16 @@ def apply(text, generated, target=TARGET):
     return "".join(lines[:begins[0]]) + generated + "".join(lines[ends[0] + 1:])
 
 
+def one_block(text, target, verb):
+    """The backstop (dc1 r3 F1): `text`, about to be written to `target`, must hold exactly
+    one BEGIN and one END in order by `markers`, or `verb` refuses and writes nothing."""
+    begins, ends = markers(text.splitlines(), BEGIN, END)
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        raise Refusal("%s: %s: its block could not be placed; nothing written; check for a "
+                      "code fence left open above it, close it, and run `%s` again"
+                      % (verb, target, verb))
+
+
 def tree_file(ledger, path):
     """(the folder's file, its whole text) `render --scope tree` writes for the ledger at
     `path` (d36 ruling 2)."""
@@ -642,6 +652,7 @@ def cmd_render(args, path, out, err):
         gate_said(out, "render", [(target, list_gate(target, err))])
         return 0
     crlf = keeps_crlf(target)
+    one_block(new, display(target), "render")
     write_text(target, new)
     gates = list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
