@@ -13,11 +13,9 @@ from tests.hermetic import REPO, Hermetic
 
 EMPTY = "# Decisions\n\n## In force\n\n## Proposed\n\n## Superseded\n"
 BLOCK = ("<!-- BEGIN GENERATED: decisions -->\n"
-         # the block's own words; the old name built, so the hygiene scan's `renamed` group
-         # finds no literal of it here
-         + "Generated from `DECISIONS.md` by `%s render`; edit the ledger and rerun it, "
-         "never this block.\n" % "decisions"
-         + "<!-- END GENERATED: decisions -->\n")
+         "Generated from `DECISIONS.md` by `decisions render`; edit the ledger and rerun it, "
+         "never this block.\n"
+         "<!-- END GENERATED: decisions -->\n")
 NEW = ["new", "--title", "Indent", "--stands", "Files mix both.", "--choice", "Which indent here?",
        "--option", "Spaces: all files move to four spaces", "--option",
        "Tabs: all files move to tabs", "--recommend", "Spaces: most files use them."]
