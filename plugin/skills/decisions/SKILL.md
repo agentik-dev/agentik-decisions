@@ -28,6 +28,8 @@ and it carries no data.
   `<!-- decisions: legacy below -->` above its old text, then takes new
   entries in this shape. The text below that line is read by `show` and
   `find`, and the lint passes over it.
+- A repo with no ledger gets one from `agentik-decisions init`, which writes it
+  empty with its block in CLAUDE.md; the owner runs it as `/decisions:init`.
 
 ## 2. Reading
 
