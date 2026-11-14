@@ -3,7 +3,8 @@ beside it, written by `render`'s own `block` and `apply`; both files go on the e
 list, and the run says so. Where a ledger is already there and that CLAUDE.md holds no block
 or is absent (dc2 R4), it lints the ledger as `render` does, then adds the block rendered
 from it under the file's own lines, the ledger untouched, and lists CLAUDE.md alone; `render`
-only rewrites a block that is there. It refuses, writing nothing, where a ledger and its
+only rewrites a block that is there. dc3: after the gate's line, a CLAUDE.md that held
+hand-written lines is said with what they load and the skill that audits them. It refuses, writing nothing, where a ledger and its
 block are both there, where a folder or a link to nothing stands at the ledger's path,
 outside a git work tree with no `--ledger`, and where the CLAUDE.md holds markers that are
 not one block or a block another ledger rendered."""
@@ -13,8 +14,8 @@ import os
 from .common import Refusal, commit_texts, disk_text, keeps_crlf, read_text
 from .ledger import (IN_FORCE, PROPOSED, SUPERSEDED, display, in_the_way, lint, parse,
                      where)
-from .render import (TARGET, apply, block, gate_said, growth, holds_markers, is_ledger,
-                     list_gate, one_block, refuse_another)
+from .render import (TARGET, apply, block, gate_said, growth, hand_said, holds_markers,
+                     is_ledger, list_gate, one_block, refuse_another)
 
 __all__ = ["cmd_init", "EMPTY"]
 
@@ -47,6 +48,7 @@ def cmd_init(args, out, err):
     out.write("init: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     gate_said(out, "init", [(path, list_gate(path, err, "init")),
                             (target, list_gate(target, err, "init"))])
+    hand_said(out, "init", target, old)  # dc3 R2
     next_act(out, target)
     return 0
 
@@ -81,5 +83,6 @@ def add_block(path, out, err):
     out.write("init: %s is already there; it stays as it is\n" % display(path))
     out.write("init: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
     gate_said(out, "init", [(target, list_gate(target, err, "init"))])
+    hand_said(out, "init", target, old)  # dc3 R2
     next_act(out, target)
     return 0

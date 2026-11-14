@@ -43,6 +43,15 @@ PIN_LOADS_ALONE = ("render: CLAUDE.md loads 166 B, comments aside and imports in
                    "ceiling for a repo's file is 3,072 B")
 
 
+# dc3 R2: before render refuses a file of hand-written lines, and in init's lines after the
+# gate's, stdout says what they load; H holds no comment and no import
+SAID = ("%s: %s loads %s B of hand-written text on every turn of every session started here; "
+        "/decisions:audit-claude-md goes through it with you and finds the lines no session "
+        "acts on and the rules that belong in the ledger\n")
+SAID_H = SAID % ("render", "%s", len(H.encode()))
+ANY_SAID = re.compile(r"(render: \S+ loads [\d,]+ B of hand-written text on every turn [^\n]*\n)?")
+
+
 def refusal(target, state, after):
     return "decisions: render: %s %s%s%s\n" % (target, state, REFUSED, after)
 
@@ -57,16 +66,22 @@ class Invited(Base):
         with open(path, mode, encoding="utf-8", newline="") as handle:
             handle.write(text)
 
-    def refuses(self, argv, err_line):
+    def refuses(self, argv, err_line, said=""):
+        """`said`: dc3's line on stdout, or None for that line or none (a figure of its own)."""
         before = snapshot(self.tmp)
         code, out, err = self.run_cli(*argv)
-        self.assertEqual((code, out, err), (2, "", err_line), argv)
+        self.assertEqual((code, err), (2, err_line), argv)
+        if said is None:
+            self.assertRegex(out, r"\A%s\Z" % ANY_SAID.pattern, argv)
+        else:
+            self.assertEqual(out, said, argv)
         self.assertEqual(snapshot(self.tmp), before, argv)
         return err
 
     def test_1_hand_lines_get_nothing(self):
         self.write(self.claude, H)
-        self.refuses(["render"], refusal("CLAUDE.md", "holds no generated block", INIT))
+        self.refuses(["render"], refusal("CLAUDE.md", "holds no generated block", INIT),
+                     SAID_H % "CLAUDE.md")
         self.assertEqual(self.read(self.claude), H)
         self.assertFalse(os.path.lexists(os.path.join(self.repo, ".claude")))
 
@@ -108,10 +123,11 @@ class Invited(Base):
                 os.symlink(text, self.claude)
             else:
                 self.write(self.claude, text)
-            self.refuses(["render"], line)
+            said = "" if name in ("empty", "blank lines", "a link to nothing") else None
+            self.refuses(["render"], line, said)
             # the CLAUDE.md beside the ledger however it is named: `init` adds its block
             for named in ("CLAUDE.md", os.path.join(".", "CLAUDE.md"), self.claude):
-                self.refuses(["render", "--into", named], line)
+                self.refuses(["render", "--into", named], line, said)
         self.assertFalse(os.path.lexists(os.path.join(self.repo, "gone.md")))
         self.assertFalse(os.path.lexists(os.path.join(self.repo, ".claude")))
 
@@ -119,7 +135,8 @@ class Invited(Base):
         notes = os.path.join(self.repo, "NOTES.md")
         self.write(notes, H)
         self.refuses(["render", "--into", "NOTES.md"],
-                     refusal("NOTES.md", "holds no generated block", MARKS))
+                     refusal("NOTES.md", "holds no generated block", MARKS),
+                     SAID_H % "NOTES.md")
         self.refuses(["render", "--into", "NEW.md"], refusal("NEW.md", "is absent", MARKS))
         self.assertFalse(os.path.lexists(os.path.join(self.repo, "NEW.md")))
         self.write(notes, H + BEGIN + "\n" + END + "\nAfter.\n")
@@ -163,7 +180,8 @@ class Invited(Base):
                        check=True)
         self.write(self.claude, H)
         self.refuses(["render", "--fold-tails"],
-                     refusal("CLAUDE.md", "holds no generated block", INIT))
+                     refusal("CLAUDE.md", "holds no generated block", INIT),
+                     SAID_H % "CLAUDE.md")
         self.assertEqual(self.read(self.ledger), FIXTURE)
 
     def test_8_init_adds_the_block_under_hand_lines(self):
@@ -176,6 +194,7 @@ class Invited(Base):
         self.assertEqual(out, "init: DECISIONS.md is already there; it stays as it is\n"
                               "init: wrote CLAUDE.md: 0 B to 236 B, +236 B; the block is "
                               "loaded on every turn\n" + GATE_LINE % ("init", "CLAUDE.md") +
+                              SAID % ("init", "CLAUDE.md", len(H.encode())) +
                               "init: next, `agentik decisions new` records a question; its "
                               "answer becomes an entry and reaches CLAUDE.md\n")
         self.assertEqual(self.listed(), ["CLAUDE.md"])

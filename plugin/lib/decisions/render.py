@@ -27,7 +27,9 @@ target that is absent or holds no marker line (a fenced example is none) gets no
 the run refuses, exit 2, with `render: PATH is absent` or `holds no generated block`, `and
 render only rewrites a block that is there; nothing written;` and the act that adds it,
 `agentik decisions init` for the CLAUDE.md beside the ledger (`--ledger` as the run named
-it), else the two marker lines; `--fold-tails` refuses so before it folds. `--check` writes
+it), else the two marker lines; `--fold-tails` refuses so before it folds. dc3: before it
+refuses a file that holds hand-written lines, stdout says what they load, comments aside
+and imports included, and names `/decisions:audit-claude-md`. `--check` writes
 nothing: it prints the unified diff render would make and exits 1 when the block is stale,
 0 when it is fresh; on a target with no block, in place of the diff, `render: PATH STATE;
 NEXT`, then the loaded bytes, exit 1. A target that is the
@@ -62,11 +64,11 @@ from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_paren
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
 from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
-                   markers, named_ledger, rule_words, title_warnings, tree_text)
+                   markers, named_ledger, rule_words, strip_comments, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
            "tail_note", "tree_file", "list_gate", "gate_said", "holds_markers", "invited",
-           "BEGIN", "END", "TARGET", "GATES"]
+           "hand_said", "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -486,6 +488,18 @@ def invited(target, path, named=None):
                    "`%s`, each alone on a line" % (BEGIN, END))
 
 
+def hand_said(out, verb, target, text):
+    """dc3 R1, R2: what `text`, the file at `target` as its owner wrote it, loads, comments
+    aside and imports included, and the skill that audits it; said only when the text,
+    comments aside, holds a line that is not blank."""
+    if not any(line.strip() for line in strip_comments(text).splitlines()):
+        return
+    out.write("%s: %s loads %s B of hand-written text on every turn of every session started "
+              "here; /decisions:audit-claude-md goes through it with you and finds the lines "
+              "no session acts on and the rules that belong in the ledger\n"
+              % (verb, display(target), "{:,}".format(loaded_bytes(target, text))))
+
+
 def one_block(text, target, verb):
     """The backstop (dc1 r3 F1): `text`, about to be written to `target`, must hold exactly
     one BEGIN and one END in order by `markers`, or `verb` refuses and writes nothing."""
@@ -677,6 +691,7 @@ def cmd_render(args, path, out, err):
             measure(out, target, apply(old, block(ledger, path, target), display(target)),
                     ledger, False)
             return 1
+        hand_said(out, "render", target, old)  # dc3 R2: before the refusal
         raise Refusal("render: %s %s, and render only rewrites a block that is there; "
                       "nothing written; %s" % (display(target), state, after))
     was = disk_text(target)
