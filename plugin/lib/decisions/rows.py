@@ -1,29 +1,36 @@
-"""`rows` (agentik-hq design/16 section 4 items 5 and 6, packet rw2): each build row's stage,
-read from its record folder and from git; `rows check` holds every row's records against git.
+"""`rows` (agentik-hq design/16 section 4 items 5 to 7, packets rw2 and rw2b): each build
+row's stage, read from its record folder and from git; `rows check` holds every row's records
+against git; `rows close` writes a pushed row's `done` cell and its done line.
 
     decisions rows [check] [--json] [--root DIR] [REPO...]
+    decisions rows close ROW [--withdrawn WHY] [--root DIR] [--repo DIR] [--dry-run] [-y]
 
 DIR holds one folder a row, a folder holding `row.md`; the default is `history/rows` under
 the working directory's git top, and DIR's git top is the home. A row's repo cell names the
 home (`hq` or its short name), a REPO named by its short name, or, with none named, the
-folder beside the home called `agentik-<cell>` or `<cell>`. The verb writes nothing and
-fetches nothing: git is read through `backlog.Git`, `status` with `--no-optional-locks`.
-Exit 0 with the rows shown, contradictions included; `rows check` exits 1 when a row is
-stale; 2 for usage or no DIR, with `--json` an error object on stdout.
+folder beside the home called `agentik-<cell>` or `<cell>`. The read and `check` write
+nothing and fetch nothing: git is read through `backlog.Git`, `status` with
+`--no-optional-locks`. `close` writes row.md and the home's done file, both or neither, and
+runs no `git add` and no commit. Exit 0 with the rows shown, contradictions included; `rows
+check` exits 1 when a row is stale; 2 for usage or no DIR, with `--json` an error object on
+stdout, and for a close refused, declined or that cannot ask.
 """
 
 import json
 import os
+import posixpath
 import re
 import shlex
+import sys
 
-from .backlog import (CELL_LEVEL, DATE_WORD, HANDOFF, HEADING, HOME_CELL, LEVEL, NICE,
-                      ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red, gathered,
-                      most_urgent, nice_items, short_name)
-from .common import Refusal, git_top, read_text
+from . import ask as ask_module
+from .backlog import (CELL_LEVEL, DATE_WORD, DONE_FILE, HANDOFF, HEADING, HOME_CELL, LEVEL,
+                      NICE, ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red,
+                      gathered, most_urgent, nice_items, short_name)
+from .common import Refusal, commit_texts, disk_text, git_top, read_text
 from .speak import CONTROL, ESCAPE
 
-__all__ = ["cmd_rows", "table", "KEYS", "SCHEMA"]
+__all__ = ["cmd_rows", "table", "asked", "KEYS", "SCHEMA"]
 
 SCHEMA = "agentik.rows/1"
 ROOT = os.path.join("history", "rows")
@@ -40,9 +47,20 @@ PHASE_2 = "phase 2"
 STAGE = re.compile(r"^(first build|fix of review [0-9]+|phase 2|cut)(?![\w-])")
 GATE_STATUS = "agentik session gate status"
 UNREADABLE = "unreadable"
-# R6: a row's keys, in this order.
+# R6: a row's keys, in this order; rw2b R8 adds `cut`.
 KEYS = ("row", "repo", "level", "from", "depends_on", "waits", "state", "stale", "branch",
-        "worktree", "tip", "dirty", "past", "record", "head", "gate", "ruling", "owed", "next")
+        "worktree", "tip", "dirty", "past", "record", "head", "gate", "ruling", "owed", "next",
+        "cut")
+# rw2b R8: a charter's name, `<date>-<n>.md` or `<date>-<n>-<chain>.md`, under SITTINGS.
+CHARTER = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2})-([0-9]+)(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?"
+                     r"\.md$")
+SITTINGS = "history/sittings/"
+SHOWN, LISTED, ACT_CAP = 3, 50, 100
+# rw2b R1 and R7: the close's options, its question and its answers.
+CLOSE_FLAGS = ("withdrawn", "repo", "dry_run", "yes")
+QUESTION = "Write this? y for yes, n or Enter for no. "
+YES = ("y", "yes")
+CLOSED_CAP = 80
 
 
 class RowsRefusal(Refusal):
@@ -58,14 +76,15 @@ def bare(cell):
     return cell.replace("`", "").strip()
 
 
-def table(text):
-    """R3: {item: value} of the first `| item | value |` table, each value less its backticks."""
-    found, inside = {}, False
-    for line in text.splitlines():
+def table_rows(lines):
+    """(index, cells) of each body row of the first `| item | value |` table in `lines`,
+    each cell less its backticks; rw2b R5 finds the `done` row by it."""
+    inside = False
+    for index, line in enumerate(lines):
         s = line.strip()
         if not s.startswith("|"):
             if inside:
-                break
+                return
             continue
         body = s[1:-1] if s.endswith("|") and not s.endswith("\\|") else s[1:]
         cells = [bare(c) for c in ROW_CELL.split(body)]
@@ -74,6 +93,13 @@ def table(text):
             continue
         if all(re.match(r"^:?-+:?$", c) for c in cells):
             continue
+        yield index, cells
+
+
+def table(text):
+    """R3: {item: value} of the first `| item | value |` table, each value less its backticks."""
+    found = {}
+    for _index, cells in table_rows(text.splitlines()):
         # review 1 F5: the value is the second cell, whatever columns follow
         found.setdefault(cells[0].lower(), cells[1] if len(cells) > 1 else "")
     return found
@@ -235,6 +261,108 @@ def dirty_of(path):
     """The worktree's changed and untracked paths, read without the index lock."""
     out = Git(path).run("--no-optional-locks", "status", "--porcelain")
     return None if out is None else len([l for l in out.splitlines() if l.strip()])
+
+
+def paths_of(path):
+    """rw2b R8: the paths `dirty_of` counts, as git prints them, LISTED at most; porcelain v2,
+    whose lines open with no space for `Git.run`'s strip to take."""
+    out = Git(path).run("--no-optional-locks", "status", "--porcelain=v2")
+    if out is None:
+        return None
+    found = []
+    for line in out.splitlines():
+        kind = line[:2]
+        if kind == "1 ":
+            parts = line.split(" ", 8)
+        elif kind == "2 ":
+            parts = line.split(" ", 9)
+            parts[-1] = parts[-1].split("\t", 1)[0]
+        elif kind == "u ":
+            parts = line.split(" ", 10)
+        elif kind in ("? ", "! "):
+            parts = [line[2:]]
+        else:
+            continue
+        found.append(parts[-1])
+    return found[:LISTED]
+
+
+def section_of(text, title):
+    """rw2b R8: the lines under the `## <title>` heading up to the next heading, or None."""
+    lines, inside, found = [], False, False
+    for line in text.splitlines():
+        m = HEADING.match(line)
+        if m:
+            inside = len(m.group(1)) == 2 and m.group(2).strip() == title
+            found = found or inside
+            continue
+        if inside:
+            lines.append(line)
+    return lines if found else None
+
+
+def charter_of(git, base, tip):
+    """rw2b R8: the newest charter the branch added or changed since `base`, by date and then
+    by its number, or None."""
+    if not base or not tip:
+        return None
+    out = git.run("diff", "--name-only", "--diff-filter=AM", base, tip, "--", SITTINGS)
+    best = None
+    for path in (out or "").splitlines():
+        m = CHARTER.match(posixpath.basename(path))
+        if m:
+            key = (m.group(1), int(m.group(2)), path)
+            best = key if best is None or key > best else best
+    return best[2] if best else None
+
+
+def cut_of(row, git, since):
+    """rw2b R8: what a cut builder left: the charter on the tip, the commits past `since`,
+    the worktree's loose paths."""
+    tip = row["tip"]
+    charter = charter_of(git, row["base"], tip)
+    unchecked = next_act = None
+    if charter:
+        text = git.run("show", "%s:%s" % (tip, charter)) or ""
+        unchecked = [l.rstrip() for l in section_of(text, "Done-ness") or []
+                     if l.startswith("- [ ]")]
+        act = next((l.strip() for l in section_of(text, "Next act") or [] if l.strip()), None)
+        next_act = act[:ACT_CAP] if act else None
+    commits = []
+    out = git.run("log", "--format=%H%x1f%s", "-n", str(LISTED), "%s..%s" % (since, tip)) \
+        if since and tip else None
+    for line in (out or "").splitlines():
+        sha, _, subject = line.partition("\x1f")
+        commits.append({"sha": sha, "subject": subject})
+    return {"charter": charter, "unchecked": unchecked, "next_act": next_act,
+            "commits": commits,
+            "paths": paths_of(row["worktree"]) if row["worktree"] else None}
+
+
+def is_cut(row):
+    """rw2b R8: `building`, or `to fix` with commits past its record."""
+    return row["state"] == "building" or (row["state"] == "to fix" and (row["past"] or 0) > 0)
+
+
+def cut_lines(row):
+    """rw2b R8: the text's lines of a cut row, SHOWN of each and a count."""
+    cut = row["cut"]
+    if cut["charter"]:
+        lines = ["  charter %s: %d unchecked; next act: %s"
+                 % (cut["charter"], len(cut["unchecked"]), cut["next_act"] or "none")]
+    else:
+        lines = ["  charter: none on %s" % row["branch"]]
+    shown_commits = cut["commits"][:SHOWN]
+    lines.extend("  past: %s %s" % (c["sha"][:7], c["subject"]) for c in shown_commits)
+    more = max(row["past"] or 0, len(cut["commits"])) - len(shown_commits)
+    if more > 0:
+        lines.append("  past: and %d more" % more)
+    paths = cut["paths"] or []
+    if paths:
+        line = "  dirty: " + ", ".join(paths[:SHOWN])
+        more = max(row["dirty"] or 0, len(paths)) - len(paths[:SHOWN])
+        lines.append(line + (" and %d more" % more if more > 0 else ""))
+    return lines
 
 
 def facts(row, git):
@@ -410,7 +538,8 @@ def shown(row):
             "branch": row["branch"], "worktree": row["worktree"], "tip": row["tip"],
             "dirty": row["dirty"], "past": row["past"], "record": row["record"],
             "head": row["head"], "gate": row["gate"], "ruling": row["ruling"],
-            "owed": row["rec"]["owed"], "next": {"text": row["next"][0], "command": command}}
+            "owed": row["rec"]["owed"], "next": {"text": row["next"][0], "command": command},
+            "cut": row["cut"]}
 
 
 def line_of(row):
@@ -498,6 +627,7 @@ def read(args):
         count = git.run("rev-list", "--count", "%s..%s" % (since, row["tip"])) \
             if since and row["tip"] else None
         row["past"] = int(count) if count and count.isdigit() else None
+        row["cut"] = cut_of(row, git, since) if is_cut(row) else None
     for row in shut:
         row["stale"] = []
         sha = row["rec"]["done"]["sha"]
@@ -544,6 +674,8 @@ def cmd_rows(args, out, err):
         for row in opened:
             lines.append(line_of(row))
             lines.extend("  stale: %s" % what for what in row["stale"])
+            if row["cut"]:
+                lines.extend(cut_lines(row))
     for group in skipped:
         lines.append("skipped (%s): %s%s" % (group["why"], "" if group["repo"] is None
                                              else group["repo"] + ": ", ", ".join(group["rows"])))
