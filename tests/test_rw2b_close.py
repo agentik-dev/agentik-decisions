@@ -574,3 +574,146 @@ class Pin(Depot):
         self.assertEqual((code, self.normal(out)), (0, PIN_ROWS))
         code, out = self.checked()
         self.assertEqual((code, self.normal(out)), (1, PIN_CHECK))
+
+
+class Review1(Depot):
+    """Review 1's mends: F1 nothing written from a read made before the question, F2 no WHY
+    of several lines, F6 `cut.unchecked` capped, F7 a charter directly in history/sittings/."""
+
+    def test_f1_a_change_made_while_the_question_waits(self):
+        self.pushed("p1-crate")
+        self.put(self.done, "- older: a row, done 2026-11-01 1111111\n")
+        path, done = self.path("p1-crate"), self.done
+
+        class Edit(Stdin):
+            def readline(stdin):
+                with open(path, "a", encoding="utf-8") as handle:
+                    handle.write("- [ ] owed added by another sitting\n")
+                with open(done, "a", encoding="utf-8") as handle:
+                    handle.write("- other: written meanwhile\n")
+                return "y\n"
+
+        with mock.patch.object(rows_module.sys, "stdin", Edit("y\n")):
+            code, out, err = self.close("close", "p1-crate", err=TTY())
+        self.assertEqual(code, 2, out)
+        self.assertTrue(err.endswith("decisions: rows close: %s changed since the close read "
+                                     "it; nothing written; run the close again\n" % path), err)
+        self.assertNotIn("closed", out)
+        self.assertIn("- [ ] owed added by another sitting", self.text("p1-crate"))
+        self.assertIn("| done |  |", self.text("p1-crate"))
+        with open(done, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "- older: a row, done 2026-11-01 1111111\n"
+                             "- other: written meanwhile\n")
+
+    def test_f1_the_done_file_changed_alone(self):
+        cell = self.pushed("p1-crate")
+        before = self.text("p1-crate")
+        done = self.done
+
+        class Edit(Stdin):
+            def readline(stdin):
+                with open(done, "w", encoding="utf-8") as handle:
+                    handle.write("- other: written meanwhile\n")
+                return "y\n"
+
+        with mock.patch.object(rows_module.sys, "stdin", Edit("y\n")):
+            code, out, err = self.close("close", "p1-crate", err=TTY())
+        self.assertEqual(code, 2, out)
+        self.assertTrue(err.endswith("decisions: rows close: %s changed since the close read "
+                                     "it; nothing written; run the close again\n" % done), err)
+        self.assertEqual(self.text("p1-crate"), before)
+        self.assertNotIn(cell.split()[1], open(done, encoding="utf-8").read())
+
+    def test_f1_a_close_inside_a_close(self):
+        self.pushed("a1-crate")
+        cell2 = self.pushed("a2-crate")
+        me, inner = self, []
+
+        class Other(Stdin):
+            def readline(stdin):
+                inner.append(me.close("close", "a2-crate", "-y"))
+                return "y\n"
+
+        with mock.patch.object(rows_module.sys, "stdin", Other("y\n")):
+            code, out, err = self.close("close", "a1-crate", err=TTY())
+        self.assertEqual(inner[0][0], 0, inner)
+        self.assertEqual(inner[0][1].splitlines()[-1], "rows close: a2-crate closed")
+        self.assertEqual(code, 2, out)
+        self.assertIn("%s changed since the close read it" % self.done, err)
+        with open(self.done, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "a2-crate: a made-up row, done %s\n" % cell2)
+        self.assertIn("| done |  |", self.text("a1-crate"))
+        self.assertEqual(sorted(self.view()), ["a1-crate"])
+        code, out, _ = self.close("close", "a1-crate", "-y")
+        self.assertEqual(code, 0, out)
+        with open(self.done, encoding="utf-8") as handle:
+            self.assertEqual(len(handle.read().splitlines()), 2)
+
+    def test_f1_the_write_holds_the_lock(self):
+        from decisions.common import held
+        self.pushed("p1-crate")
+        before = self.snapshot("p1-crate")
+        lock = os.path.join(os.path.realpath(self.root), rows_module.CLOSE_LOCK)
+        with mock.patch.object(rows_module, "CLOSE_WAIT", 0.2), held(lock, 1.0, io.StringIO()):
+            code, out, err = self.close("close", "p1-crate", "-y")
+        self.assertEqual(code, 2, out)
+        self.assertIn("%s is held by pid %d" % (rows_module.CLOSE_LOCK, os.getpid()), err)
+        self.assertEqual(self.snapshot("p1-crate"), before)
+        self.assertFalse(os.path.exists(lock))
+        self.assertEqual(self.close("close", "p1-crate", "-y")[0], 0)
+        self.assertFalse(os.path.exists(lock))
+
+    def test_f2_no_why_of_several_lines_or_hidden_characters(self):
+        self.crate("p2-crate")
+        before = self.snapshot("p2-crate")
+        why = "rows close: --withdrawn takes one line of words with no | in it"
+        breaks = [c for c in map(chr, range(0x110000)) if len(("a%sb" % c).splitlines()) > 1]
+        hidden = ["؜", "᠎", "​", "‌", "‍", "‎", "‏",
+                  "‪", "‫", "‬", "‭", "‮", "⁠", "⁡",
+                  "⁢", "⁣", "⁤", "⁦", "⁧", "⁨", "⁩",
+                  "﻿"]
+        self.assertIn(" ", breaks)
+        for char in breaks + hidden:
+            code, out, err = self.close("close", "p2-crate", "--withdrawn", "a%sb" % char, "-y")
+            self.assertEqual((code, out, err), (2, "", "decisions: %s\n" % why), repr(char))
+        self.assertEqual(self.snapshot("p2-crate"), before)
+
+    def test_f2_a_done_row_above_repo_and_branch_reads_whole(self):
+        self.put(self.path("p3-crate"), "# Row p3-crate: a made-up row\n\n| item | value |\n"
+                 "|---|---|\n| done | |\n| repo | crate |\n| branch | p3-other |\n")
+        code, out, err = self.close("close", "p3-crate", "--withdrawn",
+                                    "superseded by p9, a café — résumé", "-y")
+        self.assertEqual((code, err), (0, ""), out)
+        cells = rows_module.table(self.text("p3-crate"))
+        self.assertEqual(sorted(cells), ["branch", "done", "repo"])
+        self.assertEqual((cells["repo"], cells["branch"]), ("crate", "p3-other"))
+        self.assertTrue(cells["done"].endswith("superseded by p9, a café — "
+                                               "résumé"))
+
+    def test_f6_unchecked_capped(self):
+        tree = Cut.tree_of(self, "p5-crate")
+        Cut.charter(self, tree, "2026-11-14-3.md",
+                    unchecked=["- [ ] box %d" % n for n in range(70)])
+        self.crate("p5-crate")
+        cut = self.view()["p5-crate"]["cut"]
+        self.assertEqual(cut["unchecked"], ["- [ ] box %d" % n for n in range(50)])
+        line = Cut.text_of(self, "p5-crate")[1]
+        self.assertEqual(line, "  charter history/sittings/2026-11-14-3.md: 70 unchecked; "
+                               "next act: none")
+
+    def test_f7_a_charter_lies_directly_in_history_sittings(self):
+        tree = Cut.tree_of(self, "c1-crate")
+        Cut.charter(self, tree, "2026-11-14-2.md", unchecked=("- [ ] the real one",),
+                    next_act="the real act")
+        for rel, text in (("zz/2026-11-14-2.md", "# a copy\n\n## Next act\nzz copy\n"),
+                          ("archive/old/2099-01-01-1.md", "# not a charter\n")):
+            path = os.path.join(tree, "history", "sittings", rel)
+            os.makedirs(os.path.dirname(path))
+            self.put(path, text)
+            git(tree, "add", path)
+            git(tree, "commit", "-q", "-m", "add " + rel)
+        self.crate("c1-crate")
+        cut = self.view()["c1-crate"]["cut"]
+        self.assertEqual((cut["charter"], cut["unchecked"], cut["next_act"]),
+                         ("history/sittings/2026-11-14-2.md", ["- [ ] the real one"],
+                          "the real act"))
