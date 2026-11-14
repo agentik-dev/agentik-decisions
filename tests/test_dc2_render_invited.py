@@ -249,3 +249,71 @@ class Invited(Base):
         self.assertEqual(self.read(self.claude), H)
         self.assertIn("answer: CLAUDE.md holds no GENERATED markers; the block is left as it "
                       "is; %s\n" % INIT, err)
+
+    def asked(self):
+        """The number of a question filed by `new`, its answer one `Every session` entry."""
+        code, out, err = self.run_cli(
+            "new", "--title", "Width", "--stands", "Lines run long.", "--choice",
+            "Which width here?", "--option", "Short: lines stop at eighty",
+            "--option", "Long: lines stop at a hundred", "--recommend", "Short: most do.")
+        self.assertEqual(code, 0, err)
+        return re.search(r"^(\d+)\. ", self.read(self.ledger).split("## Proposed")[1],
+                         re.M).group(1)
+
+    def answering(self, number, *extra):
+        return self.run_cli("answer", number, "--pick", "Short", "--source", "me", "--text",
+                            "Lines stop at eighty.", "--area", "Every session",
+                            "--every-turn", *extra)
+
+    def test_r1_f1_preview_shows_no_append_and_no_cost(self):
+        number = self.asked()
+        for hand, state in ((H, "holds no generated block"), (None, "is absent")):
+            if hand is None:
+                os.remove(self.claude)
+            else:
+                self.write(self.claude, hand)
+            before = snapshot(self.tmp)
+            code, out, err = self.answering(number, "--preview")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(snapshot(self.tmp), before, state)
+            self.assertIn("answer --preview: CLAUDE.md %s; %s\n" % (state, INIT), out)
+            self.assertNotIn(BEGIN, out, state)
+            self.assertNotIn("CLAUDE.md loads", out, state)
+            self.assertNotIn("(after the answer)", out, state)
+
+    def test_r1_f2_answer_over_markers_that_are_not_one_block_names_no_init(self):
+        markers = "decisions: CLAUDE.md: the GENERATED markers are not one BEGIN before one END\n"
+        for marked in (H + BEGIN + "\n", H + END + "\n", H + END + "\nx\n" + BEGIN + "\n"):
+            number = self.asked()
+            self.write(self.claude, marked)
+            code, out, err = self.answering(number, "--preview")
+            self.assertEqual(code, 0, err)
+            self.assertIn("answer --preview: CLAUDE.md: the GENERATED markers are not one "
+                          "BEGIN before one END; render would refuse it, so no diff\n", out)
+            code, out, err = self.answering(number)
+            self.assertEqual(code, 0, err)
+            self.assertIn("answer: %s, Short;" % number, out)
+            self.assertEqual(self.read(self.claude), marked)
+            self.assertEqual(err, "answer: CLAUDE.md: the GENERATED markers are not one BEGIN "
+                                  "before one END; the block is left as it is\n", marked)
+            self.assertNotIn("init", out + err)
+            for verb in ("init", "render"):
+                code, _, said = self.run_cli(verb)
+                self.assertEqual((code, said), (2, markers), (verb, marked))
+            self.assertEqual(self.read(self.claude), marked)
+
+    def test_notes_4_init_over_a_ledger_refuses_a_text_that_holds_not_one_block(self):
+        import decisions.init
+        self.write(self.claude, H)
+        before = snapshot(self.tmp)
+        held = decisions.init.apply
+        decisions.init.apply = lambda text, generated, target=None: (
+            held(text, generated, target) + generated)
+        try:
+            code, out, err = self.run_cli("init")
+        finally:
+            decisions.init.apply = held
+        self.assertEqual(code, 2, out)
+        self.assertIn("CLAUDE.md: its block could not be placed", err)
+        self.assertIn("nothing written", err)
+        self.assertEqual(snapshot(self.tmp), before)
