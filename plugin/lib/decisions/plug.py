@@ -19,7 +19,7 @@ from .common import VERSION, Refusal, git_top
 from .doctor import PLUGIN
 from .ledger import IN_FORCE_CAP, locate
 from .rows import ROOT
-from .speak import RENDER, respeak_root
+from .speak import RENDER, has_renderer, respeak_root
 from .tree import CEILINGS
 
 __all__ = ["cmd_describe", "describe", "config", "settings", "SUMMARIES", "USAGE"]
@@ -124,15 +124,17 @@ def settings(cwd, env):
     # the contract's §4: each layer that sets the key, lowest first; the variable sets it
     # whenever it is not empty, as `respeak_root` reads it, whether or not it names a renderer;
     # the default layer is the root found without it (fk4: the suite's sources, else the file)
+    # (one read: the launcher starts once, so a hanging one costs one wall)
     shipped = respeak_root({k: v for k, v in env.items() if k != ENV}, cache)
     named = env.get(ENV) or None
+    root = (named if has_renderer(named) else None) if named else shipped
     layered = ([{"layer": "default", "value": shipped}] if shipped else []) + (
         [{"layer": "env", "value": named}] if named else [])
     top = _top(cwd)
     days = _subparsers(_parser()[1]).choices["expire"].get_default("days")
     rows = [_setting("ledger", "launch", found, command="agentik decisions --ledger VALUE show 1",
                      note=FLAG),
-            _setting("respeak.root", "launch", respeak_root(env, cache),
+            _setting("respeak.root", "launch", root,
                      layer="env" if named else "default",
                      command="%s=VALUE agentik decisions ask" % ENV, note=VARIABLE,
                      values=layered),

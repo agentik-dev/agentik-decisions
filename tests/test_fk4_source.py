@@ -305,6 +305,24 @@ class Source(Hermetic):
                 check = self.doctor_json()
                 self.assertEqual((check["detail"], check["source"]), (own, None))
 
+    # -- review 1 --------------------------------------------------------------------
+
+    def test_r1f1_describe_config_starts_the_launcher_once(self):
+        from decisions import plug
+        own = self.root("agentik", "0.12.6")
+        self.answers(self.row("own", OWN, own, "0.12.6"))
+        mine = os.path.join(self.home, "mine")
+        os.makedirs(os.path.join(mine, "scripts"))
+        open(os.path.join(mine, speak.RENDER), "w").close()
+        for env, want in ((self.env, own), (dict(self.env, RESPEAK_ROOT=mine), mine)):
+            with self.subTest(variable="RESPEAK_ROOT" in env):
+                if os.path.exists(self.log):
+                    os.remove(self.log)
+                setting, = plug.config("respeak.root", cwd=self.home, env=env)["settings"]
+                self.assertEqual(setting["value"], want)
+                self.assertEqual(setting["values"][0], {"layer": "default", "value": own})
+                self.assertEqual(self.logged(), ["describe sources --json respeak"])
+
     # -- line 8 ----------------------------------------------------------------------
 
     def test_8_the_newest_folder_rule_is_gone(self):
