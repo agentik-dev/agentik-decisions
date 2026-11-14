@@ -25,6 +25,8 @@ LAUNCHER = os.path.join(REPO, "plugin", "bin", "agentik-decisions")
 COMMAND = os.path.join(REPO, "plugin", "commands", "init.md")
 INIT = "agentik decisions init"
 INSTRUCT = "/decisions:instruct"
+# dc2 R7: render rewrites a block that is there, so a file render writes holds these first
+MARKED = BLOCK.splitlines(keepends=True)[0] + BLOCK.splitlines(keepends=True)[-1]
 
 
 def snapshot(root):
@@ -162,6 +164,8 @@ class GateSays(Base):
         return [l for l in out.splitlines() if INSTRUCT in l]
 
     def test_7_render_then_answer_each_say_theirs_once(self):
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(MARKED)
         code, out, err = self.run_cli("render")
         self.assertEqual(code, 0, err)
         said = self.said(out)
@@ -170,7 +174,8 @@ class GateSays(Base):
         self.assertIn(os.path.join(".claude", GATES), said[0])
         self.assertNotIn("DECISIONS.md", said[0])
         self.assertEqual(self.said(self.run_cli("render")[1]), [])
-        os.remove(self.claude)
+        with open(self.claude, "w", encoding="utf-8") as handle:
+            handle.write(MARKED)
         self.assertEqual(self.run_cli("render")[0], 0)
         for n, title in ((1, "Indent"), (2, "Width")):
             argv = list(NEW)
@@ -186,13 +191,13 @@ class GateSays(Base):
             else:
                 self.assertEqual(said, [], out)
 
-    def test_8_answer_without_markers_names_render(self):
+    def test_8_answer_without_markers_names_init(self):
         self.assertEqual(self.run_cli(*NEW)[0], 0)
         code, out, err = self.run_cli("answer", "1", "--pick", "Spaces", "--source", "me",
                                       "--text", "Four spaces.", "--area", "Style")
         self.assertEqual(code, 0, err)
         line = next(l for l in err.splitlines() if "GENERATED markers" in l)
-        self.assertIn("`agentik decisions render`", line)
+        self.assertIn("`agentik decisions init` adds it", line)  # dc2 R5
         self.assertFalse(os.path.exists(self.claude))
 
 
@@ -223,7 +228,7 @@ class ReviewOne(Base):
         os.mkdir(os.path.join(self.repo, "docs"))
         other = os.path.join(self.repo, "docs", "DECISIONS.md")
         with open(self.claude, "w", encoding="utf-8") as handle:
-            handle.write("hand line\n")
+            handle.write("hand line\n\n" + MARKED)
         with open(other, "w", encoding="utf-8") as handle:
             handle.write(EMPTY)
         for argv in (NEW, ANSWER, ["render", "--into", self.claude]):
@@ -368,10 +373,10 @@ class ReviewTwo(Base):
         code, out, err = self.run_cli("render", "--check")
         self.assertEqual(code, 1, err)
         self.assertNotIn("-my own example text", out)
-        code, out, err = self.run_cli("render")
+        code, out, err = self.run_cli("init")  # dc2 R7: the append is init's
         self.assertEqual(code, 0, err)
         self.assertEqual(self.read(self.claude), self.FENCED + "\n" + BLOCK)
-        self.assertIn("render: wrote CLAUDE.md: 0 B to 171 B, +171 B;", out)
+        self.assertIn("init: wrote CLAUDE.md: 0 B to 171 B, +171 B;", out)
 
     def test_r2_f4_a_real_block_beside_fenced_examples(self):
         with open(self.claude, "w", encoding="utf-8") as handle:
@@ -565,7 +570,7 @@ class ReviewThree(Base):
     def test_r3_f1_backstop_refuses_a_text_that_holds_not_one_block(self):
         import decisions.init
         import decisions.render
-        self.put("# Hand\n", real=False)
+        self.put("# Hand\n\n" + MARKED, real=False)  # dc2 R7: a block there to rewrite
         real = decisions.render.apply
 
         def twice(text, generated, target=None):

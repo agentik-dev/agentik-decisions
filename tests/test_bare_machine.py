@@ -87,6 +87,7 @@ class BareMachine(unittest.TestCase):
         self.ok(self.tool("answer", number, "--pick", "A (Recommended)", "--source", "the bare test",
                           "--text", "Bare holds.", "--area", "build"))
         self.assertIn("Bare holds.", self.ok(self.tool("show", number)).stdout)
+        self.ok(self.tool("init"))  # dc2 R7: init adds the block, render rewrites it
         self.ok(self.tool("render"))
         self.ok(self.tool("render", "--check"))
         self.assertIn("bare item", self.ok(self.tool("backlog")).stdout)

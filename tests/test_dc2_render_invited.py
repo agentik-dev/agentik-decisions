@@ -17,7 +17,8 @@ H = "# Orchard\n\nPears are picked by hand in the cool hours.\nThe ladder rests 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
 BLOCK = (BEGIN + "\n"
-         "Generated from `DECISIONS.md` by `decisions render`; edit the ledger and rerun it, "
+         "Generated from `DECISIONS.md` by `decisions"
+         " render`; edit the ledger and rerun it, "
          "never this block.\n\n"
          "1. **Indent.** This repo indents with four spaces. (2026-11-13)\n" + END + "\n")
 REFUSED = ", and render only rewrites a block that is there; nothing written; "
@@ -126,7 +127,8 @@ class Invited(Base):
         self.assertEqual(code, 0, err)
         text = self.read(notes)
         self.assertTrue(text.startswith(H + BEGIN + "\nGenerated from `DECISIONS.md` by "
-                                        "`decisions render --into NOTES.md`"), text)
+                                        "`decisions"
+                                        " render --into NOTES.md`"), text)
         self.assertTrue(text.endswith("(2026-11-13)\n" + END + "\nAfter.\n"), text)
 
     def test_6_check_and_lint_write_nothing(self):
