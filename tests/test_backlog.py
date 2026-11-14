@@ -491,7 +491,7 @@ class Backlog(Hermetic):
         os.makedirs(os.path.join(root, "scripts"))
         open(os.path.join(root, speak.RENDER), "w").close()
         self.assertEqual(doctor.check_respeak({"HOME": home, "RESPEAK_ROOT": root}),
-                         ("ok", root))
+                         ("ok", "%s (RESPEAK_ROOT gave it)" % root))
         # a warn never changes the exit
         ok = mock.Mock(return_value=("ok", "fine"))
         with mock.patch.multiple(doctor, check_python=ok, check_tool=ok, check_marketplace=ok,
