@@ -27,7 +27,7 @@ from . import ask as ask_module
 from .backlog import (CELL_LEVEL, DATE_WORD, DONE_FILE, HANDOFF, HEADING, HOME_CELL, LEVEL,
                       NICE, ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red,
                       gathered, most_urgent, nice_items, short_name)
-from .common import Refusal, commit_texts, disk_text, git_top, read_text
+from .common import Refusal, commit_texts, git_top, held, read_text
 from .speak import CONTROL, ESCAPE
 
 __all__ = ["cmd_rows", "table", "asked", "KEYS", "SCHEMA"]
@@ -61,6 +61,14 @@ CLOSE_FLAGS = ("withdrawn", "repo", "dry_run", "yes")
 QUESTION = "Write this? y for yes, n or Enter for no. "
 YES = ("y", "yes")
 CLOSED_CAP = 80
+# Review 1 F1: the re-read and the write hold this lock in DIR, CLOSE_WAIT seconds at most.
+CLOSE_LOCK, CLOSE_WAIT = ".rows-close.lock", 5.0
+# Review 1 F2: what a WHY may not hold: the C0 and C1 controls and DEL (every
+# `str.splitlines` break but two: LF, CR, VT, FF, FS, GS, RS, NEL), U+2028 and U+2029, and
+# the zero-width and direction characters U+061C, U+180E, U+200B to U+200F, U+202A to U+202E,
+# U+2060 to U+2064, U+2066 to U+206F and U+FEFF.
+WHY_BAD = re.compile("[\x00-\x1f\x7f-\x9f\u061c\u180e\u200b-\u200f\u2028-\u202e"
+                     "\u2060-\u2064\u2066-\u206f\ufeff]")
 
 
 class RowsRefusal(Refusal):
@@ -309,6 +317,9 @@ def charter_of(git, base, tip):
     out = git.run("diff", "--name-only", "--diff-filter=AM", base, tip, "--", SITTINGS)
     best = None
     for path in (out or "").splitlines():
+        # review 1 F7: a charter lies directly in SITTINGS, never in a folder under it
+        if posixpath.dirname(path) != SITTINGS.rstrip("/"):
+            continue
         m = CHARTER.match(posixpath.basename(path))
         if m:
             key = (m.group(1), int(m.group(2)), path)
@@ -322,10 +333,14 @@ def cut_of(row, git, since):
     tip = row["tip"]
     charter = charter_of(git, row["base"], tip)
     unchecked = next_act = None
+    row["unchecked_count"] = 0
     if charter:
         text = git.run("show", "%s:%s" % (tip, charter)) or ""
         unchecked = [l.rstrip() for l in section_of(text, "Done-ness") or []
                      if l.startswith("- [ ]")]
+        # review 1 F6: LISTED at most, as commits and paths; the text keeps the count
+        row["unchecked_count"] = len(unchecked)
+        unchecked = unchecked[:LISTED]
         act = next((l.strip() for l in section_of(text, "Next act") or [] if l.strip()), None)
         next_act = act[:ACT_CAP] if act else None
     commits = []
@@ -349,7 +364,8 @@ def cut_lines(row):
     cut = row["cut"]
     if cut["charter"]:
         lines = ["  charter %s: %d unchecked; next act: %s"
-                 % (cut["charter"], len(cut["unchecked"]), cut["next_act"] or "none")]
+                 % (cut["charter"], max(row.get("unchecked_count") or 0, len(cut["unchecked"])),
+                    cut["next_act"] or "none")]
     else:
         lines = ["  charter: none on %s" % row["branch"]]
     shown_commits = cut["commits"][:SHOWN]
@@ -726,6 +742,22 @@ def asked(stdin_tty, stderr_tty, reader, err):
     return bool(answer) and answer.strip().lower() in YES
 
 
+def snapshot(path):
+    """Review 1 F1: (the bytes of `path` or None when absent, its text with its line ends),
+    from one read; a Refusal naming why it cannot be read."""
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+    except FileNotFoundError:
+        return None, ""
+    except OSError as exc:
+        raise Refusal("%s: unreadable: %s" % (path, exc))
+    try:
+        return raw, raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise Refusal("%s: unreadable: %s" % (path, exc))
+
+
 def with_cell(text, cell):
     """rw2b R5: `text` with the first table's `done` row as `| done | <cell> |`, its line end
     and every other byte kept; None when it has no `done` row."""
@@ -772,7 +804,7 @@ def checkout_of(args, row, home):
     return path
 
 
-def closing(args, row, root, home, text, err):
+def closing(args, row, root, home, text, old, err):
     """rw2b R3 to R5: (cell, the done file's new text or None, its line) of a pushed row
     that owes nothing; each contradiction one stderr line."""
     name = row["row"]
@@ -791,7 +823,6 @@ def closing(args, row, root, home, text, err):
         err.write(clean("rows close %s: stale: %s" % (name, what)) + "\n")
     sha7 = row["landing"][:7]
     cell = "%s %s" % (row["landed_on"], sha7)
-    old = disk_text(os.path.join(home, DONE_FILE))
     if re.search(r"(?<![0-9A-Za-z])" + sha7, old):
         return cell, None, "holds %s already, no line" % sha7
     lines = text.splitlines()
@@ -816,7 +847,7 @@ def cmd_close(args, names, out, err):
     why = getattr(args, "withdrawn", None)
     if why is not None:
         why = why.strip()
-        if not why or "|" in why or CONTROL.search(why):
+        if not why or "|" in why or WHY_BAD.search(why):
             raise Refusal("rows close: --withdrawn takes one line of words with no | in it")
     root, home = root_of(args)
     name = names[0]
@@ -826,6 +857,8 @@ def cmd_close(args, names, out, err):
     path = os.path.join(folder, ROW)
     if not os.path.isfile(path):
         raise refused("rows close: no row %s under %s" % (name, root))
+    # review 1 F1: what the close shows and writes comes from this one read of each file
+    row_raw, text = snapshot(path)
     rec = records(folder)
     if "done" not in rec["cells"]:
         raise refused("rows close: %s has no done cell; nothing written" % path)
@@ -833,12 +866,15 @@ def cmd_close(args, names, out, err):
         out.write(clean("rows close: %s is closed already: %s"
                         % (name, rec["cells"]["done"][:CLOSED_CAP])) + "\n")
         return 0
-    text = disk_text(path)
     done = os.path.join(home, DONE_FILE)
+    shown = [(path, row_raw)]
     if why is not None:
         cell, done_text, entry = "withdrawn %s: %s" % (ask_module.today(), why), None, None
     else:
-        cell, done_text, entry = closing(args, row_of(name, folder, rec), root, home, text, err)
+        done_raw, old = snapshot(done)
+        shown.append((done, done_raw))
+        cell, done_text, entry = closing(args, row_of(name, folder, rec), root, home, text, old,
+                                         err)
     row_text = with_cell(text, cell)
     if row_text is None:
         raise refused("rows close: %s has no done cell; nothing written" % path)
@@ -859,9 +895,17 @@ def cmd_close(args, names, out, err):
             raise Refusal("rows close: declined, nothing written")
     texts = [(path, row_text)]
     if done_text is not None:
-        os.makedirs(os.path.dirname(done), exist_ok=True)
         texts.append((done, done_text))
-    commit_texts(texts)
+    # review 1 F1: under the lock, each file read again just before the write; a change since
+    # the read above refuses, so a close never writes over a hand's edit or another close's
+    with held(os.path.join(root, CLOSE_LOCK), CLOSE_WAIT, err):
+        for file, raw in shown:
+            if snapshot(file)[0] != raw:
+                raise refused("rows close: %s changed since the close read it; nothing "
+                              "written; run the close again" % file)
+        if done_text is not None:
+            os.makedirs(os.path.dirname(done), exist_ok=True)
+        commit_texts(texts)
     out.write(clean("rows close: %s %s" % (name, "withdrawn" if why is not None else "closed"))
               + "\n")
     return 0
