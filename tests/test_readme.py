@@ -388,17 +388,22 @@ class Render(unittest.TestCase):
                 self.assertEqual((self.repo / "design/readme/source.md").read_text(), SOURCE)
                 self.assertEqual(self.written(), files)
 
-    def test_cache_picks_the_highest_version_tuple(self):
+    def test_cache_takes_the_one_installed_not_the_newest(self):
+        # fk4: the installed file beside the cache decides, never the newest folder; a temp
+        # HOME holds no launcher, so the suite's read is not asked
         cache = self.tmp / "cache"
-        fake_plugin(cache / "respeak" / "respeak" / "0.6.0")
+        installed = fake_plugin(cache / "respeak" / "respeak" / "0.6.0")
         fake_plugin(cache / "claude-code-respeak" / "respeak" / "0.6.1")
-        run = self.run_script("--cache", str(cache))
+        (self.tmp / "installed_plugins.json").write_text(json.dumps({"version": 2, "plugins": {
+            "respeak@respeak": [{"scope": "user", "installPath": str(installed)}]}}))
+        run = self.run_script("--cache", str(cache), more_env={"HOME": str(self.tmp / "home")})
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn("claude-code-respeak/respeak/0.6.1", run.stdout)
-        self.assertNotIn("0.6.0", run.stdout)
+        self.assertIn("respeak/respeak/0.6.0", run.stdout)
+        self.assertNotIn("0.6.1", run.stdout)
 
     def test_empty_cache_refuses(self):
-        run = self.run_script("--cache", str(self.tmp / "none"))
+        run = self.run_script("--cache", str(self.tmp / "none"),
+                              more_env={"HOME": str(self.tmp / "home")})
         self.assertEqual(run.returncode, 2)
         self.assertFalse((self.repo / "README.md").exists())
 

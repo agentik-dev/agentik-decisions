@@ -16,9 +16,9 @@ renderer in technical mode, under the notes in design/readme/contract.txt:
      no other failure keeps a temp file;
   5. the temp file moves over README.md, and the sidecar
      design/readme/rendered.sha256 gets its two lines (source, README).
-The plugin root is --plugin-root, else the highest version under --cache by
-version tuple (`*/respeak/<version>/`; a sort over whole paths is wrong), found
-by `decisions.speak.newest_root`.
+The plugin root is --plugin-root, else the one `decisions.speak.respeak_root`
+finds without RESPEAK_ROOT: the suite's sources, else the one respeak installed
+at scope user or managed beside --cache (packet fk4).
 
 Usage: readme-render [--repo DIR] [--plugin-root DIR] [--cache DIR]
                      [--python PATH] [--max-rounds N] [--max-turns N]
@@ -67,10 +67,11 @@ class Refused(Exception):
     """A setup, status-line or verifier refusal: exit 2."""
 
 
-def newest_root(cache):
-    """The highest-versioned `<cache>/*/respeak/<version>/` holding the renderer; the
-    finder is `decisions.speak.newest_root` (design d18 section 3)."""
-    root = speak.newest_root(cache)
+def installed_root(cache):
+    """The installed respeak's root holding the renderer; the finder is
+    `decisions.speak.respeak_root`, the variable aside (packet fk4)."""
+    root = speak.respeak_root({k: v for k, v in os.environ.items() if k != "RESPEAK_ROOT"},
+                              cache)
     if root is None:
         raise Refused("no installed respeak plugin under %s" % cache)
     return root
@@ -160,7 +161,7 @@ def render(args):
     python = args.python or os.environ.get("RESPEAK_PYTHON")
     if not python or not os.access(python, os.X_OK):
         raise Refused("no respeak python (--python or RESPEAK_PYTHON): %r" % python)
-    root = args.plugin_root or newest_root(args.cache)
+    root = args.plugin_root or installed_root(args.cache)
     for part in (RENDER, VERIFY):
         if not (Path(root) / part).is_file():
             raise Refused("no %s under %s" % (part, root))

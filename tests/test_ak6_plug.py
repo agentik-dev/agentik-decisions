@@ -225,6 +225,10 @@ class Config(Plug):
         none = os.path.join(self.t, "none")
         for root in (cache, rr):
             self.put(os.path.join(root, "scripts", "respeak-render.sh"), "#!/bin/sh\n")
+        # fk4 R3: a cache folder counts only as the one respeak the installed file names
+        self.put(os.path.join(self.home, ".claude", "plugins", "installed_plugins.json"),
+                 json.dumps({"version": 2, "plugins": {"respeak@m": [
+                     {"scope": "user", "installPath": cache}]}}))
         default = ("default", cache)
         self.assertEqual(self.respeak(), (cache, "default", [default], False))           # (a)
         self.assertEqual(self.respeak(none), (None, "env", [default, ("env", none)], True))  # (b)
@@ -269,7 +273,9 @@ class Doctor(Plug):
                          (statuses.count("fail"), statuses.count("warn")))
         checks = {c["name"]: c for c in got["checks"]}
         for check in got["checks"]:
-            self.assertEqual(list(check), ["name", "status", "detail", "remedy"])
+            # fk4 R6: respeak's check also gives its `source`
+            self.assertEqual(list(check), ["name", "status", "detail", "remedy"] + (
+                ["source"] if check["name"] == "respeak" else []))
             if check["status"] == "ok":
                 self.assertIsNone(check["remedy"], check)
         self.assertEqual(checks["marketplace"]["remedy"], doctor.MARKETPLACE_HINT)
@@ -485,8 +491,10 @@ class Unrunnable(Plug):
         import io
         from unittest import mock
         from decisions import cli, common
+        # fk4: the temp HOME, so the respeak read asks no launcher of the live home
         with mock.patch.object(common, "bounded",
-                               side_effect=subprocess.TimeoutExpired(["git"], 10)):
+                               side_effect=subprocess.TimeoutExpired(["git"], 10)), \
+                mock.patch.dict(os.environ, {"HOME": self.home}):
             out = io.StringIO()
             self.assertEqual(cli.main(["describe", "config", "--json"], out, io.StringIO()), 0)
         got = {s["key"]: s["value"] for s in json.loads(out.getvalue())["settings"]}
