@@ -103,9 +103,10 @@ class StructureTest(unittest.TestCase):
 
     def test_ask_skill_drives_the_selector(self):
         """d18 section 1: the skill serves /decisions:ask, so no command shares its name."""
-        # d37: and `instruct`, whose command only the owner types
+        # d37: and `instruct`, whose command only the owner types; dc3: and
+        # `audit-claude-md`, which only the owner starts
         self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "skills"))),
-                         ["ask", "decisions", "instruct"])
+                         ["ask", "audit-claude-md", "decisions", "instruct"])
         front, body = split_frontmatter(read(ASK))
         self.assertIn("name: ask", front)
         self.assertIn("allowed-tools: Bash(agentik-decisions *), AskUserQuestion", front)
