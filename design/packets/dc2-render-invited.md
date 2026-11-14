@@ -14,12 +14,12 @@
 
 The owner's words, asked what `render` should do when a repo's `CLAUDE.md` was written by hand and holds no generated block, option A being "change nothing and print the command that adds one (`agentik decisions init`)": "A but we really should make it clear there are benefits to auditing the CLAUDE.md". The letter is this row; the rest is the next row's.
 
-A packet row by the suite's entry 17: no new verb, flag, file format or ledger entry. Cited: entries 6 (3.9 floor, stdlib), 7 and 8 (a ledger's voice), 37 (made-up names).
+A packet row (suite entry 17). Cited: entries 6, 7, 8 and 37.
 
 Measured at `c4ff3f2` (0.22.3), a temp HOME, a new git repo. L is a ledger of one `Every session` entry. H is a `CLAUDE.md` of hand lines.
 
-- L and H, `render`: `render: wrote CLAUDE.md: 0 B to 236 B, +236 B; the block is loaded on every turn`, then the gate's line, exit 0. H grows by the block and is listed on `.claude/edit-gates`.
-- L alone, `render`: the same line; a `CLAUDE.md` is made and gated. `--into NOTES.md` over a hand file: the same (`0 B to 252 B`). `--fold-tails`: `no tail to fold`, then the same append.
+- L and H, `render`: `render: wrote CLAUDE.md: 0 B to 236 B, +236 B; ...`, the gate's line, exit 0; H is gated.
+- L alone, `render`: the same; a `CLAUDE.md` is made and gated. `--into NOTES.md` over a hand file and `--fold-tails`: the same append.
 - L and H, `init`: `decisions: init: a ledger is already at <path>; nothing written`, exit 2.
 - L and H, `answer`: ``answer: CLAUDE.md holds no GENERATED markers; the block is left as it is; `agentik decisions render` writes it``, exit 0.
 - L and H, `render --check`: a diff of the append, then `render: CLAUDE.md loads N B, ...`, exit 1.
