@@ -214,10 +214,12 @@ def respeak_source(environ, cache):
     row = read_sources(environ)
     if row is None:
         return _from_file(cache)
-    kind, root = row["kind"], _text(row.get("root"))
+    kind, root, plugin = row["kind"], _text(row.get("root")), _text(row.get("plugin"))
+    if kind == "own" and plugin != OWN:     # review 1: `own` is respeak's own id alone
+        kind = "plugin"
     stands = kind in ("own", "plugin", "folder") and row.get("found") is True
     return _found("read", root if stands and os.path.isabs(root or "") and has_renderer(root)
-                  else None, kind, _text(row.get("plugin")), _text(row.get("version")),
+                  else None, kind, plugin, _text(row.get("version")),
                   _declared(row.get("declared")), _seen(row.get("seen")))
 
 

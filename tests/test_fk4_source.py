@@ -333,6 +333,22 @@ class Source(Hermetic):
         self.assertIn("%s:7" % declared["path"], detail)
         self.assertIn("not installed", detail)
 
+    def test_r1f3_a_row_is_our_own_only_when_its_plugin_is(self):
+        fork = self.root("acme-tools", "0.12.6")
+        self.installed((FORK, fork, "0.12.6", "user"))
+        self.answers(self.row("own", FORK, fork, "0.12.6"))
+        self.assertEqual(self.found(), fork)
+        check = self.doctor_json()
+        self.assertEqual(check["status"], "ok")
+        self.assertNotIn("acme", check["detail"])
+        self.assertNotIn("acme", check["remedy"] or "")
+        self.assertEqual(check["source"], {"kind": "plugin", "plugin": FORK, "root": fork,
+                                           "version": "0.12.6", "declared": None})
+        self.answers(self.row("own", None, fork, "0.12.6"))
+        check = self.doctor_json()
+        self.assertNotIn("acme", check["detail"])
+        self.assertEqual(check["source"]["kind"], "plugin")
+
     # -- line 8 ----------------------------------------------------------------------
 
     def test_8_the_newest_folder_rule_is_gone(self):
