@@ -49,7 +49,6 @@ SAID = ("%s: %s loads %s B of hand-written text on every turn of every session s
         "/decisions:audit-claude-md goes through it with you and finds the lines no session "
         "acts on and the rules that belong in the ledger\n")
 SAID_H = SAID % ("render", "%s", len(H.encode()))
-ANY_SAID = re.compile(r"(render: \S+ loads [\d,]+ B of hand-written text on every turn [^\n]*\n)?")
 
 
 def refusal(target, state, after):
@@ -67,14 +66,10 @@ class Invited(Base):
             handle.write(text)
 
     def refuses(self, argv, err_line, said=""):
-        """`said`: dc3's line on stdout, or None for that line or none (a figure of its own)."""
+        """`said`: stdout, dc3's line or the pin's empty one."""
         before = snapshot(self.tmp)
         code, out, err = self.run_cli(*argv)
-        self.assertEqual((code, err), (2, err_line), argv)
-        if said is None:
-            self.assertRegex(out, r"\A%s\Z" % ANY_SAID.pattern, argv)
-        else:
-            self.assertEqual(out, said, argv)
+        self.assertEqual((code, out, err), (2, said, err_line), argv)
         self.assertEqual(snapshot(self.tmp), before, argv)
         return err
 
@@ -107,23 +102,26 @@ class Invited(Base):
         self.write(os.path.join(elsewhere, "hand.md"), H)
         self.write(os.path.join(self.repo, "AGENTS.md"), H)
         no_block = refusal("CLAUDE.md", "holds no generated block", INIT)
+        # dc3: the line prints for each that holds a hand-written line, by its own figure
+        # (the fenced markers are text, not comments, there; CRLF reads as LF; a link, its file)
         cases = [
-            ("empty", "", no_block),
-            ("blank lines", "\n\n\n", no_block),
-            ("fenced markers", "# Notes\n```\n%s\nan example\n%s\n```\n" % (BEGIN, END), no_block),
-            ("CRLF", H.replace("\n", "\r\n"), no_block),
-            ("a link to AGENTS.md beside it", "AGENTS.md", no_block),
-            ("a link to another folder", os.path.join("..", "elsewhere", "hand.md"), no_block),
-            ("a link to nothing", "gone.md", refusal("CLAUDE.md", "is absent", INIT)),
+            ("empty", "", no_block, ""),
+            ("blank lines", "\n\n\n", no_block, ""),
+            ("fenced markers", "# Notes\n```\n%s\nan example\n%s\n```\n" % (BEGIN, END), no_block,
+             SAID % ("render", "CLAUDE.md", 97)),
+            ("CRLF", H.replace("\n", "\r\n"), no_block, SAID_H % "CLAUDE.md"),
+            ("a link to AGENTS.md beside it", "AGENTS.md", no_block, SAID_H % "CLAUDE.md"),
+            ("a link to another folder", os.path.join("..", "elsewhere", "hand.md"), no_block,
+             SAID_H % "CLAUDE.md"),
+            ("a link to nothing", "gone.md", refusal("CLAUDE.md", "is absent", INIT), ""),
         ]
-        for name, text, line in cases:
+        for name, text, line, said in cases:
             if os.path.lexists(self.claude):
                 os.unlink(self.claude)
             if name.startswith("a link"):
                 os.symlink(text, self.claude)
             else:
                 self.write(self.claude, text)
-            said = "" if name in ("empty", "blank lines", "a link to nothing") else None
             self.refuses(["render"], line, said)
             # the CLAUDE.md beside the ledger however it is named: `init` adds its block
             for named in ("CLAUDE.md", os.path.join(".", "CLAUDE.md"), self.claude):
@@ -135,8 +133,7 @@ class Invited(Base):
         notes = os.path.join(self.repo, "NOTES.md")
         self.write(notes, H)
         self.refuses(["render", "--into", "NOTES.md"],
-                     refusal("NOTES.md", "holds no generated block", MARKS),
-                     SAID_H % "NOTES.md")
+                     refusal("NOTES.md", "holds no generated block", MARKS))
         self.refuses(["render", "--into", "NEW.md"], refusal("NEW.md", "is absent", MARKS))
         self.assertFalse(os.path.lexists(os.path.join(self.repo, "NEW.md")))
         self.write(notes, H + BEGIN + "\n" + END + "\nAfter.\n")

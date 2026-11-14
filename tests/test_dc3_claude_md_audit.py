@@ -31,8 +31,11 @@ NEXT = ("init: next, `agentik decisions new` records a question; its answer beco
         "and reaches CLAUDE.md\n")
 PAGE = os.path.join(PLUGIN, "skills", "audit-claude-md", "SKILL.md")
 # the sha256 of the brief's page, word for word (R3)
-PAGE_SHA = "e25c490dc7efa00ec1c25da216bfe24c36966e617ceea35b87f8415613298750"
+# review 1's ruling: step 3 runs `render --lint --draft <draft>`; no other word changes
+PAGE_SHA = "PENDING"
 NAMES = ("rule", "twice", "stale", "one act", "in the repo", "for people", "import", "keeps")
+DRAFTED = re.compile(r"(?m)^render: as drafted in (\S+), (\S+) would load ([\d,]+) B, comments "
+                     r"aside and imports included; the ceiling for a repo's file is 3,072 B$")
 PIN_DESCRIPTIONS = 483  # the bytes test_instruct's sum counts at ab7b4f5
 
 # measured at ab7b4f5 (0.22.5) by the same fixtures: acceptance line 4
@@ -103,6 +106,18 @@ class Audit(Fixture):
         self.assertEqual(self.run_cli("render"),
                          (2, LINE % ("render", "CLAUDE.md", "79"), REFUSAL))
         self.assertEqual(snapshot(self.tmp), before)
+
+    def test_r1_f2_the_line_is_for_a_claude_md_alone(self):
+        self.write(self.ledger, L)
+        readme = os.path.join(self.repo, "README.md")
+        self.write(readme, "# A project\n\nSee the docs for how to build.\n")
+        code, out, err = self.run_cli("render", "--into", "README.md")
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("README.md holds no generated block", err)
+        os.mkdir(os.path.join(self.repo, "sub"))
+        self.write(os.path.join(self.repo, "sub", "CLAUDE.md"), "# Sub\n")
+        code, out, err = self.run_cli("render", "--into", "sub/CLAUDE.md")
+        self.assertEqual((code, out), (2, LINE % ("render", "sub/CLAUDE.md", "6")), err)
 
     def test_3_no_line_where_no_hand_text(self):
         code, out, err = self.run_cli("init")  # an empty repo
@@ -175,7 +190,7 @@ class Page(Fixture):
     def test_6_each_command_the_page_names_is_the_tools(self):
         parser = build_parser()
         verbs = next(a for a in parser._actions if a.dest == "verb").choices
-        verb, seen = None, 0
+        verb, seen, flagged = None, 0, set()
         for span in re.findall(r"`([^`]+)`", self.text()):
             try:
                 words = shlex.split(span.replace("<", "'<").replace(">", ">'"))
@@ -197,7 +212,9 @@ class Page(Fixture):
             for word in flags:
                 if word.startswith("--"):
                     self.assertIn(word, verbs[verb]._option_string_actions, span)
+                    flagged.add((verb, word))
         self.assertGreaterEqual(seen, 6)
+        self.assertIn(("render", "--draft"), flagged)  # review 1's ruling: step 3
 
     def test_6_the_measures_the_walk_runs(self):
         self.write(self.ledger, L)
@@ -205,10 +222,11 @@ class Page(Fixture):
         draft = os.path.join(self.tmp, "draft.md")
         self.write(draft, "# Mine\n")
         before = snapshot(self.tmp)
-        for argv in (["render", "--lint"], ["render", "--lint", "--into", draft]):
+        for argv in (["render", "--lint"], ["render", "--lint", "--draft", draft]):
             code, out, err = self.run_cli(*argv)
             self.assertEqual(code, 0, err)
             self.assertRegex(out, r"(?m)^render: \S+ loads [\d,]+ B, ", argv)
+        self.assertRegex(out, DRAFTED)
         self.assertEqual(snapshot(self.tmp), before)
 
     def test_7_the_page_names_the_eight_and_no_figure(self):
@@ -229,3 +247,68 @@ class Page(Fixture):
             self.assertTrue(os.path.isfile(os.path.join(PLUGIN, "commands", name + ".md"))
                             or os.path.isfile(os.path.join(PLUGIN, "skills", name, "SKILL.md")),
                             name)
+
+
+class Draft(Fixture):
+    """Review 1, R1-F1: `render --lint --draft D` measures D as the target would stand."""
+
+    def setUp(self):
+        super().setUp()
+        self.write(self.claude, F)
+        code, out, err = self.run_cli("init")
+        self.assertEqual(code, 0, err)
+        os.mkdir(os.path.join(self.tmp, "drafts"))
+        self.draft = os.path.join(self.tmp, "drafts", "d2.md")
+        text = read(self.claude)
+        self.write(self.draft, text.replace("Never push on a Friday.\n", ""))
+        self.assertEqual(len(text.encode()) - len(read(self.draft).encode()), 24)
+
+    def loads(self, out):
+        return int(re.search(r"(?m)^render: CLAUDE.md loads ([\d,]+) B, ", out)
+                   .group(1).replace(",", ""))
+
+    def test_r1_f1_the_draft_reads_24_b_under_the_file(self):
+        code, out, err = self.run_cli("render", "--lint")
+        self.assertEqual(code, 0, err)
+        now = self.loads(out)
+        before = snapshot(self.tmp)
+        for extra in ([], ["--into", "CLAUDE.md"], ["--into", self.claude]):
+            code, out, err = self.run_cli("render", "--lint", "--draft", self.draft, *extra)
+            self.assertEqual(code, 0, err)
+            self.assertEqual(self.loads(out), now, out)  # the file's own line, as it is
+            drafted = DRAFTED.findall(out)
+            self.assertEqual(len(drafted), 1, out)
+            self.assertEqual(drafted[0][1], "CLAUDE.md")
+            self.assertEqual(int(drafted[0][2].replace(",", "")), now - 24, out)
+            self.assertTrue(out.endswith(drafted[0][2] + " B, comments aside and imports "
+                                         "included; the ceiling for a repo's file is 3,072 B\n"))
+        self.assertEqual(snapshot(self.tmp), before)
+
+    def test_r1_f1_a_draft_with_no_block_takes_the_targets(self):
+        self.write(self.draft, F.replace("Never push on a Friday.\n", ""))
+        now = self.loads(self.run_cli("render", "--lint")[1])
+        code, out, err = self.run_cli("render", "--lint", "--draft", self.draft)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(int(DRAFTED.search(out).group(3)), now - 24, out)
+
+    def test_r1_f1_the_refusals(self):
+        folder = os.path.join(self.tmp, "drafts")
+        latin = os.path.join(folder, "latin.md")
+        with open(latin, "wb") as handle:
+            handle.write(b"# Caf\xe9\n")
+        half = os.path.join(folder, "half.md")
+        self.write(half, "# Mine\n" + BEGIN + "\nno end\n")
+        before = snapshot(self.tmp)
+        for argv, said in ((["render", "--draft", self.draft], "--draft goes with --lint"),
+                           (["render", "--check", "--draft", self.draft],
+                            "--draft goes with --lint"),
+                           (["render", "--lint", "--draft", os.path.join(folder, "gone.md")],
+                            "is absent"),
+                           (["render", "--lint", "--draft", folder], "is a folder"),
+                           (["render", "--lint", "--draft", latin], "unreadable"),
+                           (["render", "--lint", "--draft", half], "not one BEGIN before one END")):
+            code, out, err = self.run_cli(*argv)
+            self.assertEqual((code, out), (2, ""), argv)
+            self.assertTrue(err.startswith("decisions: render: "), err)
+            self.assertIn(said, err, argv)
+        self.assertEqual(snapshot(self.tmp), before)
