@@ -56,7 +56,11 @@ class StructureTest(unittest.TestCase):
     def test_exactly_the_six_commands(self):
         # d25: and /decisions:install-cli, which runs the plugin's own launcher, never PATH's
         self.assertEqual(sorted(os.listdir(os.path.join(PLUGIN, "commands"))),
-                         sorted(COMMANDS + ("install-cli.md", "instruct.md")))
+                         sorted(COMMANDS + ("init.md", "install-cli.md", "instruct.md")))
+        # dc1 R7: /decisions:init, the plugin's own launcher too
+        text = read(os.path.join(PLUGIN, "commands", "init.md"))
+        self.assertIn("allowed-tools: [Bash(*/bin/agentik-decisions init*)]", text)
+        self.assertIn("!`${CLAUDE_PLUGIN_ROOT}/bin/agentik-decisions init $ARGUMENTS`", text)
         text = read(os.path.join(PLUGIN, "commands", "install-cli.md"))
         self.assertIn("allowed-tools: [Bash(*/bin/agentik-decisions install-cli*)]", text)
         self.assertIn("!`${CLAUDE_PLUGIN_ROOT}/bin/agentik-decisions install-cli $ARGUMENTS`",
@@ -203,7 +207,9 @@ class StructureTest(unittest.TestCase):
                 if ":" in head:
                     for verb in served:
                         self.assertIn(verb, head, sentence.group(0))
-                    self.assertIsNotNone(re.search(r"plus `?doctor`?", sentence.group(0)),
+                    # dc1 R8: `init` may stand first beside them
+                    self.assertIsNotNone(re.search(r"plus (?:`?init`?, )?`?doctor`?",
+                                                   sentence.group(0)),
                                          sentence.group(0))
 
     def test_no_data_in_plugin(self):

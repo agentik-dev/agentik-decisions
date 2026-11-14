@@ -27,12 +27,14 @@ each departure from the shape is one (line, message) in `Ledger.problems`.
 import collections
 import os
 import re
+import shlex
 
 from .common import Refusal, git_top, read_text
 from . import questions
 
-__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "display", "check_entry",
-           "lint", "repeats", "sentences", "dropped", "unclosed", "final_parenthetical",
+__all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "where", "in_the_way", "display",
+           "check_entry", "lint", "repeats", "sentences", "dropped", "unclosed",
+           "final_parenthetical",
            "bold_title", "NAME", "IN_FORCE", "is_every", "is_tree", "ordered", "TITLES",
            "PROPOSED", "SUPERSEDED", "EVERY_SESSION", "TREE_SESSION", "IN_FORCE_CAP", "LEGACY"]
 
@@ -385,19 +387,65 @@ def parse(text, path=NAME):
     return Ledger(path, entries, areas, problems, legacy)
 
 
-def locate(ledger=None, cwd=None):
-    """The ledger's path: `ledger` when named, else DECISIONS.md at the git top of `cwd`."""
+def where(ledger=None, cwd=None):
+    """The ledger's place, there or not: `ledger` when named, else DECISIONS.md at the git
+    top of `cwd`; outside a git work tree with none named, a refusal."""
     cwd = os.getcwd() if cwd is None else cwd
     if ledger:
-        path = os.path.abspath(os.path.join(cwd, os.path.expanduser(ledger)))
+        seps = tuple(filter(None, (os.sep, os.altsep)))
+        raw = os.path.expanduser(ledger)
+        bare = raw.rstrip("".join(seps)) or raw
+        full = os.path.abspath(os.path.join(cwd, bare))
+        parts = bare.split(os.sep)
+        for k, part in enumerate(parts[1:], 1):
+            # dc1 r2 F2: abspath reads `gone/..` by its letters; the system reads the disk
+            if part == ".." and parts[k - 1] not in ("", ".", "..") and \
+                    not os.path.isdir(os.path.join(cwd, os.sep.join(parts[:k]) or os.sep)):
+                raise Refusal("no ledger: --ledger %s steps out of %s, which is no folder; "
+                              "name the ledger's file by a path that is there"
+                              % (shlex.quote(ledger), shlex.quote(os.sep.join(parts[:k]))))
+        if parts[-1] in (".", ".."):
+            # dc1 r2 F2: a last part `.` or `..` names a folder, as a trailing slash does
+            raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
+                          % (shlex.quote(ledger),
+                             shlex.quote(os.path.join(os.path.normpath(ledger), NAME))))
+        if raw.endswith(seps) and not os.path.isfile(full):
+            # dc1 r1 F4: --ledger names the ledger's file, never a folder; r2 F3: a slash
+            # after an existing ledger's name reads that ledger, as before r1
+            raise Refusal("no ledger: --ledger %s names a folder; name the ledger's file, as %s"
+                          % (shlex.quote(ledger), shlex.quote(ledger + NAME)))
+        return full
+    top = git_top(cwd)
+    if not top:
+        raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger" % cwd)
+    return os.path.join(top, NAME)
+
+
+def in_the_way(path):
+    """What stands at `path` when it is there and no ledger's file, in words, else None:
+    `init` refuses with it, and `locate`'s refusal says the same (dc1 r1 F4, F5)."""
+    if os.path.isdir(path):
+        kind = "a folder"
+    elif os.path.islink(path) and not os.path.exists(path):
+        kind = "a link to nothing"
+    elif os.path.lexists(path) and not os.path.isfile(path):
+        kind = "no regular file"
     else:
-        top = git_top(cwd)
-        if not top:
-            raise Refusal("no ledger: %s is outside a git work tree; name one with --ledger"
-                          % cwd)
-        path = os.path.join(top, NAME)
+        return None
+    return "%s is %s, not a ledger; move it away or name a file with --ledger" % (path, kind)
+
+
+def locate(ledger=None, cwd=None):
+    """The ledger's path, by `where`; a refusal when no file is there, naming `init`."""
+    path = where(ledger, cwd)
     if not os.path.isfile(path):
-        raise Refusal("no ledger at %s" % path)
+        way = in_the_way(path)
+        if way:
+            # dc1 r1 F5: what stands there, so the act it names can run
+            raise Refusal("no ledger: %s; then `agentik decisions init` makes one" % way)
+        # dc1 R5: the refusal names the next act
+        raise Refusal("no ledger at %s; `agentik decisions init%s` makes one"
+                      % (path, " --ledger %s" % shlex.quote(ledger) if ledger else ""))
     return path
 
 

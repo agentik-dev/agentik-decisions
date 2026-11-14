@@ -70,7 +70,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | verb | what it does |
 |---|---|
 | `show <n>...` | each entry verbatim, under its section heading |
-| `show --area NAME` | a whole `###` subsection; NAME is a case-insensitive prefix of its heading, an exact name wins, and a leading `The ` in the heading may be left out |
+| `show --area NAME` | a whole `###` subsection; NAME is a case-insensitive prefix of its heading, an exact name wins, and a leading `The ` may be left out |
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
@@ -78,6 +78,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `render [--scope tree] [--into PATH] [--check] [--ceiling]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
+| `init` | an empty ledger and its block in the `CLAUDE.md` beside it |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--check [--write]] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step, its items, S3, S4; `S4?` unlevelled; a closed item only counts; `--check`: state vs git, 1 if stale; only `--write` writes |
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md` |
@@ -97,7 +98,6 @@ agentik decisions ask                   # the open questions as AskUserQuestion 
 agentik decisions answer 9 --pick pin --source "the sitting" --text "Pin 3.12." --area build
 agentik decisions render                # write the block into the CLAUDE.md beside the ledger
 agentik decisions render --check        # exit 1 and the diff when the block is stale
-agentik decisions render --into ~/.claude/CLAUDE.md
 agentik decisions backlog               # this repository's backlog against its build order
 agentik decisions audit --edits HEAD~20  # instruction text changed outside the lane
 ```
