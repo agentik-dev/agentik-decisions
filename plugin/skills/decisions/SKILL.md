@@ -31,6 +31,7 @@ and it carries no data.
 - A repo with no ledger gets one from `agentik-decisions init`, which writes it
   empty with its block in CLAUDE.md; over a ledger whose CLAUDE.md holds no block
   it adds the block alone. The owner runs it as `/decisions:init`.
+- The owner audits a hand-kept CLAUDE.md by typing `/decisions:audit-claude-md`.
 
 ## 2. Reading
 

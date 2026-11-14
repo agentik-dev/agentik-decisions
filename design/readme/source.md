@@ -87,6 +87,8 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
 | `--version` | `agentik-decisions 0.22.5`, the version `doctor` compares with the one on PATH |
 
+Over a hand-kept `CLAUDE.md`, `init` and `render` say what its own lines load; `/decisions:audit-claude-md` audits them.
+
 One example per verb:
 
 ```
@@ -162,7 +164,7 @@ Otherwise it rewrites the block between `<!-- BEGIN GENERATED: decisions -->` an
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
 `--check` and `--lint` print the file's loaded bytes, comments aside and imports included, beside its ceiling; `--ceiling` exits 1 over it.
 `--lint` warns, its exit unchanged, on an `Every session` title outside the ten behaviours and on a hand-written line holding `never`, `always`, `must` or `only`.
-The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word, in the ten behaviours' order, but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming the `show N` command that reads one.
+The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word, in the ten behaviours' order, but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming `show N`.
 Proposed, Superseded and tree entries stay out.
 `render --scope tree` writes `### Every session of the tree` alone, the whole file, into the `CLAUDE.md` of the folder that holds the repo's main checkout; `--check` fails when it is absent or stale.
 `render` refuses a target whose block came from another ledger, and `--scope tree` a file it did not write.
@@ -218,9 +220,9 @@ The tool reads no configuration file: the ledger is `--ledger` or `DECISIONS.md`
 - The portfolio's ledger decides where decisions live and names the six verbs.
 - `design/d29-churn.md`: `analyze`, and the block's short tails.
 - `design/d23-backlog-view.md`: the backlog view, and respeak kept optional.
-- `design/d18-one-flow.md`: one flow from a fork to an entry; `design/packets/d18-one-flow.md` built it, with its acceptance table.
+- `design/d18-one-flow.md`: one flow from a fork to an entry; its packet is in `design/packets/`.
 - `history/`: the older designs and packets.
-- `history/sittings/`: one charter per working session, its handover the choices made inside the design.
+- `history/sittings/`: one charter per session, its handover the choices made inside the design.
 
 ## Tests
 
@@ -257,7 +259,7 @@ make check
 ```
 
 `make check` runs under `scripts/bounded`, in order: `gates`, `test`, `lint`, `doclint`, `hygiene`, `validate`, `decisions` (`render --check` when the repository keeps a `DECISIONS.md`), then the README's freshness by its sidecar.
-`tests/skips.allow` lists the skips the suite may report; it lists none, and the suite exits 1 on any skip that file does not list.
+`tests/skips.allow` lists the skips allowed, none; any other skip exits 1.
 
 ## Conventions shared with the sibling plugins
 
