@@ -245,6 +245,10 @@ def build_parser():
     render.add_argument("--scope", choices=("repo", "tree"), default="repo",
                         help="tree: the ledger's `Every session of the tree` alone, the whole "
                         "file, into the CLAUDE.md of the folder that holds the repo")
+    render.add_argument("--draft", default=None, metavar="DRAFT",
+                        help="with --lint: also what the target would load with DRAFT's "
+                        "text in its place, its own block and its folder's imports; "
+                        "writes nothing")
     render.add_argument("--ceiling", action="store_true",
                         help="with --check or --lint: exit 1 when the file loads more than "
                         "its ceiling")

@@ -43,6 +43,14 @@ PIN_LOADS_ALONE = ("render: CLAUDE.md loads 166 B, comments aside and imports in
                    "ceiling for a repo's file is 3,072 B")
 
 
+# dc3 R2: before render refuses a file of hand-written lines, and in init's lines after the
+# gate's, stdout says what they load; H holds no comment and no import
+SAID = ("%s: %s loads %s B of hand-written text on every turn of every session started here; "
+        "/decisions:audit-claude-md goes through it with you and finds the lines no session "
+        "acts on and the rules that belong in the ledger\n")
+SAID_H = SAID % ("render", "%s", len(H.encode()))
+
+
 def refusal(target, state, after):
     return "decisions: render: %s %s%s%s\n" % (target, state, REFUSED, after)
 
@@ -57,16 +65,18 @@ class Invited(Base):
         with open(path, mode, encoding="utf-8", newline="") as handle:
             handle.write(text)
 
-    def refuses(self, argv, err_line):
+    def refuses(self, argv, err_line, said=""):
+        """`said`: stdout, dc3's line or the pin's empty one."""
         before = snapshot(self.tmp)
         code, out, err = self.run_cli(*argv)
-        self.assertEqual((code, out, err), (2, "", err_line), argv)
+        self.assertEqual((code, out, err), (2, said, err_line), argv)
         self.assertEqual(snapshot(self.tmp), before, argv)
         return err
 
     def test_1_hand_lines_get_nothing(self):
         self.write(self.claude, H)
-        self.refuses(["render"], refusal("CLAUDE.md", "holds no generated block", INIT))
+        self.refuses(["render"], refusal("CLAUDE.md", "holds no generated block", INIT),
+                     SAID_H % "CLAUDE.md")
         self.assertEqual(self.read(self.claude), H)
         self.assertFalse(os.path.lexists(os.path.join(self.repo, ".claude")))
 
@@ -92,26 +102,30 @@ class Invited(Base):
         self.write(os.path.join(elsewhere, "hand.md"), H)
         self.write(os.path.join(self.repo, "AGENTS.md"), H)
         no_block = refusal("CLAUDE.md", "holds no generated block", INIT)
+        # dc3: the line prints for each that holds a hand-written line, by its own figure
+        # (the fenced markers are text, not comments, there; CRLF reads as LF; a link, its file)
         cases = [
-            ("empty", "", no_block),
-            ("blank lines", "\n\n\n", no_block),
-            ("fenced markers", "# Notes\n```\n%s\nan example\n%s\n```\n" % (BEGIN, END), no_block),
-            ("CRLF", H.replace("\n", "\r\n"), no_block),
-            ("a link to AGENTS.md beside it", "AGENTS.md", no_block),
-            ("a link to another folder", os.path.join("..", "elsewhere", "hand.md"), no_block),
-            ("a link to nothing", "gone.md", refusal("CLAUDE.md", "is absent", INIT)),
+            ("empty", "", no_block, ""),
+            ("blank lines", "\n\n\n", no_block, ""),
+            ("fenced markers", "# Notes\n```\n%s\nan example\n%s\n```\n" % (BEGIN, END), no_block,
+             SAID % ("render", "CLAUDE.md", 97)),
+            ("CRLF", H.replace("\n", "\r\n"), no_block, SAID_H % "CLAUDE.md"),
+            ("a link to AGENTS.md beside it", "AGENTS.md", no_block, SAID_H % "CLAUDE.md"),
+            ("a link to another folder", os.path.join("..", "elsewhere", "hand.md"), no_block,
+             SAID_H % "CLAUDE.md"),
+            ("a link to nothing", "gone.md", refusal("CLAUDE.md", "is absent", INIT), ""),
         ]
-        for name, text, line in cases:
+        for name, text, line, said in cases:
             if os.path.lexists(self.claude):
                 os.unlink(self.claude)
             if name.startswith("a link"):
                 os.symlink(text, self.claude)
             else:
                 self.write(self.claude, text)
-            self.refuses(["render"], line)
+            self.refuses(["render"], line, said)
             # the CLAUDE.md beside the ledger however it is named: `init` adds its block
             for named in ("CLAUDE.md", os.path.join(".", "CLAUDE.md"), self.claude):
-                self.refuses(["render", "--into", named], line)
+                self.refuses(["render", "--into", named], line, said)
         self.assertFalse(os.path.lexists(os.path.join(self.repo, "gone.md")))
         self.assertFalse(os.path.lexists(os.path.join(self.repo, ".claude")))
 
@@ -163,7 +177,8 @@ class Invited(Base):
                        check=True)
         self.write(self.claude, H)
         self.refuses(["render", "--fold-tails"],
-                     refusal("CLAUDE.md", "holds no generated block", INIT))
+                     refusal("CLAUDE.md", "holds no generated block", INIT),
+                     SAID_H % "CLAUDE.md")
         self.assertEqual(self.read(self.ledger), FIXTURE)
 
     def test_8_init_adds_the_block_under_hand_lines(self):
@@ -176,6 +191,7 @@ class Invited(Base):
         self.assertEqual(out, "init: DECISIONS.md is already there; it stays as it is\n"
                               "init: wrote CLAUDE.md: 0 B to 236 B, +236 B; the block is "
                               "loaded on every turn\n" + GATE_LINE % ("init", "CLAUDE.md") +
+                              SAID % ("init", "CLAUDE.md", len(H.encode())) +
                               "init: next, `agentik decisions new` records a question; its "
                               "answer becomes an entry and reaches CLAUDE.md\n")
         self.assertEqual(self.listed(), ["CLAUDE.md"])

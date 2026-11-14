@@ -27,7 +27,14 @@ target that is absent or holds no marker line (a fenced example is none) gets no
 the run refuses, exit 2, with `render: PATH is absent` or `holds no generated block`, `and
 render only rewrites a block that is there; nothing written;` and the act that adds it,
 `agentik decisions init` for the CLAUDE.md beside the ledger (`--ledger` as the run named
-it), else the two marker lines; `--fold-tails` refuses so before it folds. `--check` writes
+it), else the two marker lines; `--fold-tails` refuses so before it folds. dc3: before it
+refuses a CLAUDE.md, in any folder, that holds hand-written lines, stdout says what they
+load, comments aside and imports included, and names `/decisions:audit-claude-md`; a target
+of another name gets no such line. `--lint --draft DRAFT` also prints what the target would
+load with DRAFT's text in its place, `render: as drafted in DRAFT, PATH would load N B, ...`:
+the target's own block put in DRAFT's block or appended, imports read from the target's
+folder; it writes nothing, and refuses, exit 2, without `--lint`, under `--scope tree`, and
+a DRAFT that is absent, a folder, unreadable or holds markers that are not one block. `--check` writes
 nothing: it prints the unified diff render would make and exits 1 when the block is stale,
 0 when it is fresh; on a target with no block, in place of the diff, `render: PATH STATE;
 NEXT`, then the loaded bytes, exit 1. A target that is the
@@ -62,11 +69,11 @@ from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_paren
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
 from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
-                   markers, named_ledger, rule_words, title_warnings, tree_text)
+                   markers, named_ledger, rule_words, strip_comments, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
            "tail_note", "tree_file", "list_gate", "gate_said", "holds_markers", "invited",
-           "BEGIN", "END", "TARGET", "GATES"]
+           "hand_said", "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -486,6 +493,20 @@ def invited(target, path, named=None):
                    "`%s`, each alone on a line" % (BEGIN, END))
 
 
+def hand_said(out, verb, target, text):
+    """dc3 R1, R2: what `text`, the file at `target` as its owner wrote it, loads, comments
+    aside and imports included, and the skill that audits it; said only when the target is
+    a CLAUDE.md (review 1, R1-F2) and the text, comments aside, holds a line that is not
+    blank."""
+    if os.path.basename(target) != TARGET or \
+            not any(line.strip() for line in strip_comments(text).splitlines()):
+        return
+    out.write("%s: %s loads %s B of hand-written text on every turn of every session started "
+              "here; /decisions:audit-claude-md goes through it with you and finds the lines "
+              "no session acts on and the rules that belong in the ledger\n"
+              % (verb, display(target), "{:,}".format(loaded_bytes(target, text))))
+
+
 def one_block(text, target, verb):
     """The backstop (dc1 r3 F1): `text`, about to be written to `target`, must hold exactly
     one BEGIN and one END in order by `markers`, or `verb` refuses and writes nothing."""
@@ -502,13 +523,32 @@ def tree_file(ledger, path):
     return tree_text(ledger, path, short_tail, BEGIN, END)
 
 
-def measure(out, target, text, ledger, tree):
+def read_draft(draft):
+    """dc3 review 1, R1-F1: the text of the draft at `draft`, or a Refusal in render's voice
+    for one that is absent, a folder, unreadable, or holds markers that are not one block."""
+    name = display(draft)
+    if os.path.isdir(draft):
+        raise Refusal("render: the draft %s is a folder; nothing written" % name)
+    if not os.path.exists(draft):
+        raise Refusal("render: the draft %s is absent; nothing written" % name)
+    try:
+        text = read_text(draft)
+        apply(text, "", name)
+    except Refusal as why:
+        raise Refusal("render: the draft %s; nothing written" % why)
+    return text
+
+
+def measure(out, target, text, ledger, tree, draft=None):
     """Print the bytes `text`, the file at `target`, loads beside its ceiling (d36 ruling
-    6); True when it is over."""
+    6); True when it is over. With `draft`, the line says `text` is the target as drafted
+    there (dc3 review 1, R1-F1)."""
     figure, kind = ceiling_for(target, ledger, tree)
     size = loaded_bytes(target, text)
-    out.write("render: %s loads %s B, comments aside and imports included; the ceiling for "
-              "%s is %s B%s\n" % (display(target), "{:,}".format(size), kind,
+    said = ("as drafted in %s, %s would load" % (display(draft), display(target)) if draft
+            else "%s loads" % display(target))
+    out.write("render: %s %s B, comments aside and imports included; the ceiling for "
+              "%s is %s B%s\n" % (said, "{:,}".format(size), kind,
                                   "{:,}".format(figure),
                                   "; over by {:,} B".format(size - figure)
                                   if size > figure else ""))
@@ -626,11 +666,19 @@ def cmd_render(args, path, out, err):
     ceiling = getattr(args, "ceiling", False)
     if ceiling and not (args.check or args.lint):
         raise Refusal("render: --ceiling goes with --check or --lint; nothing written")
+    draft = getattr(args, "draft", None)
+    if draft is not None and not args.lint:
+        raise Refusal("render: --draft goes with --lint; nothing written")
+    if draft is not None and getattr(args, "scope", None) == "tree":
+        raise Refusal("render: --draft measures the repo's block, not --scope tree; nothing "
+                      "written")
     if getattr(args, "scope", None) == "tree":
         return cmd_tree(args, ledger, path, out, err, ceiling)
     target = os.path.abspath(os.path.expanduser(args.into)) if args.into else \
         os.path.join(os.path.dirname(path), TARGET)
     if args.lint:
+        drafted = read_draft(os.path.abspath(os.path.expanduser(draft))) \
+            if draft is not None else None
         warn(err, title_warnings(ledger))
         warn(err, gate_warnings(path))
         # d32: the measure, the bytes of the block render would write there, CRLF counted
@@ -653,6 +701,10 @@ def cmd_render(args, path, out, err):
                    "render puts it in the block" % (display(target), n, ", ".join(
                        "`%s`" % w for w in words)) for n, words in rule_words(text, BEGIN, END)])
         over = measure(out, target, apply(text, generated, display(target)), ledger, False)
+        if drafted is not None:
+            # R1-F1: the draft in the target's place, its block and its folder's imports
+            measure(out, target, apply(drafted, generated, display(draft)), ledger, False,
+                    os.path.abspath(os.path.expanduser(draft)))
         return 1 if over and ceiling else 0
     if is_ledger(target, path):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
@@ -677,6 +729,7 @@ def cmd_render(args, path, out, err):
             measure(out, target, apply(old, block(ledger, path, target), display(target)),
                     ledger, False)
             return 1
+        hand_said(out, "render", target, old)  # dc3 R2: before the refusal
         raise Refusal("render: %s %s, and render only rewrites a block that is there; "
                       "nothing written; %s" % (display(target), state, after))
     was = disk_text(target)

@@ -6,7 +6,6 @@ The findings a review left that block nothing, one row each in agentik-hq design
 
 | id | level | area | finding | evidence | from |
 |---|---|---|---|---|---|
-| n57 | S4 | `plugin/commands/instruct.md` | A skill and a command share the name `decisions:instruct`; which starts on the owner's typed `/decisions:instruct where` is unverified. Drop the command (the skill is typeable with its argument-hint) and amend R4, or rename it `/decisions:lane` | REFUTE-2026-11-12-d37-r1, "The shared name" and note 1 | 2026-11-12, d37 r1 |
 | n58 | S4 | `tests/test_instruct.py` | No test pins `disable-model-invocation` on the ten older commands, only on `instruct.md`; seven would have to lose it before the 1,024 B sum goes red. Test that every command file carries the flag | note 2: the largest command unhidden gives 576 B, computed | 2026-11-12, d37 r1 |
 | n59 | S4 | `plugin/skills/instruct/SKILL.md` | `allowed-tools: Bash(agentik decisions *)` pre-approves the writing verbs too, as every page's `Bash(agentik-decisions *)` does, so step 7's "on yes" is text only; narrow it to the reading verbs and `answer --preview` | note 3 | 2026-11-12, d37 r1 |
 | n60 | S4 | `audit.py` `edits` | A path holding a newline breaks the text output's one line per commit; by reading, not run, `n.strip("\n")` maps a file named `CLAUDE.md` plus a newline to `CLAUDE.md` | note 4, probe p5 | 2026-11-12, d37 r1 |
@@ -88,3 +87,5 @@ The findings a review left that block nothing, one row each in agentik-hq design
 | n145 | S4 | `tests/test_g2b_gates.py` | The fixtures-folder case asserts `exists(into)` after `marked(into)` made it, so it is trivially true; the test's subject, the list, still holds | review 1 note 5 | 2026-11-13, dc2 r1 note 5 |
 | n146 | S4 | `tree.markers` | U+2028 and the other `str.splitlines` separators make a marker of text an editor shows on one line with hand text; a BOM before BEGIN refuses as "not one BEGIN before one END"; both as at the pin | review 1 c1 `ls2028` | 2026-11-13, dc2 r1 note 6 |
 | n147 | S4 | `render` R2, the session's guard | Unfinished: whether the session plugin's instruction guard (`_blocks(old) != _blocks(new)`) lets a session add the two marker lines to an `--into` file, the act R2 names; not reproduced | review 1 note 7 | 2026-11-13, dc2 r1 note 7 |
+| n148 | S4 | `tree.loaded_bytes`, `render.hand_said` | A file that holds only a byte-order mark reads `loads 3 B` of hand-written text, since `str.strip` keeps U+FEFF; the line prints for a file no session reads a word of | review 1 NICE note 1 | 2026-11-13, dc3 r1 |
+| n149 | S4 | `README.md` `## The plugin` | The plugin table does not list `/decisions:audit-claude-md`, for want of room under the 24,576 B cap | review 1 NICE note 5; build 1 | 2026-11-13, dc3 r1 |
