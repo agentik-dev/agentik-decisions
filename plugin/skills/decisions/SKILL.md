@@ -29,7 +29,8 @@ and it carries no data.
   entries in this shape. The text below that line is read by `show` and
   `find`, and the lint passes over it.
 - A repo with no ledger gets one from `agentik-decisions init`, which writes it
-  empty with its block in CLAUDE.md; the owner runs it as `/decisions:init`.
+  empty with its block in CLAUDE.md; over a ledger whose CLAUDE.md holds no block
+  it adds the block alone. The owner runs it as `/decisions:init`.
 
 ## 2. Reading
 
@@ -90,7 +91,8 @@ paraphrase or trim an entry: a paraphrase is new, undecided text.
 ## 5. Keeping the block fresh
 
 After the ledger changes, `agentik-decisions render` rewrites the block in the
-CLAUDE.md beside it, and on its tree flag (`render --help`) the folder's file. `agentik-decisions
+CLAUDE.md beside it, and on its tree flag (`render --help`) the folder's file. It never
+adds a block to a file that holds none: it says so, exits 2 and names `init`. `agentik-decisions
 render --check` prints the diff and exits 1 when the file is stale, and a lint
 problem exits 1 in every mode. `--check` and `--lint` print the file's loaded bytes
 beside its ceiling; `--ceiling` makes the excess fail.

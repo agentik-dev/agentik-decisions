@@ -78,14 +78,14 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `render [--scope tree] [--into PATH] [--check] [--ceiling]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
 | `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
-| `init` | an empty ledger and its block in the `CLAUDE.md` beside it |
+| `init` | an empty ledger and its block in the `CLAUDE.md` beside it, or the block alone |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
 | `backlog [REPO...] [--order FILE] [--check [--write]] [--json]` | `NICE_TO_HAVE.md`'s items against `HANDOFF.md`'s build order, or FILE's steps for the repo or `suite`: S1, S2, each open step, its items, S3, S4; `S4?` unlevelled; a closed item only counts; `--check`: state vs git, 1 if stale; only `--write` writes |
 | `expire [REPO...] [--order FILE] [--days N] [--write] [--json]` | closed items, and S4 or `S4?` ones over N (14) days old on no open step; dry; `--write`, once HEAD holds `NICE_TO_HAVE.md`, in a commit of its own, moves their lines byte for byte to `history/NICE-overflow.md` |
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
-| `--version` | `agentik-decisions 0.22.4`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.22.5`, the version `doctor` compares with the one on PATH |
 
 One example per verb:
 
@@ -158,7 +158,7 @@ After an unknown `## ` heading no entry belongs to the section or the area befor
 When an `OPEN-QUESTIONS.md` sits beside the ledger, its first heading starts `# Decisions for the owner`, at most five questions are open, each block holds the four labels in order, 2 to 4 options with the first alone recommended and no two labels equal ignoring case, and an answer line, no two blocks share a number, and each question has its Proposed line; front matter and a `## ` line inside a code fence are skipped.
 Lines under `## Decided without asking` are `- ` bullets after an optional paragraph, and each line under `## Answered` ends in `(DATE; source)`.
 Each problem prints `file:line: message`, and the exit is 1.
-Otherwise it writes the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->`, replacing a stale block in place, or appends it after one blank line when the markers are absent.
+Otherwise it rewrites the block between `<!-- BEGIN GENERATED: decisions -->` and `<!-- END GENERATED: decisions -->` in place; a file without them gets nothing, exit 2, and `init` adds it.
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
 `--check` and `--lint` print the file's loaded bytes, comments aside and imports included, beside its ceiling; `--ceiling` exits 1 over it.
 `--lint` warns, its exit unchanged, on an `Every session` title outside the ten behaviours and on a hand-written line holding `never`, `always`, `must` or `only`.
@@ -274,7 +274,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.22.4`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.22.5`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|

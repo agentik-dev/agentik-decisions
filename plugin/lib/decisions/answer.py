@@ -50,7 +50,9 @@ question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `#
 run holds `.new.lock`, lints both texts (an open count over the cap, which the
 answer lowers, is no refusal), and writes both files or neither;
 then it rewrites the CLAUDE.md block, beside the ledger or at `--into`, when
-that file holds the GENERATED markers; a target that is the ledger itself is
+that file holds the GENERATED markers, and without them says on stderr what adds the
+block, `agentik decisions init` for the CLAUDE.md beside the ledger, else the two marker
+lines (dc2 R5); a target that is the ledger itself is
 refused with exit 2 before anything is written. Once both files are written the answer
 stands: a block that cannot be rewritten is a warning on stderr naming the
 `agentik decisions render` command, with the `--ledger` and `--into` the answer used,
@@ -95,10 +97,9 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, gate_said, growth, is_ledger,
-                     list_gate, tail_note,
-                     tree_file)
-from .tree import ceiling_for, loaded_bytes, markers
+from .render import (TARGET, apply, block, cmd_tree, gate_said, growth,
+                     holds_markers, invited, is_ledger, list_gate, tail_note, tree_file)
+from .tree import ceiling_for, loaded_bytes
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
 
@@ -441,7 +442,8 @@ def cmd_answer(args, path, out, err):
                 out.write("replaced: %s\n" % replaced)
             if cut is not None:
                 out.write("tail was: (%s)\n" % cut)
-            preview(ledger_text, new_ledger, path, target, out)
+            preview(ledger_text, new_ledger, path, target, out,
+                    getattr(args, "ledger", None))
             return 0
         commit_texts([(path_q, new_q), (path, new_ledger)])
         gates = list_gate(path, err, "answer")
@@ -461,7 +463,7 @@ def cmd_answer(args, path, out, err):
         if value:
             command += " %s %s" % (flag, shlex.quote(value))
     try:
-        rewrite_block(path, target, out, err, command)
+        rewrite_block(path, target, out, err, getattr(args, "ledger", None))
     except Refusal as exc:
         # d18 1a obs: both files are written, so the answer stands; the block is a warning.
         err.write("answer: warning: the answer is written, but the block in %s is not: %s; "
@@ -475,17 +477,23 @@ def tree_lines(ledger):
     return [e.text for e in ledger.entries if is_tree(e)]
 
 
-def preview(ledger_text, new_ledger, path, target, out):
+def preview(ledger_text, new_ledger, path, target, out, named=None):
     """d37 `--preview`: the diff `render` would make in the repo's file at `target` once
     the ledger is `new_ledger`, and in the folder's file when the tree's section changes;
-    each file's loaded bytes now and after beside its ceiling. It writes nothing."""
+    each file's loaded bytes now and after beside its ceiling. A file with no block gets
+    `render`'s line and no diff or cost, since render adds no block (dc2 R1-F1). It writes
+    nothing."""
     old, new = parse(ledger_text), parse(new_ledger)
     files = []
     try:
         # d37 r1 F2: a file render cannot read is said, as answer's warning says it
         was = read_text(target) if os.path.exists(target) else ""
-        files.append((target, was, apply(was, block(new, path, target), display(target)),
-                      False))
+        if holds_markers(was):
+            files.append((target, was, apply(was, block(new, path, target), display(target)),
+                          False))
+        else:
+            out.write("answer --preview: %s %s; %s\n"
+                      % ((display(target),) + invited(target, path, named)))
     except Refusal as exc:
         out.write("answer --preview: %s; render would refuse it, so no diff\n" % exc)
     if tree_lines(old) != tree_lines(new):
@@ -564,14 +572,22 @@ def repo_block(ledger_text, new_ledger, path, target, amends, heading):
                   % (now - was, was, now, note))
 
 
-def rewrite_block(path, target, out, err, command="agentik decisions render"):
+def rewrite_block(path, target, out, err, named=None):
     """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has
-    markers; without them, a line naming `command`, which writes it (dc1 R6)."""
+    markers; without them, a line naming the act that adds one, `render`'s own words (dc2
+    R5): `init`, with `--ledger` as the run `named` it, for the CLAUDE.md beside the ledger,
+    else the two marker lines; markers that are not one block get `apply`'s line, as
+    `init` and `render` give it, and no act (dc2 R1-F2)."""
     old = read_text(target) if os.path.exists(target) else ""
-    begins, ends = markers(old.splitlines(), BEGIN, END)  # a fenced example is none (dc1 r2 F4)
-    if not begins or not ends:
-        err.write("answer: %s holds no GENERATED markers; the block is left as it is; `%s` "
-                  "writes it\n" % (display(target), command))
+    if not holds_markers(old):  # a fenced example is none (dc1 r2 F4)
+        err.write("answer: %s holds no GENERATED markers; the block is left as it is; %s\n"
+                  % (display(target), invited(target, path, named)[1]))
+        return
+    try:
+        apply(old, "", display(target))
+    except Refusal as exc:
+        # dc2 R1-F2: markers that are not one block get the line init and render give them
+        err.write("answer: %s; the block is left as it is\n" % exc)
         return
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:

@@ -313,6 +313,7 @@ class Answer(Repo, Base):
         # d18 1a obs: both files are written before the block; a failed block write is a
         # warning that names `agentik decisions render`, never exit 2
         claude = os.path.join(self.tmp, "CLAUDE.md")
+        self.write(claude, BEGIN + "\n" + END + "\n")  # dc2 R7: render rewrites a block there
         self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
                                         err=io.StringIO()), 0)
         before = self.read(claude)
@@ -377,7 +378,8 @@ class Answer(Repo, Base):
         self.assertEqual(code, 0, err)
         self.assertIn("CLAUDE.md holds no GENERATED markers", err)
         self.assertEqual(self.read(claude), "# Notes\n")
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
+        # dc2 R7: init adds the block; render rewrites one that is there
+        self.assertEqual(decisions.main(["init", "--ledger", self.ledger], out=io.StringIO(),
                                         err=io.StringIO()), 0)
         other = os.path.join(self.tmp, "elsewhere.md")
         shutil.copy(claude, other)
@@ -978,7 +980,7 @@ class TurnAnswer(Repo, Base):
         shutil.copy(SAMPLE_QUESTIONS, self.questions)
         self.claude = os.path.join(self.tmp, "CLAUDE.md")
         self.write(self.claude, "# Notes\n")
-        self.render()
+        self.render("init")  # dc2 R7: init adds the block
         self.new("Pin the interpreter")
 
     def new(self, title):
@@ -988,8 +990,8 @@ class TurnAnswer(Repo, Base):
         self.assertEqual(code, 0, err)
         self.commit()
 
-    def render(self):
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
+    def render(self, verb="render"):
+        self.assertEqual(decisions.main([verb, "--ledger", self.ledger], out=io.StringIO(),
                                         err=io.StringIO()), 0)
 
     def answer(self, *argv):
@@ -1055,7 +1057,7 @@ class TurnAnswer(Repo, Base):
         self.refused("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
                      "--area", "Every session")
         self.write(self.claude, "# Notes\n")
-        self.render()
+        self.render("init")  # dc2 R7: init adds the block
         size = held(self.read(self.claude))
         code, out, err = self.answer("9", "--pick", "pin", "--source", "s", "--text", "Pin it.",
                                      "--area", "Build")
@@ -1075,7 +1077,8 @@ class TurnAnswer(Repo, Base):
         with open(self.claude, "wb") as handle:
             handle.write(b"# Notes\r\n")
         out, err = io.StringIO(), io.StringIO()
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=out, err=err),
+        # dc2 R7: init adds the block to a file that holds none
+        self.assertEqual(decisions.main(["init", "--ledger", self.ledger], out=out, err=err),
                          0, err.getvalue())
         size = on_disk(self.claude)
         self.assertIn(b"\r\n" + BEGIN.encode(), raw(self.claude))

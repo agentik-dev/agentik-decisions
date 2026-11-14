@@ -12,6 +12,7 @@ from unittest import mock
 import decisions
 from decisions.render import GATES
 from tests.hermetic import SAMPLE, Hermetic
+from tests.test_render import mark_target
 from tests.test_tree_scope import Tree
 
 
@@ -59,6 +60,9 @@ class Home(Hermetic):
         self.owner = os.path.join(self.home, ".claude", GATES)
 
     def render(self, *argv, ledger=None):
+        # dc2 R7: render rewrites a block that is there, so a target absent gets the two
+        # marker lines first, as a fixture
+        mark_target(argv, ledger or self.ledger)
         out, err = io.StringIO(), io.StringIO()
         code = decisions.main(["render"] + list(argv) + ["--ledger", ledger or self.ledger],
                               out=out, err=err)

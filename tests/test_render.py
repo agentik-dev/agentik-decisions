@@ -14,6 +14,23 @@ import decisions
 from decisions.render import BEGIN, END
 from tests.hermetic import SAMPLE, Hermetic
 
+# dc2 R7: render rewrites a block that is there, so a test's file holds the two marker lines
+MARKED = BEGIN + "\n" + END + "\n"
+
+
+def mark_target(argv, ledger):
+    """dc2 R7: the file a plain `render` with `argv` writes, given the two marker lines when
+    it is absent and its folder is there, so render has a block to rewrite; a fixture."""
+    argv = list(argv)
+    if any(a in argv for a in ("--check", "--lint", "--ceiling")) or \
+            ("--scope" in argv and argv[argv.index("--scope") + 1] == "tree"):
+        return
+    into = os.path.expanduser(argv[argv.index("--into") + 1]) if "--into" in argv else \
+        os.path.join(os.path.dirname(os.path.abspath(ledger)), "CLAUDE.md")
+    if not os.path.lexists(into) and os.path.isdir(os.path.dirname(os.path.abspath(into))):
+        with open(into, "w", encoding="utf-8") as handle:
+            handle.write(MARKED)
+
 SIZED = re.compile(r"^render: the block for \S+ is \d+ B; it is loaded on every turn\n$")
 # d36: `--check` and `--lint` print the file's loaded bytes beside its ceiling, and `--lint`
 # warns on stderr; a test that pinned them silent reads them and takes them out.
@@ -68,6 +85,18 @@ class Base(Hermetic):
         with open(path or self.target, "w", encoding="utf-8") as handle:
             handle.write(text)
 
+    def marked(self, *paths):
+        """dc2 R7: each file absent (the target by default) gets the two marker lines, so
+        render has a block to rewrite."""
+        for path in paths or (self.target,):
+            if not os.path.lexists(path):
+                self.write(MARKED, path)
+
+    def init(self):
+        out, err = io.StringIO(), io.StringIO()
+        code = decisions.main(["init", "--ledger", self.ledger], out=out, err=err)
+        return code, out.getvalue(), err.getvalue()
+
     def line(self, prefix):
         return next(line for line in self.lines if line.startswith(prefix))
 
@@ -94,6 +123,7 @@ class Render(Base):
         self.assertIn("render: wrote CLAUDE.md", out.replace(self.tmp + os.sep, ""))
 
     def test_proposed_and_superseded_stay_out(self):
+        self.write(MARKED)
         self.run_cli()
         text = self.read()
         for absent in ("A second interpreter", "separate files", "old gate"):
@@ -110,12 +140,14 @@ class Render(Base):
         self.assertEqual(sha(self.target), before)
 
     def test_absent_markers_append_after_one_blank_line(self):
+        # dc2 R7: the append is init's
         self.write("# Contract\n\nText.\n\n\n")
-        self.assertEqual(self.run_cli()[0], 0)
+        self.assertEqual(self.init()[0], 0)
         self.assertEqual(self.read(), "# Contract\n\nText.\n\n" + self.block())
 
     def test_an_absent_target_is_made(self):
-        self.assertEqual(self.run_cli()[0], 0)
+        # dc2 R7: init makes it
+        self.assertEqual(self.init()[0], 0)
         self.assertEqual(self.read(), self.block())
 
     def test_into_another_file_names_the_ledger_whole(self):
@@ -126,6 +158,7 @@ class Render(Base):
         self.ledger = os.path.join(repo, "DECISIONS.md")
         elsewhere = os.path.join(home, ".claude", "CLAUDE.md")
         os.makedirs(os.path.dirname(elsewhere))
+        self.write(MARKED, elsewhere)
         code, _, err = self.run_cli("--into", elsewhere)
         self.assertEqual(code, 0, err)
         text = self.read(elsewhere)
@@ -138,6 +171,7 @@ class Render(Base):
 
     def test_into_a_sibling_file_names_it(self):
         sibling = os.path.join(self.tmp, "AGENTS.md")
+        self.write(MARKED, sibling)
         self.assertEqual(self.run_cli("--into", sibling)[0], 0)
         self.assertIn("by `decisions render --into AGENTS.md`;", self.read(sibling))
 
@@ -167,7 +201,7 @@ class Render(Base):
         # F5: the write goes through the link to the file it names
         real = os.path.join(self.tmp, "shared", "CLAUDE.md")
         os.makedirs(os.path.dirname(real))
-        self.write("# Shared\n", real)
+        self.write("# Shared\n\n" + MARKED, real)
         os.symlink(real, self.target)
         code, _, err = self.run_cli()
         self.assertEqual(code, 0, err)
@@ -386,6 +420,7 @@ class T2(Hermetic):
         self.ledger = os.path.join(self.tmp, "DECISIONS.md")
         self.target = os.path.join(self.tmp, "CLAUDE.md")
         self.write(FIXTURE, self.ledger)
+        self.write(MARKED)
         self.git("init", "-q")
         self.commit()
 
@@ -589,14 +624,16 @@ def on_disk(path):
 class TurnRender(Base):
 
     def test_every_turn_render_prints_bytes(self):
-        self.write("# Notes\n")
+        self.write("# Notes\n" + MARKED)
         code, out, err = self.run_cli()
         self.assertEqual(code, 0, err)
         size = held(self.read())
-        # dc1 R4: the first render says the list it put the file on, in one line after
+        # dc1 R4: the first render says the list it put the file on, in one line after;
+        # dc2 R7: from the two marker lines, which are the block's first bytes
+        marked = len(MARKED.encode())
         self.assertEqual(out.replace(self.tmp + os.sep, "").splitlines(keepends=True)[0],
-                         "render: wrote CLAUDE.md: 0 B to %d B, +%d B; %s\n"
-                         % (size, size, LOADED))
+                         "render: wrote CLAUDE.md: %d B to %d B, +%d B; %s\n"
+                         % (marked, size, size - marked, LOADED))
         self.assertIn("/decisions:instruct", out.splitlines()[1])
         self.assertEqual(len(out.splitlines()), 2, out)
         line = self.line("1. ")
@@ -622,9 +659,10 @@ class TurnRender(Base):
         self.write(self.read(self.ledger).replace(line, line.replace("English.",
                                                                      "English. " + WIDE)),
                    self.ledger)
-        self.write("# Notes\n")
+        self.write("# Notes\n" + MARKED)
         self.assertEqual(self.run_cli()[0], 0)
         other = os.path.join(self.tmp, "other.md")
+        self.write(MARKED, other)
         self.assertEqual(self.run_cli("--into", other)[0], 0)
         for argv, name in (((), "CLAUDE.md"), (("--into", other), "other.md")):
             size = on_disk(other if argv else self.target)
@@ -640,7 +678,7 @@ class TurnRender(Base):
         self.assertNotIn("is loaded on every turn", out)
 
     def test_every_turn_lint_gives_no_size_for_a_refused_target(self):
-        self.write("# Notes\n")
+        self.write("# Notes\n" + MARKED)
         self.assertEqual(self.run_cli()[0], 0)
         self.write(self.read() * 2)  # two blocks: render refuses this target
         code, out, err = self.run_cli("--lint")

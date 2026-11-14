@@ -89,7 +89,8 @@ class Lane(Repo, NewBase):
         self.assertEqual(code, 0, err)
         self.q = re.search(r"new: (\d+)", out).group(1)
         out = io.StringIO()
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=out,
+        # dc2 R7: init adds the block; render rewrites one that is there
+        self.assertEqual(decisions.main(["init", "--ledger", self.ledger], out=out,
                                         err=io.StringIO()), 0, out.getvalue())
         self.commit(root=self.root)
 
