@@ -288,7 +288,7 @@ class Help(Read):
         code, out, _err = self.run_tool("--help")
         self.assertEqual(code, 0)
         self.assertIn("questions [REPO...] [--json]", out)
-        self.assertEqual(list(decisions.VERBS)[7:9], ["backlog", "questions"])
+        self.assertEqual(list(decisions.VERBS)[8:10], ["backlog", "questions"])
         code, out, _err = self.run_tool("questions", "--help")
         self.assertEqual(code, 0)
         self.assertIn("REPO", out)

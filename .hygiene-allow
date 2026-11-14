@@ -70,5 +70,6 @@ plugin/lib/decisions/doctor.py: renamed  # c1 c7 c9's fallbacks: the old state f
 plugin/lib/decisions/render.py: renamed  # the block's wording stays until r2 (agentik-r1 4.3)
 tests/test_render.py: renamed   # pins render's wording, which stays until r2
 tests/test_tree_scope.py: renamed  # pins the block's wording at the pin, which stays until r2
+tests/test_dc1_init.py: renamed  # holds the generated block's own line, which names the render verb as the block prints it
 tests/test_readme.py: renamed   # the reject list, and respeak's cache folder before the rename
 tests/test_doclint.py: renamed  # doclint's cases cite the relay repo by its name of the time

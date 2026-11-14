@@ -95,10 +95,10 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, growth, is_ledger, list_gate,
-                     tail_note,
+from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, gate_said, growth, is_ledger,
+                     list_gate, tail_note,
                      tree_file)
-from .tree import ceiling_for, loaded_bytes
+from .tree import ceiling_for, loaded_bytes, markers
 
 __all__ = ["cmd_answer", "insert_entry", "amend_entry", "drop_line", "move_entry"]
 
@@ -444,7 +444,7 @@ def cmd_answer(args, path, out, err):
             preview(ledger_text, new_ledger, path, target, out)
             return 0
         commit_texts([(path_q, new_q), (path, new_ledger)])
-        list_gate(path, err, "answer")
+        gates = list_gate(path, err, "answer")
     out.write("answer: %d, %s; %s in %s\n" % (number, label, done, display(path)))
     if replaced is not None:
         out.write("replaced: %s\n" % replaced)
@@ -456,16 +456,17 @@ def cmd_answer(args, path, out, err):
                   "%s` rewrites the folder's file\n" % (
                       " --ledger %s" % shlex.quote(args.ledger)
                       if getattr(args, "ledger", None) else ""))
+    command = "agentik decisions render"
+    for flag, value in (("--ledger", getattr(args, "ledger", None)), ("--into", args.into)):
+        if value:
+            command += " %s %s" % (flag, shlex.quote(value))
     try:
-        rewrite_block(path, target, out, err)
+        rewrite_block(path, target, out, err, command)
     except Refusal as exc:
         # d18 1a obs: both files are written, so the answer stands; the block is a warning.
-        command = "agentik decisions render"
-        for flag, value in (("--ledger", getattr(args, "ledger", None)), ("--into", args.into)):
-            if value:
-                command += " %s %s" % (flag, shlex.quote(value))
         err.write("answer: warning: the answer is written, but the block in %s is not: %s; "
                   "`%s` rewrites it\n" % (display(target), exc, command))
+    gate_said(out, "answer", [(path, gates)])  # dc1 R4: last, after the lines it printed before
     return 0
 
 
@@ -563,18 +564,20 @@ def repo_block(ledger_text, new_ledger, path, target, amends, heading):
                   % (now - was, was, now, note))
 
 
-def rewrite_block(path, target, out, err):
-    """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has markers."""
+def rewrite_block(path, target, out, err, command="agentik decisions render"):
+    """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has
+    markers; without them, a line naming `command`, which writes it (dc1 R6)."""
     old = read_text(target) if os.path.exists(target) else ""
-    lines = [line.strip() for line in old.splitlines()]
-    if BEGIN not in lines or END not in lines:
-        err.write("answer: %s holds no GENERATED markers; the block is left as it is\n"
-                  % display(target))
+    begins, ends = markers(old.splitlines(), BEGIN, END)  # a fenced example is none (dc1 r2 F4)
+    if not begins or not ends:
+        err.write("answer: %s holds no GENERATED markers; the block is left as it is; `%s` "
+                  "writes it\n" % (display(target), command))
         return
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:
         was, crlf = disk_text(target), keeps_crlf(target)
         write_text(target, new)
-        list_gate(target, err, "answer")
+        gates = list_gate(target, err, "answer")
         out.write("answer: rewrote the block in %s: %s\n" % (display(target),
                                                              growth(was, new, crlf)))
+        gate_said(out, "answer", [(target, gates)])

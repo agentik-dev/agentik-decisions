@@ -55,10 +55,10 @@ from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_paren
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
 from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tree_file, loaded_bytes,
-                   named_ledger, rule_words, title_warnings, tree_text)
+                   markers, named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
-           "tail_note", "tree_file", "list_gate", "BEGIN", "END", "TARGET", "GATES"]
+           "tail_note", "tree_file", "list_gate", "gate_said", "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -180,6 +180,28 @@ def list_gate(target, err=None, verb="render"):
         return None
 
 
+def gate_said(out, verb, listed):
+    """dc1 R4: one line on `out` for each list in `listed`, (target, list) pairs as
+    `list_gate` returned them, naming the files it now holds; None, a list not written,
+    says nothing."""
+    lists = []
+    for target, gates in listed:
+        if gates is None:
+            continue
+        found = next((names for g, names in lists if g == gates), None)
+        if found is None:
+            lists.append((gates, [_spelled(target)]))
+        else:
+            found.append(_spelled(target))
+    for gates, names in lists:
+        one = len(names) == 1
+        out.write("%s: %s %s now on the edit-gates list %s: a session changes %s through "
+                  "/decisions:instruct, never by its own edit; deleting %s line there lifts "
+                  "the gate\n" % (verb, " and ".join(names), "is" if one else "are",
+                                    _spelled(gates), "it" if one else "them",
+                                    "its" if one else "a file's"))
+
+
 def _list_lines(gates):
     """(number, line) of each non-comment line of the list `gates`; none when it is absent."""
     try:
@@ -280,8 +302,7 @@ def block_bytes(text, crlf=False):
     included, every line end CRLF when `crlf`, or None when `text` holds no such block
     (d32). A text read with its line ends kept is measured as it is on disk."""
     lines = text.splitlines(keepends=True)
-    begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
-    ends = [i for i, line in enumerate(lines) if line.strip() == END]
+    begins, ends = markers(lines, BEGIN, END)
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         return None
     return on_disk("".join(lines[begins[0]:ends[0] + 1]), crlf)
@@ -424,15 +445,25 @@ def block(ledger, path, target, tails=False):
 
 
 def apply(text, generated, target=TARGET):
-    """`text` with `generated` between the markers, or appended when they are absent."""
+    """`text` with `generated` between the markers, or appended when they are absent;
+    marker lines inside a code fence are an example, never the block (dc1 r2 F4)."""
     lines = text.splitlines(keepends=True)
-    begins = [i for i, line in enumerate(lines) if line.strip() == BEGIN]
-    ends = [i for i, line in enumerate(lines) if line.strip() == END]
+    begins, ends = markers(lines, BEGIN, END)
     if not begins and not ends:
         return generated if not text.strip() else text.rstrip("\n") + "\n\n" + generated
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         raise Refusal("%s: the GENERATED markers are not one BEGIN before one END" % target)
     return "".join(lines[:begins[0]]) + generated + "".join(lines[ends[0] + 1:])
+
+
+def one_block(text, target, verb):
+    """The backstop (dc1 r3 F1): `text`, about to be written to `target`, must hold exactly
+    one BEGIN and one END in order by `markers`, or `verb` refuses and writes nothing."""
+    begins, ends = markers(text.splitlines(), BEGIN, END)
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        raise Refusal("%s: %s: its block could not be placed; nothing written; check for a "
+                      "code fence left open above it, close it, and run `%s` again"
+                      % (verb, target, verb))
 
 
 def tree_file(ledger, path):
@@ -459,17 +490,17 @@ def warn(err, lines):
         err.write("render: warning: %s\n" % line)
 
 
-def refuse_another(text, target, path):
+def refuse_another(text, target, path, verb="render"):
     """d36 ruling 4: refuse a target whose generated block names another ledger. A named
     path that holds no ledger now is this ledger before its repo moved, so the block is
-    refreshed as at the pin (d36 r1 F1)."""
+    refreshed as at the pin (d36 r1 F1). `verb` names the act refused (`init`, dc1 r1 F1)."""
     named = named_ledger(text, target, BEGIN, END)
     if named is None or not os.path.isfile(named) or named == os.path.realpath(path) \
             or canonical(named) == canonical(path):
         return
-    raise Refusal("render: the block in %s was generated from %s, not from %s, and render "
+    raise Refusal("%s: the block in %s was generated from %s, not from %s, and %s "
                   "never writes over another ledger's block; nothing written"
-                  % (display(target), real_tilde(named), real_tilde(path)))
+                  % (verb, display(target), real_tilde(named), real_tilde(path), verb))
 
 
 def other_tree(folder):
@@ -546,12 +577,13 @@ def cmd_tree(args, ledger, path, out, err, ceiling):
         return 1 if stale or (over and ceiling) else 0
     if old == text:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target, err)
+        gate_said(out, "render", [(target, list_gate(target, err))])
         return 0
     was, crlf = disk_text(target), keeps_crlf(target)
     write_text(target, text)
-    list_gate(target, err)
+    gates = list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, text, crlf)))
+    gate_said(out, "render", [(target, gates)])
     return 0
 
 
@@ -596,8 +628,11 @@ def cmd_render(args, path, out, err):
         raise Refusal("render: the target %s is the ledger itself; nothing written"
                       % display(target))
     old = read_text(target) if os.path.exists(target) else ""
-    if args.into:
-        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin
+    away = os.path.dirname(os.path.realpath(target)) != \
+        os.path.realpath(os.path.dirname(target))
+    if args.into or away:
+        # d36 r1 F1: the default target, beside the ledger, is never refused, as at the pin;
+        # dc1 r2 F1: one that is a link to a file in another folder is not beside it
         refuse_another(old, target, path)
         if is_tree_file(old, BEGIN, END):
             # d36 r1 F4: the repo's block never takes the place of a tree's block
@@ -614,12 +649,14 @@ def cmd_render(args, path, out, err):
         return check(old, new, ledger, path, target, out, err, ceiling)
     if new == old:
         out.write("render: %s is fresh\n" % display(target))
-        list_gate(target, err)
+        gate_said(out, "render", [(target, list_gate(target, err))])
         return 0
     crlf = keeps_crlf(target)
+    one_block(new, display(target), "render")
     write_text(target, new)
-    list_gate(target, err)
+    gates = list_gate(target, err)
     out.write("render: wrote %s: %s\n" % (display(target), growth(was, new, crlf)))
+    gate_said(out, "render", [(target, gates)])
     return 0
 
 

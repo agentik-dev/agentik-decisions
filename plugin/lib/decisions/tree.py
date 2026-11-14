@@ -204,11 +204,48 @@ ENTRY_OF = re.compile(r"^Each is an entry of `([^`]+)`;")
 SOURCE = re.compile(r"^(?:<!--\s*)?Generated from `([^`]+)` by `")
 
 
+def settle(scan):
+    """What `scan(loose)` finds once no fence is left open (dc1 r3 F1): `scan` reads with
+    the fence lines in the set `loose` as plain text and returns (what it found, the row of
+    the fence it left open at the end, or None). A fence that never closes fences nothing:
+    its opener goes loose and the text is read again, so a marker below it counts as it did
+    before fences were read at all."""
+    loose = set()
+    while True:
+        found, dangling = scan(loose)
+        if dangling is None:
+            return found
+        loose.add(dangling)
+
+
+def markers(lines, begin, end):
+    """(the BEGIN rows, the END rows) of `lines`, each a list of indexes; a marker line
+    between a fence line and the fence line that closes it, outside the block, is an
+    example, never a marker (dc1 r2 F4); a fence with no closing line is none (dc1 r3 F1)."""
+    def scan(loose):
+        begins, ends, fence, inside, opener = [], [], None, False, None
+        for i, line in enumerate(lines):
+            if fence is None and line.strip() == begin:
+                begins.append(i)
+                inside = True
+                continue
+            if fence is None and line.strip() == end:
+                ends.append(i)
+                inside = False
+                continue
+            opened = None if inside or i in loose else FENCE.match(line)
+            if opened:
+                mark = opened.group(1)[0]
+                fence, opener = (None, None) if fence == mark else (fence or mark,
+                                                                    opener if fence else i)
+        return (begins, ends), opener if fence else None
+    return settle(scan)
+
+
 def block_lines(text, begin, end):
     """The lines strictly between the one BEGIN and the one END of `text`, or None."""
     lines = text.splitlines()
-    begins = [i for i, line in enumerate(lines) if line.strip() == begin]
-    ends = [i for i, line in enumerate(lines) if line.strip() == end]
+    begins, ends = markers(lines, begin, end)
     if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
         return None
     return lines[begins[0] + 1:ends[0]]
@@ -223,7 +260,8 @@ def is_tree_file(text, begin, end):
 def named_ledger(text, target, begin, end):
     """The real path of the ledger the block in `text` names as its source, or None when
     it names none: a tree file's `Each is an entry of` path, else the `Generated from`
-    path, resolved against `target`'s folder when it is relative."""
+    path, resolved against the folder of the file `target` is, through any link, when it
+    is relative (dc1 r2 F1: a link's own folder may hold another ledger, or none)."""
     inside = block_lines(text, begin, end)
     if not inside:
         return None
@@ -233,53 +271,56 @@ def named_ledger(text, target, begin, end):
         if found:
             name = os.path.expanduser(found.group(1))
             if not os.path.isabs(name):
-                name = os.path.join(os.path.dirname(os.path.abspath(target)), name)
+                name = os.path.join(os.path.dirname(os.path.realpath(target)), name)
             return os.path.realpath(name)
     return None
 
 
 def outside_lines(text, begin, end):
     """(1-based number, line) of each line of `text` outside the block, an HTML comment
-    and a code fence."""
+    and a code fence; a marker line is read as `markers` reads it, comment or none, and
+    a fence that never closes is none, as there (dc1 r3 F1)."""
     lines = text.splitlines()
-    inside = False
-    fence, comment = None, False
-    found = []
-    for n, line in enumerate(lines, 1):
-        if line.strip() == begin:
-            inside = True
-            continue
-        if line.strip() == end:
-            inside = False
-            continue
-        if inside:
-            continue
-        opened = FENCE.match(line)
-        if opened and not comment:
-            mark = opened.group(1)[0]
-            fence = None if fence == mark else (fence or mark)
-            continue
-        if fence is not None:
-            continue
-        visible = ""
-        rest = line
-        while rest:
-            if comment:
-                close = rest.find("-->")
-                if close < 0:
-                    rest = ""
-                    break
-                rest, comment = rest[close + 3:], False
+
+    def scan(loose):
+        inside, fence, comment, opener, found = False, None, False, None, []
+        for n, line in enumerate(lines, 1):
+            if fence is None and line.strip() == begin:
+                inside = True
                 continue
-            start = rest.find("<!--")
-            if start < 0:
-                visible += rest
-                break
-            visible += rest[:start]
-            rest, comment = rest[start + 4:], True
-        if visible.strip():
-            found.append((n, visible))
-    return found
+            if fence is None and line.strip() == end:
+                inside = False
+                continue
+            if inside:
+                continue
+            opened = FENCE.match(line) if n not in loose else None
+            if opened and not comment:
+                mark = opened.group(1)[0]
+                fence, opener = (None, None) if fence == mark else (fence or mark,
+                                                                    opener if fence else n)
+                continue
+            if fence is not None:
+                continue
+            visible = ""
+            rest = line
+            while rest:
+                if comment:
+                    close = rest.find("-->")
+                    if close < 0:
+                        rest = ""
+                        break
+                    rest, comment = rest[close + 3:], False
+                    continue
+                start = rest.find("<!--")
+                if start < 0:
+                    visible += rest
+                    break
+                visible += rest[:start]
+                rest, comment = rest[start + 4:], True
+            if visible.strip():
+                found.append((n, visible))
+        return found, opener if fence else None
+    return settle(scan)
 
 
 def rule_words(text, begin, end):
