@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentik-decisions"
-version = "0.23.1"
+version = "0.23.2"
 description = "Six verbs over one sectioned DECISIONS.md per repo: show, find, new, ask, answer and render, plus doctor and backlog."
 requires-python = ">=3.9"
 dependencies = []
