@@ -197,8 +197,8 @@ def _from_file(cache):
                              "scope": entry["scope"], "root": entry.get("installPath")})
     if len(seen) == 1:
         one = seen[0]
-        root = _text(one["root"])
-        return _found("file", root if has_renderer(root) else None,
+        root = _text(one["root"])          # review 1: an absolute installPath alone
+        return _found("file", root if os.path.isabs(root or "") and has_renderer(root) else None,
                       "own" if one["plugin"] == OWN else "plugin", one["plugin"],
                       _text(one["version"]), None, seen)
     return _found("file", None, "undecided" if seen else "absent", seen=seen)

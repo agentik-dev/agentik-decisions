@@ -349,6 +349,19 @@ class Source(Hermetic):
         self.assertNotIn("acme", check["detail"])
         self.assertEqual(check["source"]["kind"], "plugin")
 
+    def test_r1f4_the_file_takes_an_absolute_install_path_only(self):
+        here = os.path.join(self.home, "work")
+        os.makedirs(os.path.join(here, "here", "scripts"))
+        open(os.path.join(here, "here", speak.RENDER), "w").close()
+        back = os.getcwd()
+        os.chdir(here)
+        self.addCleanup(os.chdir, back)
+        for ident in (FORK, OWN):
+            with self.subTest(plugin=ident):
+                self.installed((ident, "here", "0.12.6", "user"))
+                self.assertIsNone(self.found())
+                self.assertEqual(doctor.check_respeak(self.env), ("warn", TODAY))
+
     # -- line 8 ----------------------------------------------------------------------
 
     def test_8_the_newest_folder_rule_is_gone(self):
