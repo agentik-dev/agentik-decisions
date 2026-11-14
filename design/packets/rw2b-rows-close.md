@@ -3,7 +3,7 @@
 | item | value |
 |---|---|
 | from | the hq's coordinator, 2026-11-14, brief rw2b |
-| pin | main at `1ace01a` (0.23.0), the merge of dc3-claude-md-audit, after dc1-init. Version 0.23.1, alone as the last commit under `plugin/`. Worktree `.claude/worktrees/rw2b-rows-close`, branch `rw2b-rows-close`, nothing linked |
+| pin | main at `1ace01a` (0.23.0), the merge of dc3-claude-md-audit, after dc1-init. Version 0.23.1, then 0.23.2 at review 1's fix, alone as the last commit under `plugin/`. Worktree `.claude/worktrees/rw2b-rows-close`, branch `rw2b-rows-close`, nothing linked |
 | wall | this worktree; no push, `--amend`, rebase, merge, install or bare `make`; no test reads live state or writes under the real home |
 | may touch | `plugin/lib/decisions/rows.py`, `plugin/lib/decisions/cli.py` (the docstring's `rows` lines, its exit list, the `rows` parser); `tests/test_rw2b_close.py` (new), `tests/test_rw2_rows.py` (the key count, 19 to 20); the version places; this packet; the charter |
 | verify | the gate queue's `make check`, once, last |
@@ -49,6 +49,8 @@ The home `depot` with `history/rows/`, the repo `agentik-crate` beside it, rows 
 ## 4. Findings that name this row: ledger, NICE, forks
 
 Left: `backlog --check --write` adding a done line where the file holds the sha (a NICE row); a README row. `backlog.py` is imported from, unchanged. No fork.
+
+Review 1, ruled fix, mended here: F1 the close reads row.md and the done file once, then again under `.rows-close.lock` in DIR (`common.held`) just before `commit_texts`, and refuses a file changed since (`rows close: <file> changed since the close read it; nothing written; run the close again`); F2 a WHY holding a line break, U+2028, U+2029 or a zero-width or direction character refused (`WHY_BAD`); F6 `cut.unchecked` at 50, the text's count whole; F7 a charter lies directly in `history/sittings/`. F3, F5 and the uncapped `past:` subject: NICE n150 to n152. Version 0.23.2.
 
 ## 5. Forbidden reads
 
