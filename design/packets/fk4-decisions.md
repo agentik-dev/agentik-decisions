@@ -10,7 +10,7 @@
 | acceptance | §3; `python -m unittest tests.test_fk4_source tests.test_backlog tests.test_bare_machine tests.test_doctor tests.test_ak6_plug` |
 | budget | about 90 tool calls |
 
-## 1. The finding, measured
+## 1. What the source says: the finding, measured
 
 `speak.respeak_root` takes `RESPEAK_ROOT`, else `newest_root`: the highest `*/respeak/<N.N.N>/` under the plugin cache holding the renderer, of any marketplace, installed or not. The brief measured at `b059365`, in made-up homes: a fork alone (`respeak@acme-tools` 0.12.6) reads ok, the fork's folder; the fork at `0.12.6-acme.1` reads `respeak not found`; nothing installed and a leftover folder reads ok; `respeak@agentik` 0.12.6 with the fork at 0.12.7 reads the fork's. The suite now has one finder, `agentik-suite describe sources --json`; both doctors take its answer, or one shared rule where there is none.
 
@@ -24,7 +24,7 @@
 - R6, `check_respeak`'s line. By the variable: ok, the root, and that `RESPEAK_ROOT` gave it. `own`: ok, the root as the detail. `plugin` or `folder` with a root: ok, a detail with no id, marketplace, folder or version; the JSON check gains `source` `{"kind", "plugin", "root", "version", "declared"}` (null in the two cases before), and the text line prints the root after the detail. `undecided`: warn, the count, `remedy` `agentik config suite.sources.respeak`. A line whose plugin is not installed or whose folder is gone: warn, naming `path:line`. R3's two or more: warn, its words. None, and `absent`: today's warn, byte for byte.
 - R7, not this row's: `check_plugin`, `check_marketplace`, and `selector.render`'s line with no root (`tests/test_bare_machine.py` pins it).
 
-## 3. Acceptance
+## 3. Interfaces and the acceptance list
 
 Tests in `tests/test_fk4_source.py`, each in a temp HOME; a stub launcher at `<home>/.local/bin/agentik-suite` prints a canned answer and logs its argv; a root is `<home>/.claude/plugins/cache/<marketplace>/respeak/<version>` holding the renderer. At the pin the file runs 11 tests: 14 failures, 47 errors (line 5's errors are the missing `SOURCES_WALL`).
 
@@ -38,7 +38,7 @@ Tests in `tests/test_fk4_source.py`, each in a temp HOME; a stub launcher at `<h
 8. `tests/test_bare_machine.py` and `test_suite_green_without_respeak` pass unchanged; in `test_doctor_respeak_warn_absent` the variable's assertion turns; `grep -n "newest_root\|def version_key" plugin/lib/decisions/speak.py` prints nothing.
 9. The full suite; the gate's `make check`, green.
 
-## 4. Left
+## 4. Findings that name this row: what is left
 
 The suite's finder (fk1, built against the schema above and a stub; the landing waits on it); the session tool's doctor (fk3); what an issue report does with `source` (fk6).
 
