@@ -44,9 +44,16 @@ Verbs
     rows [check] [--json] [--root DIR] [REPO...]
                                   each build row's stage, read from its folder
                                   under DIR (history/rows at the git top) and
-                                  from git, with its next act; `check` walks
-                                  open and closed rows for contradictions;
-                                  writes nothing
+                                  from git, with its next act and what a cut
+                                  builder's charter left; `check` walks open
+                                  and closed rows for contradictions; both
+                                  write nothing
+    rows close ROW [--withdrawn WHY] [--root DIR] [--repo DIR] [--dry-run] [-y]
+                                  a pushed row that owes nothing: its `done`
+                                  cell and its line in history/handoff-done.md,
+                                  both or neither; --withdrawn gives any open
+                                  row up, its cell alone; it asks first at a
+                                  terminal, and -y writes without asking
     describe --json | describe config --json [KEY]
                                   this tool as one JSON object for the suite: its
                                   verbs, needs and reads; `config` each setting it
@@ -127,7 +134,8 @@ Exit codes
        not hold, whose files changed under it, or that failed, or an `audit`
        REPO that is not a directory or `--tree` FILE it cannot read, or an
        `--edits` commit name git cannot resolve, or a `describe` without --json or
-       with a word other than `config`
+       with a word other than `config`, or a `rows close` refused, declined, or
+       with neither -y nor --dry-run where it cannot ask
 """
 
 import argparse
@@ -325,14 +333,27 @@ def build_parser():
     audit.add_argument("--json", action="store_true")
 
     rows = subs.add_parser("rows", parents=[ledger],
-                           help="each build row's stage from its records and git; writes nothing")
-    rows.add_argument("words", nargs="*", metavar="[check] REPO",
+                           help="each build row's stage from its records and git; the read "
+                                "and `check` write nothing, `close` writes a row's done cell "
+                                "and its done line")
+    rows.add_argument("words", nargs="*", metavar="[check] REPO | close ROW",
                       help="`check` first walks open and closed rows for contradictions; "
-                           "then each repo's directory a row's repo cell may name")
+                           "then each repo's directory a row's repo cell may name; `close` "
+                           "first writes ROW's done cell and its line in "
+                           "history/handoff-done.md, both or neither")
     rows.add_argument("--root", default=None, metavar="DIR",
                       help="the folder of row folders; the default is history/rows at the "
                            "working directory's git top, whose git top is the home")
     rows.add_argument("--json", action="store_true")
+    rows.add_argument("--withdrawn", default=None, metavar="WHY",
+                      help="close: give the open row up, `withdrawn <today>: WHY`, one line "
+                           "with no |; no done line")
+    rows.add_argument("--repo", default=None, metavar="DIR",
+                      help="close: the row's checkout, whatever its name")
+    rows.add_argument("--dry-run", action="store_true",
+                      help="close: print what would be written and write nothing")
+    rows.add_argument("-y", "--yes", action="store_true",
+                      help="close: write without asking")
 
     describe = subs.add_parser("describe", parents=[ledger],
                                help="this tool and its settings here, as JSON for the suite; "

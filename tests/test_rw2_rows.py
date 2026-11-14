@@ -200,7 +200,7 @@ class Text(Rows):
     def test_a_row_holds_exactly_the_keys(self):
         self.row("p3-basket")
         self.assertEqual(tuple(self.view()["p3-basket"]), KEYS)
-        self.assertEqual(len(KEYS), 19)
+        self.assertEqual(len(KEYS), 20)
 
     def test_the_text_view(self):
         tip = self.on_branch("p4-crate", "crate-1.txt")
