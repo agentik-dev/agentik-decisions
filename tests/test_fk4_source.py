@@ -323,6 +323,16 @@ class Source(Hermetic):
                 self.assertEqual(setting["values"][0], {"layer": "default", "value": own})
                 self.assertEqual(self.logged(), ["describe sources --json respeak"])
 
+    def test_r1f2_a_line_naming_our_own_where_it_is_not_installed_names_the_line(self):
+        self.root("agentik", "0.12.6")       # a leftover folder fills nothing in
+        declared = {"path": os.path.join(self.home, "suite.toml"), "line": 7}
+        self.answers(self.row("own", OWN, None, None, found=False, declared=declared))
+        self.assertIsNone(self.found())
+        status, detail = doctor.check_respeak(self.env)
+        self.assertEqual(status, "warn")
+        self.assertIn("%s:7" % declared["path"], detail)
+        self.assertIn("not installed", detail)
+
     # -- line 8 ----------------------------------------------------------------------
 
     def test_8_the_newest_folder_rule_is_gone(self):

@@ -326,7 +326,7 @@ def respeak_line(found):
             return "warn", "%d respeak plugins installed; %s" % (count, NOT_CHECKED), source
         return "warn", ("%d respeak plugins installed and none said; `ask` keeps its text "
                         "unrendered (%s)" % (count, SOURCES_HINT)), source
-    if kind in ("plugin", "folder") and declared:
+    if kind in ("own", "plugin", "folder") and declared:      # review 1: own too
         return "warn", ("the sources line at %s:%d names %s; `ask` keeps its text unrendered"
                         % (declared["path"], declared["line"],
                            "a folder that is gone" if kind == "folder"
