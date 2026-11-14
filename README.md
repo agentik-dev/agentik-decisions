@@ -74,9 +74,9 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `find WORD` | `N Title (area or section)`, the area for an entry in force and the section otherwise, for each entry whose title or body holds the word, case-insensitively; `L<line> <heading> (legacy)` for each block below the legacy line that holds it |
 | `new --title T --stands S --choice C --option "L: E" ... --recommend R [--report P]` | the four-part question in `OPEN-QUESTIONS.md`, with 2 to 4 options, the first recommended, and its Proposed line in the ledger |
 | `ask [N...]` | the open questions, rendered once through respeak and written back, printed as AskUserQuestion calls (JSON) |
-| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] [--move-to A] \| --no-entry) [--into PATH] [--every-turn] [--preview]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, and an Answered line stays; `--preview` prints the entry, each file's diff and its bytes, and writes nothing |
+| `answer N (--pick L \| --other T) --source S [--text P \| --add S] (--area A \| --amends M [--shorter] [--move-to A] \| --no-entry) [--into PATH] [--every-turn] [--preview]` | the owner's answer: entry N, an amendment of entry M, or no entry; the question and its Proposed line leave, an Answered line stays; `--preview` prints the entry, each file's diff and its bytes, and writes nothing |
 | `render [--scope tree] [--into PATH] [--check] [--ceiling]` | the lint, then the generated block in the `CLAUDE.md` beside the ledger, or in PATH |
-| `render --lint` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes and its warnings |
+| `render --lint [--draft D]` | the lint alone, over the ledger and the `OPEN-QUESTIONS.md` beside it; clean, it prints the block's size, the loaded bytes (and D's) and its warnings |
 | `render --fold-tails` | the lint, then each tail in force in form T2, as `answer --amends` writes it, then the block; HEAD must hold the ledger |
 | `init` | an empty ledger and its block in the `CLAUDE.md` beside it, or the block alone |
 | `doctor [--json]` | the interpreter (pyenv's, or the one `install-cli` sets up), the tool and its version, the plugin, the provider, the ledger and respeak (optional: absent is a warn) |
@@ -164,7 +164,7 @@ Otherwise it rewrites the block between `<!-- BEGIN GENERATED: decisions -->` an
 `--check` writes nothing: it prints a unified diff and exits 1 when the block is stale, 0 when it is fresh.
 `--check` and `--lint` print the file's loaded bytes, comments aside and imports included, beside its ceiling; `--ceiling` exits 1 over it.
 `--lint` warns, its exit unchanged, on an `Every session` title outside the ten behaviours and on a hand-written line holding `never`, `always`, `must` or `only`.
-The block holds one line naming its source and the command that regenerates it, the `Every session` entries word for word, in the ten behaviours' order, but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming `show N`.
+The block holds a line naming its source and the command that regenerates it, the `Every session` entries word for word, in the ten behaviours' order, but each tail cut to its first date and a count, `(2026-09-21; amended 2 times, see the ledger)`, and one line per other entry in force, `- N Title (area)`, under a sentence naming `show N`.
 Proposed, Superseded and tree entries stay out.
 `render --scope tree` writes `### Every session of the tree` alone, the whole file, into the `CLAUDE.md` of the folder that holds the repo's main checkout; `--check` fails when it is absent or stale.
 `render` refuses a target whose block came from another ledger, and `--scope tree` a file it did not write.
@@ -304,7 +304,7 @@ plugin/lib/decisions/     the package, each module under a thousand lines
 design/                    the current design, its packet and this README's source
 scripts/                   readme-render, hygiene, doclint, bounded, the agentik door
 tests/                     unittest suites and the sample ledger
-history/                   the old designs and packets, and one charter per working session
+history/                   the old designs and packets, and one charter per session
 ```
 
 `make readme` renders this README from `design/readme/source.md` in technical mode; `make check` refuses a README older than its source.

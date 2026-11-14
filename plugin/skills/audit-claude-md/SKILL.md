@@ -52,8 +52,8 @@ hand-written lines. The block between the GENERATED markers is the ledger's text
    Where a name does not settle an item, load the `decisions:instruct` skill and use
    the eight tests on its page.
 3. **Draft** the file as it would stand, the block untouched, in a new file outside
-   the repo. Run `agentik decisions render --lint --into <draft>` and keep its line
-   too.
+   the repo. Run `agentik decisions render --lint --draft <draft>`, with `--into <file>`
+   as in step 1, and keep its line too.
 4. **Show** one table, a row an item: its lines, its first words, its name and what
    happens to it. Under it give what the file loads now and as drafted, each figure
    copied from the tool's line and never counted by you. Then give each rule as the

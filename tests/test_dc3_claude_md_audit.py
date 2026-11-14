@@ -32,7 +32,7 @@ NEXT = ("init: next, `agentik decisions new` records a question; its answer beco
 PAGE = os.path.join(PLUGIN, "skills", "audit-claude-md", "SKILL.md")
 # the sha256 of the brief's page, word for word (R3)
 # review 1's ruling: step 3 runs `render --lint --draft <draft>`; no other word changes
-PAGE_SHA = "PENDING"
+PAGE_SHA = "8c06072defdbaf6d81cb310d4bdf7ad1f7bd558202bf67d8cb1e49ad303bce0c"
 NAMES = ("rule", "twice", "stale", "one act", "in the repo", "for people", "import", "keeps")
 DRAFTED = re.compile(r"(?m)^render: as drafted in (\S+), (\S+) would load ([\d,]+) B, comments "
                      r"aside and imports included; the ceiling for a repo's file is 3,072 B$")
