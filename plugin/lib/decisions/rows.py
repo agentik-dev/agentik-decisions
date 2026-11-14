@@ -495,6 +495,13 @@ def stale_of(row, git, repos):
     return out
 
 
+def row_of(name, folder, rec):
+    """A row as the read holds it, before its repo and git are read."""
+    cells = rec["cells"]
+    return {"row": name, "folder": folder, "rec": rec, "repo": cells.get("repo", ""),
+            "level": cells.get("level", ""), "branch": first(cells.get("branch", "")) or name}
+
+
 def gathered_rows(root, repos, closed):
     """(open rows, closed rows, skipped) of the folders under `root`; withdrawn ones are none."""
     opened, shut, skipped = [], [], []
@@ -510,9 +517,7 @@ def gathered_rows(root, repos, closed):
             continue
         if rec["done"]["state"] == "withdrawn":
             continue
-        cells = rec["cells"]
-        row = {"row": name, "folder": folder, "rec": rec, "repo": cells.get("repo", ""),
-               "level": cells.get("level", ""), "branch": first(cells.get("branch", "")) or name}
+        row = row_of(name, folder, rec)
         is_open = rec["done"]["state"] == "open"
         if not is_open and not closed:
             row["path"] = None
@@ -602,6 +607,9 @@ def read(args):
     """The verb's whole read: (root, home, open rows, closed rows, skipped groups)."""
     words = list(getattr(args, "words", None) or [])
     check = bool(words) and words[0] == "check"
+    if any(getattr(args, k, None) not in (None, False) for k in CLOSE_FLAGS):
+        raise RowsRefusal("usage", "rows: --withdrawn, --repo, --dry-run and -y go with close",
+                          "name close first: rows close ROW")
     root, home = root_of(args)
     repos = Repos(home, words[1:] if check else words)
     opened, shut, skipped = gathered_rows(root, repos, check)
@@ -640,6 +648,9 @@ def read(args):
 
 def cmd_rows(args, out, err):
     """`rows [check] [--json] [--root DIR] [REPO...]`: 0, or 1 when `check` finds a stale row."""
+    words = list(getattr(args, "words", None) or [])
+    if words and words[0] == "close":
+        return cmd_close(args, words[1:], out, err)
     as_json = bool(getattr(args, "json", False))
     try:
         check, root, home, opened, shut, skipped = read(args)
@@ -685,3 +696,172 @@ def cmd_rows(args, out, err):
         lines.append("no open rows under %s" % root)
     out.write("\n".join(clean(line) for line in lines) + "\n")
     return 1 if check and reds else 0
+
+
+def refused(message):
+    """rw2b R1 to R4: a close's refusal, its line through `clean`."""
+    return Refusal(clean(message))
+
+
+def is_tty(stream):
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def asked(stdin_tty, stderr_tty, reader, err):
+    """rw2b R7: True for `y` or `yes` in any case, False for anything else, an end of file or
+    an interrupt; None, nothing asked, unless stdin and stderr are both terminals."""
+    if not (stdin_tty and stderr_tty):
+        return None
+    err.write(QUESTION)
+    err.flush()
+    try:
+        answer = reader()
+    except (EOFError, KeyboardInterrupt):
+        answer = None
+    if not answer:
+        err.write("\n")
+    return bool(answer) and answer.strip().lower() in YES
+
+
+def with_cell(text, cell):
+    """rw2b R5: `text` with the first table's `done` row as `| done | <cell> |`, its line end
+    and every other byte kept; None when it has no `done` row."""
+    lines = text.splitlines(True)
+    for index, cells in table_rows(lines):
+        if cells[0].lower() == "done":
+            line = lines[index]
+            body = line.rstrip("\r\n")
+            lines[index] = "| done | %s |%s" % (cell, line[len(body):])
+            return "".join(lines)
+    return None
+
+
+def waits_of(row, root, repos):
+    """The read's `waits` for one row: its `depends_on` rows with a folder that have not
+    landed, read only when the word could be `waits`."""
+    rec = row["rec"]
+    if row["landing"] or row["tip"] is not None or rec["builds"] or not rec["depends_on"]:
+        return []
+    opened, shut, skipped = gathered_rows(root, repos, False)
+    landed = set(r["row"] for r in shut)
+    for dep in opened:
+        if dep["row"] in rec["depends_on"]:
+            facts(dep, repos.git(dep["path"]))
+            if dep["landing"]:
+                landed.add(dep["row"])
+    known = set(r["row"] for r in opened) | landed | set(n for _, _, n in skipped)
+    return [d for d in rec["depends_on"] if d in known and d not in landed]
+
+
+def checkout_of(args, row, home):
+    """rw2b R3: the row's checkout, `--repo DIR` whatever its name, else `Repos.where`."""
+    named = getattr(args, "repo", None)
+    if named is not None:
+        real = os.path.realpath(named)
+        top = git_top(real) if os.path.isdir(real) else None
+        if not top or os.path.realpath(top) != real or Git(real).tip("main") is None:
+            raise refused("rows close: --repo %s is no checkout with a main" % named)
+        return real
+    path, why = Repos(home, None).where(row["repo"])
+    if path is None:
+        raise refused("rows close: %s's repo is not found (%s); name its checkout with "
+                      "--repo DIR" % (row["row"], why))
+    return path
+
+
+def closing(args, row, root, home, text, err):
+    """rw2b R3 to R5: (cell, the done file's new text or None, its line) of a pushed row
+    that owes nothing; each contradiction one stderr line."""
+    name = row["row"]
+    row["path"] = checkout_of(args, row, home)
+    repos = Repos(home, None)
+    git = repos.git(row["path"])
+    facts(row, git)
+    row["waits"] = waits_of(row, root, repos)
+    state = word(row, git)[0]
+    if state != "pushed":
+        raise refused("rows close: %s is %s, not pushed; nothing written" % (name, state))
+    if row["rec"]["owed"]:
+        raise refused("rows close: %s has %d open under ## Owed; nothing written"
+                      % (name, row["rec"]["owed"]))
+    for what in stale_of(row, git, repos):
+        err.write(clean("rows close %s: stale: %s" % (name, what)) + "\n")
+    sha7 = row["landing"][:7]
+    cell = "%s %s" % (row["landed_on"], sha7)
+    old = disk_text(os.path.join(home, DONE_FILE))
+    if re.search(r"(?<![0-9A-Za-z])" + sha7, old):
+        return cell, None, "holds %s already, no line" % sha7
+    lines = text.splitlines()
+    prefix = "# Row %s: " % name
+    title = lines[0][len(prefix):].strip() if lines and lines[0].startswith(prefix) else ""
+    entry = "%s: %s, done %s" % (name, title, cell) if title else "%s, done %s" % (name, cell)
+    last = next((l for l in reversed(old.splitlines()) if l.strip()), "")
+    entry = ("- " if last.startswith("- ") else "") + entry
+    sep = "" if not old or old.endswith("\n") else "\n"
+    return cell, old + sep + entry + "\n", entry
+
+
+def cmd_close(args, names, out, err):
+    """rw2b: `rows close ROW [--withdrawn WHY] [--root DIR] [--repo DIR] [--dry-run] [-y]`:
+    0 written, dry or closed already; a Refusal, exit 2, for the rest."""
+    if getattr(args, "json", False):
+        raise Refusal("rows close takes no --json")
+    if not names:
+        raise Refusal("rows close: name one row")
+    if len(names) > 1:
+        raise Refusal("rows close: one row a call")
+    why = getattr(args, "withdrawn", None)
+    if why is not None:
+        why = why.strip()
+        if not why or "|" in why or CONTROL.search(why):
+            raise Refusal("rows close: --withdrawn takes one line of words with no | in it")
+    root, home = root_of(args)
+    name = names[0]
+    if not NAME.fullmatch(name):
+        raise refused("rows close: no such row under %s" % root)
+    folder = os.path.join(root, name)
+    path = os.path.join(folder, ROW)
+    if not os.path.isfile(path):
+        raise refused("rows close: no row %s under %s" % (name, root))
+    rec = records(folder)
+    if "done" not in rec["cells"]:
+        raise refused("rows close: %s has no done cell; nothing written" % path)
+    if rec["done"]["state"] != "open":
+        out.write(clean("rows close: %s is closed already: %s"
+                        % (name, rec["cells"]["done"][:CLOSED_CAP])) + "\n")
+        return 0
+    text = disk_text(path)
+    done = os.path.join(home, DONE_FILE)
+    if why is not None:
+        cell, done_text, entry = "withdrawn %s: %s" % (ask_module.today(), why), None, None
+    else:
+        cell, done_text, entry = closing(args, row_of(name, folder, rec), root, home, text, err)
+    row_text = with_cell(text, cell)
+    if row_text is None:
+        raise refused("rows close: %s has no done cell; nothing written" % path)
+    lines = ["rows close %s: %s: done %s" % (name, path, cell)]
+    if entry is not None:
+        lines.append("rows close %s: %s: %s" % (name, done, entry))
+    out.write("".join(clean(line) + "\n" for line in lines))
+    if getattr(args, "dry_run", False):
+        out.write("rows close: dry run, nothing written\n")
+        return 0
+    if not getattr(args, "yes", False):
+        out.flush()
+        got = asked(is_tty(sys.stdin), is_tty(err), sys.stdin.readline, err)
+        if got is None:
+            raise Refusal("rows close: nothing written, since it cannot ask here; run it "
+                          "again with -y")
+        if not got:
+            raise Refusal("rows close: declined, nothing written")
+    texts = [(path, row_text)]
+    if done_text is not None:
+        os.makedirs(os.path.dirname(done), exist_ok=True)
+        texts.append((done, done_text))
+    commit_texts(texts)
+    out.write(clean("rows close: %s %s" % (name, "withdrawn" if why is not None else "closed"))
+              + "\n")
+    return 0
