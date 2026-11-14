@@ -237,7 +237,8 @@ def build_parser():
                         "render would change and its bytes beside the ceiling; write nothing")
 
     render = subs.add_parser("render", parents=[ledger],
-                             help="the lint, then the generated block in a CLAUDE.md")
+                             help="the lint, then the generated block rewritten in a CLAUDE.md "
+                             "that holds one; `init` adds it")
     render.add_argument("--into", default=None,
                         help="the target; the default is the CLAUDE.md beside the ledger, "
                         "or under --scope tree the folder's")
@@ -255,7 +256,8 @@ def build_parser():
                       help="rewrite each tail in force in form T2, then the block")
 
     subs.add_parser("init", parents=[ledger],
-                    help="an empty ledger and its block in the CLAUDE.md beside it")
+                    help="an empty ledger and its block in the CLAUDE.md beside it; "
+                    "where a ledger is, its block alone")
 
     doctor = subs.add_parser("doctor", parents=[ledger],
                              help="check this machine and this repo")
