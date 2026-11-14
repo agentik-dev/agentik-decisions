@@ -22,9 +22,15 @@ turn`, N the bytes of the block render would write there, CRLF counted when the 
 keeps it (d32); a target whose markers render refuses gets one stderr line and no size, the
 exit unchanged. Otherwise the block goes between
 BEGIN and END in PATH (default: the CLAUDE.md beside the ledger), replacing a
-stale block in place, or appended after one blank line when the markers are
-absent. `--check` writes nothing: it prints the unified diff render would make
-and exits 1 when the block is stale, 0 when it is fresh. A target that is the
+stale block in place. dc2: render rewrites a block that is there and never adds one: a
+target that is absent or holds no marker line (a fenced example is none) gets nothing, and
+the run refuses, exit 2, with `render: PATH is absent` or `holds no generated block`, `and
+render only rewrites a block that is there; nothing written;` and the act that adds it,
+`agentik decisions init` for the CLAUDE.md beside the ledger (`--ledger` as the run named
+it), else the two marker lines; `--fold-tails` refuses so before it folds. `--check` writes
+nothing: it prints the unified diff render would make and exits 1 when the block is stale,
+0 when it is fresh; on a target with no block, in place of the diff, `render: PATH STATE;
+NEXT`, then the loaded bytes, exit 1. A target that is the
 ledger itself, by its path, a link or a hard link, is refused with exit 2. The write keeps
 the target's line end and goes through a link to the file it names, and its line names the
 block's growth in bytes on disk, `render: wrote PATH: X B to Y B, +D B; the block is loaded
@@ -44,6 +50,7 @@ stays fresh until `render` shortens it.
 
 import difflib
 import os
+import shlex
 import subprocess
 import sys
 
@@ -58,7 +65,8 @@ from .tree import (REPO_VARIABLES, SCOPE_COMMAND, canonical, ceiling_for, is_tre
                    markers, named_ledger, rule_words, title_warnings, tree_text)
 
 __all__ = ["cmd_render", "block", "apply", "tilde", "is_ledger", "block_bytes", "growth",
-           "tail_note", "tree_file", "list_gate", "gate_said", "BEGIN", "END", "TARGET", "GATES"]
+           "tail_note", "tree_file", "list_gate", "gate_said", "holds_markers", "invited",
+           "BEGIN", "END", "TARGET", "GATES"]
 
 BEGIN = "<!-- BEGIN GENERATED: decisions -->"
 END = "<!-- END GENERATED: decisions -->"
@@ -456,6 +464,28 @@ def apply(text, generated, target=TARGET):
     return "".join(lines[:begins[0]]) + generated + "".join(lines[ends[0] + 1:])
 
 
+def holds_markers(text):
+    """True when `text` holds a BEGIN or an END line by `markers`; a fenced example is none
+    (dc1 r2 F4). Markers that are not one block are `apply`'s to refuse."""
+    begins, ends = markers(text.splitlines(), BEGIN, END)
+    return bool(begins or ends)
+
+
+def invited(target, path, named=None):
+    """dc2 R2: (what `target` is, the act that gives it a block) for a target that holds no
+    block. The CLAUDE.md beside the ledger at `path`, however it was named, takes its block
+    from `init`, with `--ledger` when the run named one (`named`, quoted as `locate` does);
+    any other file takes it once it holds the two marker lines."""
+    state = "holds no generated block" if os.path.exists(target) else "is absent"
+    here = os.path.realpath(os.path.dirname(os.path.abspath(target)))
+    if os.path.basename(target) == TARGET and \
+            here == os.path.realpath(os.path.dirname(os.path.abspath(path))):
+        return state, "`agentik decisions init%s` adds it" % (
+            " --ledger %s" % shlex.quote(named) if named else "")
+    return state, ("a file takes the block once it holds the two marker lines, `%s` then "
+                   "`%s`, each alone on a line" % (BEGIN, END))
+
+
 def one_block(text, target, verb):
     """The backstop (dc1 r3 F1): `text`, about to be written to `target`, must hold exactly
     one BEGIN and one END in order by `markers`, or `verb` refuses and writes nothing."""
@@ -639,6 +669,16 @@ def cmd_render(args, path, out, err):
             raise Refusal("render: %s is a tree's file, written by `%s`; the repo's block "
                           "never replaces it; nothing written" % (display(target),
                                                                   SCOPE_COMMAND))
+    if not holds_markers(old):
+        # dc2 R1 to R3: render rewrites a block that is there and never adds one
+        state, after = invited(target, path, getattr(args, "ledger", None))
+        if args.check:
+            out.write("render: %s %s; %s\n" % (display(target), state, after))
+            measure(out, target, apply(old, block(ledger, path, target), display(target)),
+                    ledger, False)
+            return 1
+        raise Refusal("render: %s %s, and render only rewrites a block that is there; "
+                      "nothing written; %s" % (display(target), state, after))
     was = disk_text(target)
     if getattr(args, "fold_tails", False):
         apply(old, "", display(target))  # a target refused is refused before the fold

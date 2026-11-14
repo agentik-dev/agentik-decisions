@@ -50,7 +50,9 @@ question N and its Proposed line and adds `- N. Title: LABEL (DATE; S)` under `#
 run holds `.new.lock`, lints both texts (an open count over the cap, which the
 answer lowers, is no refusal), and writes both files or neither;
 then it rewrites the CLAUDE.md block, beside the ledger or at `--into`, when
-that file holds the GENERATED markers; a target that is the ledger itself is
+that file holds the GENERATED markers, and without them says on stderr what adds the
+block, `agentik decisions init` for the CLAUDE.md beside the ledger, else the two marker
+lines (dc2 R5); a target that is the ledger itself is
 refused with exit 2 before anything is written. Once both files are written the answer
 stands: a block that cannot be rewritten is a warning on stderr naming the
 `agentik decisions render` command, with the `--ledger` and `--into` the answer used,
@@ -95,8 +97,8 @@ from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOS
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
 from .lookup import pick_area
-from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, gate_said, growth, is_ledger,
-                     list_gate, tail_note,
+from .render import (BEGIN, END, TARGET, apply, block, cmd_tree, gate_said, growth, invited,
+                     is_ledger, list_gate, tail_note,
                      tree_file)
 from .tree import ceiling_for, loaded_bytes, markers
 
@@ -461,7 +463,7 @@ def cmd_answer(args, path, out, err):
         if value:
             command += " %s %s" % (flag, shlex.quote(value))
     try:
-        rewrite_block(path, target, out, err, command)
+        rewrite_block(path, target, out, err, getattr(args, "ledger", None))
     except Refusal as exc:
         # d18 1a obs: both files are written, so the answer stands; the block is a warning.
         err.write("answer: warning: the answer is written, but the block in %s is not: %s; "
@@ -564,14 +566,16 @@ def repo_block(ledger_text, new_ledger, path, target, amends, heading):
                   % (now - was, was, now, note))
 
 
-def rewrite_block(path, target, out, err, command="agentik decisions render"):
+def rewrite_block(path, target, out, err, named=None):
     """The CLAUDE.md block at `target` rewritten from the ledger at `path`, when it has
-    markers; without them, a line naming `command`, which writes it (dc1 R6)."""
+    markers; without them, a line naming the act that adds one, `render`'s own words (dc2
+    R5): `init`, with `--ledger` as the run `named` it, for the CLAUDE.md beside the ledger,
+    else the two marker lines."""
     old = read_text(target) if os.path.exists(target) else ""
     begins, ends = markers(old.splitlines(), BEGIN, END)  # a fenced example is none (dc1 r2 F4)
     if not begins or not ends:
-        err.write("answer: %s holds no GENERATED markers; the block is left as it is; `%s` "
-                  "writes it\n" % (display(target), command))
+        err.write("answer: %s holds no GENERATED markers; the block is left as it is; %s\n"
+                  % (display(target), invited(target, path, named)[1]))
         return
     new = apply(old, block(load(path), path, target), display(target))
     if new != old:
