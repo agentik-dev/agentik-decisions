@@ -1,6 +1,6 @@
 # NICE overflow: agentik-decisions
 
-Open S4 rows moved out of `NICE_TO_HAVE.md` as it neared recordlint's 24,576 B bound (its rule 6), the oldest first, appended. Each keeps its id; a row leaves when it lands, as there. Moved 2026-11-13 at rw2's phase 2: n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15 and n18, the oldest S4 rows then open. Moved 2026-11-13 at ak6's close: n20, n21, n22, n23, n24, n25, n26 and n27. Moved 2026-11-13 at dc1's close round: n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n42 and n44. Moved 2026-11-13 at fk4's phase 2: n45, n46, n47, n48, n49, n50, n51 and n52. Moved 2026-11-14 at rw2b's review 1 fix: n58, n59, n60 and n61.
+Open S4 rows moved out of `NICE_TO_HAVE.md` as it neared recordlint's 24,576 B bound (its rule 6), the oldest first, appended. Each keeps its id; a row leaves when it lands, as there. Moved 2026-11-13 at rw2's phase 2: n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15 and n18, the oldest S4 rows then open. Moved 2026-11-13 at ak6's close: n20, n21, n22, n23, n24, n25, n26 and n27. Moved 2026-11-13 at dc1's close round: n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n42 and n44. Moved 2026-11-13 at fk4's phase 2: n45, n46, n47, n48, n49, n50, n51 and n52. Moved 2026-11-14 at rw2b's review 1 fix: n58, n59, n60 and n61. Moved 2026-11-14 at dc4: n62.
 
 ## From the open findings
 
@@ -59,3 +59,4 @@ Open S4 rows moved out of `NICE_TO_HAVE.md` as it neared recordlint's 24,576 B b
 | n59 | S4 | `plugin/skills/instruct/SKILL.md` | `allowed-tools: Bash(agentik decisions *)` pre-approves the writing verbs too, as every page's `Bash(agentik-decisions *)` does, so step 7's "on yes" is text only; narrow it to the reading verbs and `answer --preview` | note 3 | 2026-11-12, d37 r1 |
 | n60 | S4 | `audit.py` `edits` | A path holding a newline breaks the text output's one line per commit; by reading, not run, `n.strip("\n")` maps a file named `CLAUDE.md` plus a newline to `CLAUDE.md` | note 4, probe p5 | 2026-11-12, d37 r1 |
 | n61 | S4 | `audit.py` `cmd_edits` | "1 commit after HEAD~1 touch instruction text" should read "touches" | note 5, probe p6 | 2026-11-12, d37 r1 |
+| n62 | S4 | `audit.py` `edits` | Its git calls keep the caller's `GIT_*` variables, where `head_block` and `tree.git` drop them; with `GIT_DIR` set the refusal "--edits HEAD~1 names no commit in ..." misleads | note 6, probe p6 | 2026-11-12, d37 r1 |
