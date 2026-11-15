@@ -51,7 +51,8 @@ class Install(unittest.TestCase):
         run = self.make()
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         bindir = os.path.join(self.home, ".local", "bin")
-        self.assertTrue(os.path.islink(os.path.join(bindir, "decisions")))
+        # ak10-sync: the synced module writes the old-name link only where one stands (GUIDE §10)
+        self.assertFalse(os.path.lexists(os.path.join(bindir, "decisions")))
         self.assertTrue(os.access(os.path.join(bindir, "agentik"), os.X_OK))
         self.assertTrue(self.version(os.path.join(bindir, "agentik-decisions")).startswith(
             "agentik-decisions "))
