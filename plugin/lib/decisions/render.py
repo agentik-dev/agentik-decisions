@@ -573,21 +573,46 @@ def refuse_another(text, target, path, verb="render"):
                   % (verb, display(target), real_tilde(named), real_tilde(path), verb))
 
 
+def main_checkout(checkout):
+    """The main checkout of the worktree `checkout`, read from files alone: its `.git`
+    file's `gitdir:`, that gitdir's `commondir`, and the folder that holds the common
+    `.git`; None when `checkout` is no worktree or a file cannot be read (dc4 R2)."""
+    dot = os.path.join(checkout, ".git")
+    try:
+        with open(dot, encoding="utf-8") as handle:
+            line = handle.readline().strip()
+        if not line.startswith("gitdir:"):
+            return None
+        gitdir = os.path.join(checkout, line[len("gitdir:"):].strip())
+        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as handle:
+            common = os.path.realpath(os.path.join(gitdir, handle.readline().strip()))
+    except (OSError, UnicodeDecodeError):
+        return None
+    return os.path.dirname(common) if os.path.basename(common) == ".git" else None
+
+
 def other_tree(folder):
-    """A direct child of `folder` that is no checkout and holds a checkout, or None."""
+    """A direct child of `folder` that is no checkout and holds a checkout, or None. A
+    child whose every checkout is a worktree of a main checkout directly in `folder` is
+    the tree's own (dc4 R2)."""
     try:
         names = sorted(os.listdir(folder))
     except OSError:
         return None
+    here = os.path.realpath(folder)
     for name in names:
         child = os.path.join(folder, name)
         if not os.path.isdir(child) or os.path.exists(os.path.join(child, ".git")):
             continue
         try:
-            inner = os.listdir(child)
+            inner = sorted(os.listdir(child))
         except OSError:
             continue
-        if any(os.path.exists(os.path.join(child, n, ".git")) for n in inner):
+        checkouts = [os.path.join(child, n) for n in inner
+                     if os.path.exists(os.path.join(child, n, ".git"))]
+        mains = [main_checkout(c) for c in checkouts]
+        if checkouts and not all(m is not None and os.path.dirname(m) == here
+                                 for m in mains):
             return child
     return None
 
