@@ -276,6 +276,20 @@ class TreePreview(Lane):
         out = self.refused_as_render_refuses()
         self.assertIn("another tree's", out)
 
+    def test_a_folder_of_the_trees_own_worktrees_shows_the_diff(self):
+        """dc4 R2: the preview reaches `other_tree` through `cmd_tree`; a sibling folder of
+        orchard-hq's own worktrees is the tree's, so the folder's file gets its diff."""
+        git(self.root, "worktree", "add", "-q",
+            os.path.join(self.tmp, "orchard", "orchard-hq-wt", "row"), "-b", "row")
+        before = tree_hashes(self.tmp)
+        code, out, err = self.answer(self.q, *(self.ARGV + ("--preview",)))
+        self.assertEqual(tree_hashes(self.tmp), before)
+        self.assertEqual(code, 0, out + err)
+        self.assertNotIn("another tree's", out)
+        self.assertIn("orchard/CLAUDE.md (after the answer)", out)
+        self.assertEqual({v[3] for v in self.loads(out).values()},
+                         {"an hq's file", "a tree's file"}, out)
+
     def test_a_tree_file_of_another_ledger_gets_no_diff(self):
         elsewhere = os.path.join(self.tmp, "elsewhere", "DECISIONS.md")
         os.makedirs(os.path.dirname(elsewhere))
