@@ -398,11 +398,36 @@ class Ceilings(Tree):
         self.render("--scope", "tree")
         code, out, _ = self.render("--scope", "tree", "--check", "--ceiling")
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.loads(out)["a tree's file"], (loaded(TREE_FILE), 1536, False))
-        self.write(self.ledger, TREE_LEDGER.replace("### Build", entry(6, "Helpers", 300)
+        self.assertEqual(self.loads(out)["a tree's file"], (loaded(TREE_FILE), 2048, False))
+        self.write(self.ledger, TREE_LEDGER.replace("### Build", entry(6, "Helpers", 400)
                                                     + "\n### Build"))
         self.render("--scope", "tree")
-        self.check_both("a tree's file", 1536, ["--scope", "tree"])
+        self.check_both("a tree's file", 2048, ["--scope", "tree"])
+
+    def tree_file_of(self, size):
+        """The tree's file rendered at `size` loaded bytes, padded by one entry's last word;
+        the `--check --ceiling` run's exit and its loaded-bytes line."""
+        def at(pad):
+            self.write(self.ledger, TREE_LEDGER.replace(
+                "### Build", "6. **Helpers.** Helpers read %s. (2026-11-14; the fixture)\n"
+                "\n### Build" % ("x" * pad)))
+            self.assertEqual(self.render("--scope", "tree")[0], 0)
+            code, out, _ = self.render("--scope", "tree", "--check", "--ceiling")
+            return code, out, self.loads(out)["a tree's file"]
+        pad = 10 + size - at(10)[2][0]
+        code, out, line = at(pad)
+        self.assertEqual(line[0], size, out)
+        return code, out
+
+    def test_a_trees_file_at_2000_and_2049_bytes(self):
+        """dc4 R1: the tree's ceiling is 2,048 B; 2,000 B is under it, 2,049 B over by 1."""
+        code, out = self.tree_file_of(2000)
+        self.assertEqual(code, 0, out)
+        self.assertIn("loads 2,000 B, comments aside and imports included; the ceiling for "
+                      "a tree's file is 2,048 B\n", out)
+        code, out = self.tree_file_of(2049)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the ceiling for a tree's file is 2,048 B; over by 1 B\n", out)
 
     def test_the_macs_global_file(self):
         mac = os.path.join(self.home, ".claude", "CLAUDE.md")
@@ -611,3 +636,50 @@ class FixRound(Tree):
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn("is a tree's file", err)
                 self.assertEqual(self.read(self.target), TREE_FILE)
+
+
+class TreeWorktrees(Tree):
+    """dc4 R2: a sibling folder that holds only worktrees of a checkout in the tree's folder
+    is the tree's own, not another tree; anything else is refused as at the pin."""
+
+    def setUp(self):
+        super().setUp()
+        git(self.repo, "init", "-q", "--template=")
+        git(self.repo, "add", "DECISIONS.md")
+        git(self.repo, "commit", "-q", "-m", "the ledger")
+        self.sibling = os.path.join(self.folder, "orchard-hq-wt")
+        git(self.repo, "worktree", "add", "-q", os.path.join(self.sibling, "row"), "-b", "row")
+
+    def refused(self):
+        for mode in ([], ["--check"]):
+            with self.subTest(mode=mode):
+                code, out, err = self.render("--scope", "tree", *mode)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("~/work/orchard holds ~/work/orchard/orchard-hq-wt, a folder of "
+                              "checkouts that is another tree's", err)
+                self.assertFalse(os.path.exists(self.target))
+
+    def test_a_folder_of_the_trees_own_worktrees_passes(self):
+        code, out, err = self.render("--scope", "tree")
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(self.read(self.target), TREE_FILE)
+        code, out, err = self.render("--scope", "tree", "--check")
+        self.assertEqual(code, 0, out + err)
+
+    def test_the_same_folder_with_a_checkout_of_its_own_is_refused(self):
+        os.makedirs(os.path.join(self.sibling, "pear", ".git"))
+        self.refused()
+
+    def test_the_same_folder_with_a_worktree_of_a_repo_elsewhere_is_refused(self):
+        plum = os.path.join(self.home, "work", "elsewhere", "plum")
+        os.makedirs(plum)
+        self.write(os.path.join(plum, "README.md"), "# plum\n")
+        git(plum, "init", "-q", "--template=")
+        git(plum, "add", "README.md")
+        git(plum, "commit", "-q", "-m", "plum")
+        git(plum, "worktree", "add", "-q", os.path.join(self.sibling, "plum-row"), "-b", "row")
+        self.refused()
+
+    def test_a_worktree_file_that_cannot_be_read_is_refused(self):
+        self.write(os.path.join(self.sibling, "odd", ".git"), "not a gitdir line\n")
+        self.refused()

@@ -6,7 +6,6 @@ The findings a review left that block nothing, one row each in agentik-hq design
 
 | id | level | area | finding | evidence | from |
 |---|---|---|---|---|---|
-| n62 | S4 | `audit.py` `edits` | Its git calls keep the caller's `GIT_*` variables, where `head_block` and `tree.git` drop them; with `GIT_DIR` set the refusal "--edits HEAD~1 names no commit in ..." misleads | note 6, probe p6 | 2026-11-12, d37 r1 |
 | n63 | S4 | `audit.py` `guarded` | Guarded names match by case, so `claude.local.md`, which Claude Code loads on a case-insensitive volume, is not listed; a file a guarded one imports with `@` is not guarded. Design scope | note 7, probe p5 | 2026-11-12, d37 r1 |
 | n64 | S4 | `answer.py` `preview` | (unfinished) The repo's branch skips render's `refuse_another` and `is_tree_file`, which render makes for an `--into` target, so a preview `--into` might show a diff for a block another ledger made; the fixture could not be set up, inferred from the code, the same class as F1 | note 8; `render.py` `cmd_render`'s `if args.into` | 2026-11-12, d37 r1 |
 | n65 | S4 | `audit.py` `edits` | (inferred, not run) A subject or path holding the byte 0x1E splits a `git log` record | note 9 | 2026-11-12, d37 r1 |
@@ -88,3 +87,4 @@ The findings a review left that block nothing, one row each in agentik-hq design
 | n150 | S4 | `rows.py` `owed_of` | An open box not written `- [ ]` at a line's start is not counted as owed, so `rows close` closes the row: `* [ ]`, a nested `  - [ ]`, `-  [ ]`, `+ [ ]`, `1. [ ]`; widen it for the read and the close together, since the read's text for other words is pinned | review 1 F3, probe adv1 `test_e` | 2026-11-14, rw2b r1 |
 | n151 | S4 | `rows.py` `with_cell` | `rows close` rewrites the whole `done` row as `\| done \| <cell> \|`, so a third cell (`\| done \| \| a note \|`) and the line's indent are lost; replace only the second cell's text | review 1 F5, probe adv1 `test_f` | 2026-11-14, rw2b r1 |
 | n152 | S4 | `rows.py` `cut_lines` | The text's `  past: <sha7> <subject>` lines carry the whole subject, so a long one makes a line hundreds of characters wide; cap it as `next_act` is, at 100 | build 1's hand-back | 2026-11-14, rw2b r1 |
+| n153 | S4 | `rows.py` `GATE_STATUS` | The `building` row's next act names `agentik session gate status` bare; it can become `agentik session gate status --repo <worktree>`, which hq design/16 item 9 held back until session's rw3 landed, and it has (session `95da908`) | dc4 brief R3 | 2026-11-14, dc4 |
