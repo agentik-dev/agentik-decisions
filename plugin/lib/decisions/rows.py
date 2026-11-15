@@ -46,6 +46,10 @@ PHASE_2 = "phase 2"
 # Review 1 F4: R3's four stages, read by a cell's opening words.
 STAGE = re.compile(r"^(first build|fix of review [0-9]+|phase 2|cut)(?![\w-])")
 GATE_STATUS = "agentik session gate status"
+# dc5 R2: the landing's commits close with this trailer (design/19 item 9).
+GATE_LAND = re.compile(r"^Gate-Land: [0-9a-f]{7,64}$")
+# review 1 C1: a commit whose paths all lie here is a record's, and keeps the word
+HISTORY = "history/"
 UNREADABLE = "unreadable"
 # R6: a row's keys, in this order; rw2b R8 adds `cut`.
 KEYS = ("row", "repo", "level", "from", "depends_on", "waits", "state", "stale", "branch",
@@ -381,8 +385,49 @@ def cut_lines(row):
     return lines
 
 
+def stamps(git):
+    """dc5 R1: main's Makefile holds a line that opens `stamp:`, the landing's own test
+    (agentik-session `land.stamps`), read from main rather than from a worktree."""
+    text = git.run("show", "main:Makefile")
+    return bool(text) and any(line.startswith("stamp:") for line in text.splitlines())
+
+
+def readied(git, start, tip):
+    """dc5 R2, review 1 C1: every commit past `start` on the branch's first-parent line
+    closes with the landing's `Gate-Land: <sha>` trailer or touches only paths under
+    `history/` (a sitting record, a NICE overflow move); True with none past it or when git
+    cannot say."""
+    full = git.commit(start) if start else None
+    if not full or not tip or full == tip:
+        return True
+    out = git.run("log", "--first-parent", "-z", "--format=%H%n%B", "%s..%s" % (full, tip))
+    for entry in (out or "").split("\0"):
+        sha, _, message = entry.strip().partition("\n")
+        lines = message.strip().splitlines()
+        if not sha or (lines and GATE_LAND.match(lines[-1].strip())):
+            continue
+        # the paths against the first parent, so a merge is read as the line it joins
+        paths = git.run("diff-tree", "-r", "--name-only", "--no-commit-id", "-z",
+                        sha + "^", sha)
+        if paths is not None and not all(p.startswith(HISTORY) for p in paths.split("\0")
+                                         if p):
+            return False
+    return True
+
+
+def counted_from(row, git, build, last):
+    """Review 1 C1: where R2 counts from, the slice end of the review that covers `build`
+    when it is past the last build record's head (the review read up to it), else that head."""
+    review = next((r for r in reversed(row["rec"]["reviews"]) if covers(git, r, build)), None)
+    end = git.commit(review["end"]) if review and review["end"] else None
+    if end and ancestor(git, last["head"], end):
+        return end
+    return git.commit(last["head"]) if last["head"] else None
+
+
 def facts(row, git):
-    """Pass 1: the git facts of an open row: tip, merge base, landing, pushed."""
+    """Pass 1: the git facts of an open row: tip, merge base, landing, pushed, a `stamp`
+    target on main."""
     branch = row["branch"]
     tip = git.tip(branch)
     _red, landing, date = building_red(git, branch)
@@ -394,7 +439,7 @@ def facts(row, git):
     pushed = bool(landing) and git.run("merge-base", "--is-ancestor", landing,
                                        "refs/remotes/origin/main") is not None
     row.update(tip=tip, main=main, base=base, landing=landing, landed_on=date,
-               second=second, pushed=pushed)
+               second=second, pushed=pushed, stamp=stamps(git))
 
 
 def covers(git, review, build):
@@ -419,12 +464,14 @@ def judged(row, git, build):
         return "to rule", path, None, review["file"]
     merge = os.path.join(row["folder"], MERGE)
     current = row["base"] is not None and row["base"] == row["main"]
-    if current and row["rec"]["merge"]:
+    # dc5 R1: where main's Makefile has a `stamp` target the landing readies the branch, so
+    # the merge base no longer holds `ready` back (design/16 section 4 item 3)
+    if (current or row["stamp"]) and row["rec"]["merge"]:
         # review 1 F2: each part quoted for a POSIX shell, so a pasted line is four words
         command = "agentik session gate land " + " ".join(
             shlex.quote(part) for part in (row["path"], row["branch"], row["tip"], merge))
         return "ready", None, command, MERGE
-    if row["tip"] and not current:
+    if row["tip"] and not current and not row["stamp"]:
         return "reviewed", "phase 2: merge main into %s" % row["branch"], None, review["file"]
     return "reviewed", merge, None, review["file"]
 
@@ -447,12 +494,22 @@ def word(row, git):
         return "briefed", os.path.join(row["folder"], BRIEF), None, ROW
     if not builds:
         return "building", None, GATE_STATUS, ROW
-    got = judged(row, git, builds[-1])
-    if got[0] == "built" and builds[-1]["stage"] == PHASE_2:
+    last = builds[-1]
+    got, build = judged(row, git, last), last
+    if got[0] == "built" and last["stage"] == PHASE_2:
         other = next((b for b in reversed(builds) if b["stage"] != PHASE_2), None)
         again = judged(row, git, other) if other else None
         if again and again[0] in ("reviewed", "ready"):
-            return again
+            got, build = again, other
+    # dc5 R2, review 1 C1: past the last recorded head, or the covering review's slice end
+    # when that is past it, the landing's commits and record-only ones keep the word; any
+    # other commit is a builder's and asks a review
+    if got[0] in ("reviewed", "ready"):
+        start = counted_from(row, git, build, last)
+        if not readied(git, start, row["tip"]):
+            start = start or last["head"]
+            return "built", "review %d: %s..%s" % (len(rec["reviews"]) + 1, start[:7],
+                                                    row["tip"][:7]), None, last["file"]
     return got
 
 
