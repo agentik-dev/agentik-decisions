@@ -1,7 +1,9 @@
 """dc5 (agentik-hq design/16 section 4 item 3, design/19 items 2 and 9): a reviewed row with a
 merge file reads `ready` whatever its merge base where main's Makefile has a `stamp` target, and
 the landing's commits past the reviewed head, each closing `Gate-Land: <sha>`, keep the row's
-word; a plain commit there asks a review. Every repo and row is made under the temp folder,
+word; a plain commit there asks a review. Review 1's C1: the count starts at the covering
+review's slice end where it is past that head, and a commit whose paths all lie under
+`history/` keeps the word too. Every repo and row is made under the temp folder,
 with made-up names."""
 
 import os
@@ -46,6 +48,16 @@ class Ready(Rows):
         self.put(os.path.join(self.pear, "VERSION"), "0.0.2\n")
         git(self.pear, "add", "VERSION")
         git(self.pear, "commit", "-q", "-m", ROW + ": plugin 0.0.2", "-m", trailer)
+        git(self.pear, "checkout", "-q", "main")
+        return git(self.pear, "rev-parse", ROW)
+
+    def recorded(self, name):
+        """A record-only commit on the branch, one file under `history/`; the new tip."""
+        git(self.pear, "checkout", "-q", ROW)
+        path = os.path.join("history", "sittings", name)
+        self.put(os.path.join(self.pear, path), "# a made-up sitting\n")
+        git(self.pear, "add", path)
+        git(self.pear, "commit", "-q", "-m", ROW + ": the charter")
         git(self.pear, "checkout", "-q", "main")
         return git(self.pear, "rev-parse", ROW)
 
@@ -106,3 +118,35 @@ class Ready(Rows):
         got = self.word()
         self.assertEqual(got["state"], "built", got)
         self.assertEqual(got["next"]["text"], "review 2: %s..%s" % (head[:7], tip[:7]))
+
+    def test_c1_a_record_only_commit_past_the_checked_head_keeps_the_word(self):
+        _, merge = self.reviewed(STAMP)
+        tip = self.recorded("2026-01-01-1.md")
+        got = self.word()
+        self.assertEqual(got["state"], "ready", got)
+        self.assertEqual(got["next"]["command"], self.land(tip, merge))
+        # with no merge file the row is reviewed, its next act the merge file
+        os.remove(merge)
+        got = self.word()
+        self.assertEqual((got["state"], got["next"]["text"]), ("reviewed", merge), got)
+
+    def test_c1_a_review_that_ends_at_the_tip_past_a_record_only_commit_reads_ready(self):
+        head, merge = self.reviewed(STAMP)
+        end = self.recorded("2026-01-01-1.md")
+        self.review(ROW, 1, "%s..%s" % (self.base(ROW)[:7], end[:7]), ruling="closed")
+        got = self.word()
+        self.assertEqual(got["state"], "ready", got)
+        self.assertEqual(got["next"]["command"], self.land(end, merge))
+        # a code commit past the slice end asks the next review from that end
+        tip = self.on_branch(ROW, "after-review.txt")
+        got = self.word()
+        self.assertEqual(got["state"], "built", got)
+        self.assertEqual(got["next"]["text"], "review 2: %s..%s" % (end[:7], tip[:7]))
+
+    def test_c1_a_code_commit_the_review_read_keeps_the_word(self):
+        head, merge = self.reviewed(STAMP)
+        end = self.on_branch(ROW, "read-by-review.txt")
+        self.review(ROW, 1, "%s..%s" % (self.base(ROW)[:7], end[:7]), ruling="closed")
+        got = self.word()
+        self.assertEqual(got["state"], "ready", got)
+        self.assertEqual(got["next"]["command"], self.land(end, merge))
