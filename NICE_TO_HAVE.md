@@ -6,7 +6,6 @@ The findings a review left that block nothing, one row each in agentik-hq design
 
 | id | level | area | finding | evidence | from |
 |---|---|---|---|---|---|
-| n63 | S4 | `audit.py` `guarded` | Guarded names match by case, so `claude.local.md`, which Claude Code loads on a case-insensitive volume, is not listed; a file a guarded one imports with `@` is not guarded. Design scope | note 7, probe p5 | 2026-11-12, d37 r1 |
 | n64 | S4 | `answer.py` `preview` | (unfinished) The repo's branch skips render's `refuse_another` and `is_tree_file`, which render makes for an `--into` target, so a preview `--into` might show a diff for a block another ledger made; the fixture could not be set up, inferred from the code, the same class as F1 | note 8; `render.py` `cmd_render`'s `if args.into` | 2026-11-12, d37 r1 |
 | n65 | S4 | `audit.py` `edits` | (inferred, not run) A subject or path holding the byte 0x1E splits a `git log` record | note 9 | 2026-11-12, d37 r1 |
 | n66 | S4 | `answer.py` `--preview` | The preview takes `.new.lock`, so it needs a writable folder and rewrites and removes a stale lock it finds; a SIGTERM leaves the lock. The same as `answer`, and what R1 asks ("under the same lock") | note 10 | 2026-11-12, d37 r1 |
@@ -88,3 +87,4 @@ The findings a review left that block nothing, one row each in agentik-hq design
 | n151 | S4 | `rows.py` `with_cell` | `rows close` rewrites the whole `done` row as `\| done \| <cell> \|`, so a third cell (`\| done \| \| a note \|`) and the line's indent are lost; replace only the second cell's text | review 1 F5, probe adv1 `test_f` | 2026-11-14, rw2b r1 |
 | n152 | S4 | `rows.py` `cut_lines` | The text's `  past: <sha7> <subject>` lines carry the whole subject, so a long one makes a line hundreds of characters wide; cap it as `next_act` is, at 100 | build 1's hand-back | 2026-11-14, rw2b r1 |
 | n153 | S4 | `rows.py` `GATE_STATUS` | The `building` row's next act names `agentik session gate status` bare; it can become `agentik session gate status --repo <worktree>`, which hq design/16 item 9 held back until session's rw3 landed, and it has (session `95da908`) | dc4 brief R3 | 2026-11-14, dc4 |
+| n154 | S4 | `rows.py` `records`, `Repos.where` | A row whose branches are in several repos (one `merge-<repo>.txt` each) reads `built, not pushed`, and `rows close` needs `--repo` for it; (inferred, not run) the read takes the one repo its `repo` cell names and looks for `merge.txt` alone | dc5 brief R4 | 2026-11-15, dc5 |
