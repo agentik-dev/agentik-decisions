@@ -1,6 +1,6 @@
 """`doctor`: this machine and this repo, one line per check.
 
-    ok|warn|fail <name>: <detail>
+    ok|note|warn|fail <name>: <detail>
 
 Checks: python (3.9+, the plugin's floor, hq entry 6: under pyenv, a newer 3.x
 pyenv can install a warn; the uv tool's or one outside pyenv, as the plugin's
@@ -11,14 +11,17 @@ and plugin (the two json files under ~/.claude/plugins/: `agentik` and
 `decisions@agentik`, the old IDs a warn until r2), provider (the session's
 resolved file, under the session's new state folder else its old one: in range,
 none, out of range or unparsable), ledger (the DECISIONS.md `--ledger` names
-or the git top holds: lint clean, absent at the git top as a warn, a named
-file absent or its problems as a fail)
+or the git top holds: lint clean, absent at the git top as a warn, none named
+outside a git work tree as a note, a named file absent or its problems as a fail)
 and respeak (design d23 section 6, packet fk4: `ok` with the root
 `speak.respeak_source` finds, by `RESPEAK_ROOT`, the suite's sources or the
-installed file, else a warn, since only `ask` renders through it and keeps its
-text without it; a source other than the variable or `respeak@agentik` leaves
-its id and root out of the detail and gives them in the check's `source`).
-Exit 0 with no `fail`, 2 otherwise; a `warn` never changes it. `--json` prints the
+installed file; none found is a note, since respeak is optional and only `ask`
+renders through it and keeps its text without it; two installed and none said, or
+a sources line naming one that is gone, a warn; a source other than the variable
+or `respeak@agentik` leaves its id and root out of the detail and gives them in the
+check's `source`). A `note` (GUIDE section 11.5) is true and asks nothing of a
+person (id1-doctor-notes): it has no remedy and `warned` does not count it.
+Exit 0 with no `fail`, 2 otherwise; a `note` or a `warn` never changes it. `--json` prints the
 plug's doctor read (packet ak6): {"schema": "agentik.doctor/1", "ok": true, "tool":
 "decisions", "failed", "warned", "checks": [{name, status, detail, remedy}] (respeak's also
 `source`), "provider":
@@ -36,13 +39,13 @@ import sys
 import threading
 import time
 
-from .common import VERSION, Refusal, bounded
+from .common import VERSION, Refusal, bounded, git_top
 from .ledger import lint, locate
 from .speak import respeak_source
 
 __all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "first_path", "MARKETPLACE",
            "PLUGIN", "TOOL", "OLD_MARKETPLACE", "OLD_PLUGIN", "ALIAS", "SESSION_STATE",
-           "PROVIDER_RANGE", "remedy"]
+           "PROVIDER_RANGE", "PATH_LINE", "remedy"]
 
 MARKETPLACE = "agentik"
 PLUGIN = "decisions@agentik"
@@ -65,6 +68,9 @@ NOT_CHECKED = "not checked: say which with the suite's sources"
 # ak6: the launcher's mend in every case, since `make install` works only in a checkout and a
 # launcher of another version cannot mend itself.
 INSTALL_HINT = "/decisions:install-cli"
+# id1 R3: where install-cli placed the launcher in ~/.local/bin and that folder is off PATH,
+# the mend is the line setup prints for the shell profile; install-cli would place it again.
+PATH_LINE = 'export PATH="$HOME/.local/bin:$PATH"'
 MIN_PYTHON = (3, 9)    # the plugin's floor (hq entry 6, design/04 §2)
 # `pyenv install --list` waits on pyenv's rehash lock under load (ADV6-6).
 PYENV_TIMEOUT = 10
@@ -166,11 +172,28 @@ def first_path(*paths):
     return paths[0]
 
 
+def placed_off_path(env):
+    """id1 R3: True when the launcher stands in ~/.local/bin, a file this user can run,
+    and that folder is no entry of PATH, each entry read by its letters as `shutil.which`
+    reads it."""
+    folder = os.path.join(_home(env), ".local", "bin")
+    launcher = os.path.join(folder, TOOL)
+    if not (os.path.isfile(launcher) and os.access(launcher, os.X_OK)):
+        return False
+    entries = [os.path.normpath(p)
+               for p in (env.get("PATH") or "").split(os.pathsep) if p]
+    return os.path.normpath(folder) not in entries
+
+
 def check_tool(env):
-    """ok: `agentik-decisions` on PATH names this package's version; warn: absent,
-    another version, or only the old name `decisions` (the alias until r2)."""
+    """ok: `agentik-decisions` on PATH names this package's version; warn: absent (placed
+    in ~/.local/bin off PATH, the PATH line), another version, or only the old name
+    `decisions` (the alias until r2)."""
     found = shutil.which(TOOL, path=env.get("PATH"))
     if not found:
+        if placed_off_path(env):
+            return "warn", "`%s` is placed in ~/.local/bin, and ~/.local/bin is not on PATH " \
+                "(%s)" % (TOOL, PATH_LINE)
         alias = shutil.which(ALIAS, path=env.get("PATH"))
         if alias:
             return "warn", "%s: alias only; make install" % alias
@@ -290,12 +313,19 @@ def check_provider(provider):
 
 
 def check_ledger(ledger, cwd):
-    """ok: the ledger lints clean; warn: none at the git top; fail: a named ledger absent
+    """ok: the ledger lints clean; note: none named, outside a git work tree, where no
+    ledger is asked for (id1 R1); warn: none at the git top; fail: a named ledger absent
     (F16), or the lint finds problems."""
     try:
         path = locate(ledger, cwd)
     except Refusal as exc:
-        return ("fail" if ledger else "warn"), str(exc)
+        if ledger:
+            return "fail", str(exc)
+        try:
+            outside = git_top(cwd) is None
+        except Refusal:
+            outside = False
+        return ("note" if outside else "warn"), str(exc)
     try:
         found, problems = lint(path, cwd)
     except Refusal as exc:
@@ -311,7 +341,7 @@ def respeak_line(found):
     root, kind, by = found["root"], found["kind"], found["by"]
     if by == "variable":
         return (("ok", "%s (RESPEAK_ROOT gave it)" % root, None) if root
-                else ("warn", RESPEAK_ABSENT, None))
+                else ("note", RESPEAK_ABSENT, None))
     if kind == "own" and root:
         return "ok", root, None
     source = {key: found[key] for key in ("kind", "plugin", "root", "version", "declared")}
@@ -331,11 +361,12 @@ def respeak_line(found):
                         % (declared["path"], declared["line"],
                            "a folder that is gone" if kind == "folder"
                            else "a plugin that is not installed")), source
-    return "warn", RESPEAK_ABSENT, source
+    return "note", RESPEAK_ABSENT, source
 
 
 def check_respeak(env, into=None):
-    """ok: the respeak root `ask` would use; warn: none, and `ask` keeps its text. With
+    """ok: the respeak root `ask` would use; note: none, and `ask` keeps its text (id1 R2);
+    warn: a choice the suite's sources leave open or name wrong. With
     `into`, `into["respeak"]` takes the check's `source` (R6)."""
     status, detail, source = respeak_line(
         respeak_source(env, os.path.join(_home(env), ".claude", "plugins", "cache")))
@@ -360,11 +391,11 @@ def run_checks(cwd=None, env=None, ledger=None, sources=None):
 
 
 def remedy(name, status, detail):
-    """ak6 R8: the one command that mends a check, or None."""
-    if status == "ok":
+    """ak6 R8: the one command that mends a check, or None; a note asks for none (id1 R4)."""
+    if status in ("ok", "note"):
         return None
     if name == "tool":
-        return INSTALL_HINT
+        return PATH_LINE if detail.endswith("(%s)" % PATH_LINE) else INSTALL_HINT
     if name == "marketplace" and MARKETPLACE_HINT in detail:
         return MARKETPLACE_HINT
     if name == "plugin" and PLUGIN_HINT in detail:

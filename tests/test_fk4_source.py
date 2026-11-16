@@ -189,7 +189,8 @@ class Source(Hermetic):
         self.root("agentik", "0.12.6")       # no other folder fills in
         self.answers(self.row("plugin", FORK, bare, "0.12.6"))
         self.assertIsNone(self.found())
-        self.assertEqual(doctor.check_respeak(self.env)[0], "warn")
+        # id1 R2: RESPEAK_ABSENT is a note wherever it is the detail
+        self.assertEqual(doctor.check_respeak(self.env), ("note", TODAY))
 
     # -- line 5 ----------------------------------------------------------------------
 
