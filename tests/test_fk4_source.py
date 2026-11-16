@@ -152,7 +152,7 @@ class Source(Hermetic):
         self.root("agentik", "0.12.6")
         self.answers(self.row("absent", found=False))
         self.assertIsNone(self.found())
-        self.assertEqual(doctor.check_respeak(self.env), ("warn", TODAY))
+        self.assertEqual(doctor.check_respeak(self.env), ("note", TODAY))
 
     # -- line 4 ----------------------------------------------------------------------
 
@@ -247,7 +247,8 @@ class Source(Hermetic):
                     self.assertEqual(self.found(), want if gives else None)
                     status, detail = doctor.check_respeak(self.env)
                     self.assertLess(time.monotonic() - start, 6)
-                    self.assertEqual(status, "ok" if gives else "warn")
+                    self.assertEqual(status, "ok" if gives else
+                                     "note" if words == TODAY else "warn")
                     if words == TODAY:
                         self.assertEqual(detail, TODAY)
                     elif words:
@@ -286,7 +287,7 @@ class Source(Hermetic):
                 self.assertIsNone(self.doctor_json(env)["source"])
                 self.assertIsNone(self.found(dict(self.env, RESPEAK_ROOT=bare)))
                 self.assertEqual(doctor.check_respeak(dict(self.env, RESPEAK_ROOT=bare)),
-                                 ("warn", TODAY))
+                                 ("note", TODAY))
                 self.assertEqual(self.logged(), [])
 
     # -- line 7 ----------------------------------------------------------------------
@@ -360,7 +361,7 @@ class Source(Hermetic):
             with self.subTest(plugin=ident):
                 self.installed((ident, "here", "0.12.6", "user"))
                 self.assertIsNone(self.found())
-                self.assertEqual(doctor.check_respeak(self.env), ("warn", TODAY))
+                self.assertEqual(doctor.check_respeak(self.env), ("note", TODAY))
 
     # -- line 8 ----------------------------------------------------------------------
 

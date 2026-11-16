@@ -285,6 +285,79 @@ class Doctor(Hermetic):
         self.assertEqual(data["provider"], "none")
         self.assertTrue(text_out.getvalue().startswith("warn python: newer python available"))
 
+    # -- id1-doctor-notes: what asks nothing of a person is a note (GUIDE §11.5) -------
+
+    def placed(self, mode=0o755):
+        """The launcher as install-cli places it, under the temp home's .local/bin."""
+        path = os.path.join(self.home, ".local", "bin", doctor.TOOL)
+        write(path, "#!/bin/sh\necho 'agentik-decisions %s'\n" % current(), mode)
+        return path
+
+    def test_r1_the_ledger_outside_a_work_tree_is_a_note(self):
+        outside = os.path.join(self.tmp, "outside")
+        os.makedirs(outside)
+        with mock.patch.object(sys, "prefix", self.prefix):
+            got, _ = doctor.run_checks(cwd=outside, env=self.env)
+        status, detail = {name: (s, d) for name, s, d in got}["ledger"]
+        self.assertEqual(status, "note")
+        self.assertIn("outside a git work tree", detail)
+        self.assertIsNone(doctor.remedy("ledger", status, detail))
+        # a named ledger that is absent stays a fail, outside a work tree too (F16)
+        with mock.patch.object(sys, "prefix", self.prefix):
+            got, _ = doctor.run_checks(cwd=outside, env=self.env,
+                                       ledger=os.path.join(outside, "DECISIONS.md"))
+        self.assertEqual({name: s for name, s, _ in got}["ledger"], "fail")
+
+    def test_r3_a_placed_launcher_off_path_gets_the_path_line(self):
+        self.assertEqual(doctor.PATH_LINE, 'export PATH="$HOME/.local/bin:$PATH"')
+        self.placed()
+        status, detail = self.checks()[0]["tool"]
+        self.assertEqual(status, "warn")
+        self.assertIn("~/.local/bin is not on PATH", detail)
+        self.assertNotIn(doctor.INSTALL_HINT, detail)
+        self.assertEqual(doctor.remedy("tool", status, detail), doctor.PATH_LINE)
+        # placed and on PATH: ok
+        self.env["PATH"] = os.path.join(self.home, ".local", "bin") + os.pathsep + self.env["PATH"]
+        self.assertEqual(self.checks()[0]["tool"][0], "ok")
+
+    def test_r3_a_launcher_not_placed_keeps_install_cli(self):
+        for mode in (None, 0o644):      # none there, or a file that is no launcher
+            with self.subTest(mode=mode):
+                if mode is not None:
+                    self.placed(mode)
+                status, detail = self.checks()[0]["tool"]
+                self.assertEqual((status, detail),
+                                 ("warn", "`agentik-decisions` not on PATH (/decisions:install-cli)"))
+                self.assertEqual(doctor.remedy("tool", status, detail), doctor.INSTALL_HINT)
+
+    def test_r4_a_correct_install_run_from_home_has_no_warn(self):
+        """Acceptance 1: a temp HOME outside any repo, the launcher placed and on PATH, the
+        plugin installed, no respeak: no warn, exit 0, and a note is not counted as one."""
+        self.placed()
+        self.plugins(doctor.MARKETPLACE, doctor.PLUGIN)
+        self.env["PATH"] = os.path.join(self.home, ".local", "bin") + os.pathsep + "/usr/bin:/bin"
+        back = os.getcwd()
+        os.chdir(self.home)
+        self.addCleanup(os.chdir, back)
+        out, text = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(sys, "prefix", "/usr"):
+            code = decisions.main(["doctor", "--json"], out=out, err=io.StringIO())
+            self.assertEqual(decisions.main(["doctor"], out=text, err=io.StringIO()), 0)
+        self.assertEqual(code, 0)
+        data = json.loads(out.getvalue())
+        statuses = {c["name"]: c["status"] for c in data["checks"]}
+        self.assertEqual(statuses, {"python": "ok", "tool": "ok", "marketplace": "ok",
+                                    "plugin": "ok", "provider": "ok", "ledger": "note",
+                                    "respeak": "note"})
+        self.assertEqual((data["failed"], data["warned"]), (0, 0))
+        self.assertEqual(list(data), ["schema", "ok", "tool", "failed", "warned", "checks",
+                                      "provider"])
+        self.assertTrue(all(c["remedy"] is None for c in data["checks"]))
+        lines = text.getvalue().splitlines()
+        self.assertFalse([line for line in lines if not line.startswith(("ok ", "note "))])
+        self.assertIn("note ledger: ", text.getvalue())
+
     def test_a_fail_exits_2(self):
         # d25: any python at the floor outside pyenv is ok, so a floor above this one fails
         with mock.patch.dict(os.environ, self.env, clear=True), \
