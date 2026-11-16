@@ -482,24 +482,25 @@ class Backlog(Hermetic):
                              cwd=REPO, env=env, capture_output=True, text=True, timeout=300)
         self.assertEqual(run.returncode, 0, run.stderr[-2000:])
 
-    def test_doctor_respeak_warn_absent(self):
+    def test_doctor_respeak_note_absent(self):
+        # id1 R2: an absent respeak, which is optional, is a note
         home = self.empty_dir("home")
         status, detail = doctor.check_respeak({"HOME": home})
-        self.assertEqual(status, "warn")
+        self.assertEqual(status, "note")
         self.assertIn("respeak", detail)
         root = os.path.join(self.tmp, "respeak")
         os.makedirs(os.path.join(root, "scripts"))
         open(os.path.join(root, speak.RENDER), "w").close()
         self.assertEqual(doctor.check_respeak({"HOME": home, "RESPEAK_ROOT": root}),
                          ("ok", "%s (RESPEAK_ROOT gave it)" % root))
-        # a warn never changes the exit
+        # a note never changes the exit
         ok = mock.Mock(return_value=("ok", "fine"))
         with mock.patch.multiple(doctor, check_python=ok, check_tool=ok, check_marketplace=ok,
                                  check_plugin=ok, check_provider=ok, check_ledger=ok), \
                 mock.patch.dict(os.environ, {"HOME": home}):
             out = io.StringIO()
             self.assertEqual(decisions.main(["doctor"], out=out, err=io.StringIO()), 0)
-        self.assertIn("warn respeak: ", out.getvalue())
+        self.assertIn("note respeak: ", out.getvalue())
 
     # d26: design/05 section 2's NICE rows (the fixture `rows`)
 
