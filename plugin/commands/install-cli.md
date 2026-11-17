@@ -1,6 +1,6 @@
 ---
 description: "Give the terminal the CLI: freeze this plugin's code and write the agentik-decisions launcher"
-argument-hint: "[--prefix DIR]"
+argument-hint: "[--prefix DIR] [--force]"
 allowed-tools: [Bash(*/bin/agentik-decisions install-cli*)]
 disable-model-invocation: true
 ---

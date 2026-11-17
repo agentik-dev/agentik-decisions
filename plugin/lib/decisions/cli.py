@@ -59,9 +59,13 @@ Verbs
                                   verbs, needs and reads; `config` each setting it
                                   reads here (no settings file): its value, where
                                   it comes from and what changes it; writes nothing
-    install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
+    install-cli [--prefix P] [--force]
+                                  freeze this plugin's lib/ and write the launcher,
                                   its `decisions` link and the `agentik` door
-                                  under P (default ~/.local): 0, or 1 it could not
+                                  under P (default ~/.local): 0, or 1 it could not;
+                                  a newer command install-cli placed is left, one
+                                  line says so and exits 0; --force places this
+                                  one over it
     backlog [REPO...] [--order FILE] [--json]
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
@@ -367,6 +371,8 @@ def build_parser():
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
                          help="where bin/ and share/ go; the default is ~/.local")
+    install.add_argument("--force", action="store_true",
+                         help="place this plugin's command over a newer one install-cli placed")
     return parser
 
 
@@ -454,7 +460,7 @@ def cmd_install_cli(args, out, err):
     """The canonical install-cli (agentik_install, beside the package in lib/): 0 or 1."""
     import agentik_install
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        return agentik_install.install_cli(args.prefix)
+        return agentik_install.install_cli(args.prefix, force=args.force, takes_force=True)
 
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
