@@ -24,7 +24,8 @@ HEADER = "| id | level | area | finding | evidence | from |\n|---|---|---|---|--
 NOT_COMPUTED = ("not computed: tokens, account spend, work redone at a respawn, rows built "
                 "and never landed")
 STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-VERBS = {"rev-parse", "log", "rev-list", "show"}
+VERBS = {"rev-parse", "log", "rev-list", "show",
+         "config", "worktree", "cat-file"}  # rr4: the records resolver's reads
 
 
 def lines(n, word="line"):

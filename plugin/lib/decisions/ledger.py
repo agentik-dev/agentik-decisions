@@ -29,7 +29,7 @@ import os
 import re
 import shlex
 
-from .common import Refusal, git_top, read_text
+from .common import Refusal, git_top, read_text, records_of
 from . import questions
 
 __all__ = ["Entry", "Area", "Ledger", "parse", "load", "locate", "where", "in_the_way", "display",
@@ -473,8 +473,9 @@ def lint(path, cwd=None):
     whose questions and Proposed lines match one to one."""
     found = load(path, cwd)
     problems = [(found.path, n, m) for n, m in found.problems]
-    beside = os.path.join(os.path.dirname(os.path.abspath(path)), questions.NAME)
-    if not os.path.isfile(beside):
+    home = records_of(os.path.dirname(os.path.abspath(path)), "lint")  # rr4 D3
+    beside = os.path.join(home, questions.NAME) if home is not None else None
+    if beside is None or not os.path.isfile(beside):
         return found, problems
     name = display(beside, cwd)
     parsed = questions.parse(read_text(beside))

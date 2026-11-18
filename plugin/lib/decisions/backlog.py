@@ -26,7 +26,7 @@ import re
 import subprocess
 
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, git_top,
-                     read_text)
+                     read_text, records_of)
 
 __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
@@ -358,7 +358,10 @@ def for_repo(steps, repo):
 def view(repo, ordered=None):
     """The view of one repo, or None when it holds no NICE_TO_HAVE.md; `ordered`,
     (path, order, steps) of an `--order` FILE, stands for the repo's HANDOFF.md."""
-    nice, handoff = os.path.join(repo, NICE), os.path.join(repo, HANDOFF)
+    home = records_of(repo, "backlog")  # rr4 D3: the repo's records, None where it keeps none
+    if home is None:
+        return None
+    nice, handoff = os.path.join(home, NICE), os.path.join(home, HANDOFF)
     if not os.path.lexists(nice):
         return None
     items, closed = scanned(read_text(nice))

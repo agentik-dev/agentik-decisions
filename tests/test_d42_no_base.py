@@ -214,4 +214,8 @@ class NoGit(NoBase):
                     self.answer(*PICK)
                     self.answer(*OTHER)
                 self.assertIsNone(self.open_nine())
-                self.assertFalse(os.path.exists(log), scene)
+                # rr4: the records resolver's reads (`git --no-replace-objects -C ...`) are the
+                # one git ask and answer start; their own code still calls none
+                calls = open(log).read().splitlines() if os.path.exists(log) else []
+                self.assertEqual([c for c in calls if not c.startswith("--no-replace-objects -C ")],
+                                 [], scene)

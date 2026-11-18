@@ -27,7 +27,8 @@ from . import ask as ask_module
 from .backlog import (CELL_LEVEL, DATE_WORD, DONE_FILE, HANDOFF, HEADING, HOME_CELL, LEVEL,
                       NICE, ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red,
                       gathered, most_urgent, nice_items, short_name)
-from .common import Refusal, commit_texts, git_top, held, read_text
+from .common import (RECORDS_KEY, Refusal, commit_texts, git_top, held, read_text,
+                     records_answer, records_of)
 from .speak import CONTROL, ESCAPE
 
 __all__ = ["cmd_rows", "table", "asked", "KEYS", "SCHEMA"]
@@ -211,8 +212,9 @@ def records(folder):
 class Repos(object):
     """R4: a repo cell's checkout, or why its rows are skipped; one `Git` a checkout."""
 
-    def __init__(self, home, named):
+    def __init__(self, home, named, records=None):
         self.home, self.gits = home, {}
+        self.records = home if records is None else records  # rr4: HANDOFF.md's folder
         self.named = None
         if named:
             self.named = {}
@@ -331,15 +333,42 @@ def charter_of(git, base, tip):
     return best[2] if best else None
 
 
+def charter_in(records, name):
+    """rr4 D4: (the newest charter under `records` named for the row `name`, its text), or
+    (None, None): a repo whose records are out keeps its charters on no branch."""
+    folder = os.path.join(records, SITTINGS)
+    best = None
+    for entry in (sorted(os.listdir(folder)) if os.path.isdir(folder) else []):
+        m = CHARTER.match(entry)
+        tail = entry[len(m.group(1)) + 1 + len(m.group(2)):-len(".md")] if m else None
+        if m and tail == "-" + name and os.path.isfile(os.path.join(folder, entry)):
+            key = (m.group(1), int(m.group(2)), entry)
+            best = key if best is None or key > best else best
+    if best is None:
+        return None, None
+    try:
+        return SITTINGS + best[2], read_text(os.path.join(folder, best[2]))
+    except (OSError, UnicodeError):
+        return SITTINGS + best[2], ""
+
+
 def cut_of(row, git, since):
     """rw2b R8: what a cut builder left: the charter on the tip, the commits past `since`,
-    the worktree's loose paths."""
+    the worktree's loose paths. rr4 D4: a repo whose records are out gives the charter in
+    its records instead of the tip's."""
     tip = row["tip"]
-    charter = charter_of(git, row["base"], tip)
+    answer = records_answer(row["path"]) if row.get("path") else None
+    if answer is None or answer["state"] == "own":
+        charter = charter_of(git, row["base"], tip)
+        text = None
+    else:
+        home = records_of(row["path"], "rows")
+        charter, text = charter_in(home, row["row"]) if home is not None else (None, None)
     unchecked = next_act = None
     row["unchecked_count"] = 0
     if charter:
-        text = git.run("show", "%s:%s" % (tip, charter)) or ""
+        if text is None:
+            text = git.run("show", "%s:%s" % (tip, charter)) or ""
         unchecked = [l.rstrip() for l in section_of(text, "Done-ness") or []
                      if l.startswith("- [ ]")]
         # review 1 F6: LISTED at most, as commits and paths; the text keeps the count
@@ -519,7 +548,7 @@ def level_red(row, repos):
     m = FROM_HANDOFF.match(source)
     found = None
     if m:
-        path = os.path.join(repos.home, HANDOFF)
+        path = os.path.join(repos.records, HANDOFF)
         if not os.path.isfile(path):
             return None
         text = read_text(path)
@@ -656,14 +685,27 @@ def skipped_of(skipped):
     return out
 
 
-def root_of(args):
-    """R2: DIR, or `history/rows` under the working directory's git top; and its git top."""
+def root_of(args, write=False):
+    """R2: DIR, or `history/rows` under the working directory's git top; its git top; and
+    the folder of its HANDOFF.md and done file. rr4 D3: with no DIR, `history/rows` is
+    under the repo's records, and the home stays the repo's checkout."""
     root = getattr(args, "root", None)
     if root is None:
         top = git_top(os.getcwd())
         if top is None:
             raise RowsRefusal("no-root", "rows: no --root DIR and no git checkout here",
                               "name the folder of row folders with --root DIR")
+        kept = records_of(top, "rows close" if write else "rows", write=write)
+        if kept is None:
+            raise RowsRefusal("no-root", "rows: no records here: this repo keeps its records "
+                              "out and the key %s is not set" % RECORDS_KEY,
+                              "set the key, or name the folder of row folders with --root DIR")
+        if (records_answer(top) or {}).get("state") == "out":
+            root = os.path.join(kept, ROOT)
+            if not os.path.isdir(root):
+                raise RowsRefusal("no-root", "rows: %s is not a directory" % root,
+                                  "name the folder of row folders with --root DIR")
+            return os.path.realpath(root), os.path.realpath(top), kept
         root = os.path.join(top, ROOT)
     if not os.path.isdir(root):
         raise RowsRefusal("no-root", "rows: %s is not a directory" % root,
@@ -673,7 +715,7 @@ def root_of(args):
     if home is None:
         raise RowsRefusal("no-home", "rows: %s is in no git checkout" % root,
                           "put the row folders inside the home's checkout")
-    return root, os.path.realpath(home)
+    return root, os.path.realpath(home), os.path.realpath(home)
 
 
 def read(args):
@@ -683,8 +725,8 @@ def read(args):
     if any(getattr(args, k, None) not in (None, False) for k in CLOSE_FLAGS):
         raise RowsRefusal("usage", "rows: --withdrawn, --repo, --dry-run and -y go with close",
                           "name close first: rows close ROW")
-    root, home = root_of(args)
-    repos = Repos(home, words[1:] if check else words)
+    root, home, kept = root_of(args)
+    repos = Repos(home, words[1:] if check else words, kept)
     opened, shut, skipped = gathered_rows(root, repos, check)
     for row in opened:
         facts(row, repos.git(row["path"]))
@@ -906,7 +948,7 @@ def cmd_close(args, names, out, err):
         why = why.strip()
         if not why or "|" in why or WHY_BAD.search(why):
             raise Refusal("rows close: --withdrawn takes one line of words with no | in it")
-    root, home = root_of(args)
+    root, home, kept = root_of(args, write=True)
     name = names[0]
     if not NAME.fullmatch(name):
         raise refused("rows close: no such row under %s" % root)
@@ -923,7 +965,7 @@ def cmd_close(args, names, out, err):
         out.write(clean("rows close: %s is closed already: %s"
                         % (name, rec["cells"]["done"][:CLOSED_CAP])) + "\n")
         return 0
-    done = os.path.join(home, DONE_FILE)
+    done = os.path.join(kept, DONE_FILE)
     shown = [(path, row_raw)]
     if why is not None:
         cell, done_text, entry = "withdrawn %s: %s" % (ask_module.today(), why), None, None

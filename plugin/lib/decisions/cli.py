@@ -110,6 +110,11 @@ Verbs
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog`, `expire`, `analyze`, `rows` and `describe` read no ledger and
 ignore it, and `questions` ignores it, reading the DECISIONS.md beside each REPO's file.
+A repo's records (OPEN-QUESTIONS.md and its .new.lock, NICE_TO_HAVE.md, HANDOFF.md, the
+done and overflow files under history/, and history/rows) are at its git top, or under the
+folder its clone's git config key `agentik.records` names; a clone whose tree says its
+records are out and that sets no key reads none and writes none, and a key that does not
+resolve refuses. --ledger, --into, --root and --order still name their own paths.
 `--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -155,7 +160,7 @@ from .questions_read import cmd_questions
 from .expire import cmd_expire
 from .ask import cmd_new
 from .selector import cmd_ask
-from .common import VERSION, Refusal
+from .common import VERSION, Refusal, records_reset
 from .doctor import cmd_doctor
 from .init import cmd_init
 from .ledger import locate
@@ -347,7 +352,8 @@ def build_parser():
                            "history/handoff-done.md, both or neither")
     rows.add_argument("--root", default=None, metavar="DIR",
                       help="the folder of row folders; the default is history/rows at the "
-                           "working directory's git top, whose git top is the home")
+                           "working directory's git top, whose git top is the home, or under "
+                           "the folder its clone's agentik.records names")
     rows.add_argument("--json", action="store_true")
     rows.add_argument("--withdrawn", default=None, metavar="WHY",
                       help="close: give the open row up, `withdrawn <today>: WHY`, one line "
@@ -394,6 +400,7 @@ def main(argv=None, out=None, err=None):
         alias_note(sys.argv[0], err)
         argv = sys.argv[1:]
     argv = list(argv)
+    records_reset()  # rr4: each call resolves a repo's records afresh
     try:
         # argparse prints --help and its usage errors itself: into `out` and `err`.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):

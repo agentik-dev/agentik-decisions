@@ -64,7 +64,7 @@ import sys
 from . import questions
 from .ask import LOCK, NEW_WAIT
 from .common import (GIT_TIMEOUT, Refusal, bounded, disk_text, held, keeps_crlf, on_disk,
-                     read_text, write_text)
+                     read_text, records_of, write_text)
 from .ledger import (DATE, IN_FORCE, TREE_SESSION, amended, display, final_parenthetical,
                      folded, is_every, is_tree, lint, load, ordered, parse)
 from .tree import tilde as real_tilde
@@ -399,7 +399,9 @@ def head_holds(path, data):
 def cmd_fold(path, out, err):
     """`render --fold-tails`, after the lint and before the block (d31)."""
     name = display(path)
-    with held(os.path.join(os.path.dirname(path), LOCK), NEW_WAIT, err):
+    # rr4 D3: the lock is the records' one, beside the ledger where the repo keeps none here
+    home = records_of(os.path.dirname(path), "render") or os.path.dirname(path)
+    with held(os.path.join(home, LOCK), NEW_WAIT, err):
         old = read_text(path)
         try:
             with open(path, "rb") as handle:

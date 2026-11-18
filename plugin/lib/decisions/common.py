@@ -11,12 +11,12 @@ import tempfile
 import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
-           "keeps_crlf", "disk_text", "on_disk",
-           "GIT_TIMEOUT", "VERSION"]
+           "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_reset",
+           "RECORDS_KEY", "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
-VERSION = "0.23.9"
+VERSION = "0.23.10"
 
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
@@ -63,6 +63,62 @@ def git_top(cwd):
         return None
     top = out.strip()
     return top if code == 0 and top else None
+
+
+# rr4 (hq design/28 §3 items 12, 18): where a repo's records are, from commons' one resolver,
+# `agentik_records`, beside this package in lib/. Each folder is resolved once a call: `main`
+# empties the cache, so a test's second call reads the key again.
+RECORDS_KEY = "agentik.records"
+_RESOLVED = {}
+WHY = {"unread": "git cannot read it as a path", "many": "it is set more than once",
+       "relative": "it is not an absolute path", "missing": "it names no folder",
+       "inside": "it lies inside the clone or one of its worktrees",
+       "name": "its last name is not the clone's folder name",
+       "holder": "the repository holding it declares its own records out"}
+
+
+def records_reset():
+    """Forget every answer, so the next call resolves afresh."""
+    _RESOLVED.clear()
+
+
+def records_answer(folder):
+    """The resolver's `agentik.records/1` object for `folder`, or None where `folder` is in
+    no git checkout (read as `own`, today's behaviour); one resolve a folder a call."""
+    key = os.path.realpath(folder)
+    if key not in _RESOLVED:
+        import agentik_records
+        try:
+            _RESOLVED[key] = agentik_records.resolve(key)
+        except (agentik_records.NoRepo, OSError):
+            _RESOLVED[key] = None
+    return _RESOLVED[key]
+
+
+def _shown(value):
+    return "".join(c if c.isprintable() else "\\x%02x" % ord(c) for c in value)
+
+
+def records_of(folder, verb, write=False):
+    """D2: the folder holding the records of `folder`'s repo. `own` (or no checkout) gives
+    `folder` back unchanged; `out`, the key's folder; `unset`, None for a read, a Refusal for a
+    write; `broken`, a Refusal naming the key, its values and the reason."""
+    answer = records_answer(folder)
+    if answer is None or answer["state"] == "own":
+        return folder
+    if answer["state"] == "out":
+        return answer["records"]
+    if answer["state"] == "unset":
+        if not write:
+            return None
+        raise Refusal("%s: this repo keeps its records out of its tree and the key %s is not "
+                      "set in its clone; set it with `git config %s <folder>`; nothing written"
+                      % (verb, RECORDS_KEY, RECORDS_KEY))
+    import agentik_records
+    shown = ", ".join("'%s'" % _shown(v) for v in agentik_records.values(folder)) or "none"
+    raise Refusal("%s: the key %s (%s) does not resolve: %s (%s); no record read or written"
+                  % (verb, RECORDS_KEY, shown, WHY.get(answer["why"], answer["why"]),
+                     answer["why"]))
 
 
 def read_text(path):
