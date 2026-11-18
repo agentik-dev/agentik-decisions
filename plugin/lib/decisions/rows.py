@@ -333,15 +333,24 @@ def charter_of(git, base, tip):
     return best[2] if best else None
 
 
+def paired(tail, name):
+    """review 1 C3: a charter's tail (`""` or `-<chain>`) goes with the row `name` when it has
+    no chain, or its chain is the row's name or the row's name's head before a `-`."""
+    chain = tail[1:]
+    return not chain or name == chain or name.startswith(chain + "-")
+
+
 def charter_in(records, name):
-    """rr4 D4: (the newest charter under `records` named for the row `name`, its text), or
-    (None, None): a repo whose records are out keeps its charters on no branch."""
+    """rr4 D4, review 1 C3: (the newest charter under `records` for the row `name`, its text),
+    or (None, None): any name CHARTER accepts whose chain goes with the row, the newest by
+    date and then by number, as `charter_of` takes one on a branch; a repo whose records are
+    out keeps its charters on no branch."""
     folder = os.path.join(records, SITTINGS)
     best = None
     for entry in (sorted(os.listdir(folder)) if os.path.isdir(folder) else []):
         m = CHARTER.match(entry)
         tail = entry[len(m.group(1)) + 1 + len(m.group(2)):-len(".md")] if m else None
-        if m and tail == "-" + name and os.path.isfile(os.path.join(folder, entry)):
+        if m and paired(tail, name) and os.path.isfile(os.path.join(folder, entry)):
             key = (m.group(1), int(m.group(2)), entry)
             best = key if best is None or key > best else best
     if best is None:
@@ -697,8 +706,10 @@ def root_of(args, write=False):
                               "name the folder of row folders with --root DIR")
         kept = records_of(top, "rows close" if write else "rows", write=write)
         if kept is None:
-            raise RowsRefusal("no-root", "rows: no records here: this repo keeps its records "
-                              "out and the key %s is not set" % RECORDS_KEY,
+            nogit = (records_answer(top) or {}).get("state") == "nogit"
+            raise RowsRefusal("no-root", "rows: no records here: " + (
+                              "git cannot read the key %s" if nogit else "this repo keeps its "
+                              "records out and the key %s is not set") % RECORDS_KEY,
                               "set the key, or name the folder of row folders with --root DIR")
         if (records_answer(top) or {}).get("state") == "out":
             root = os.path.join(kept, ROOT)
