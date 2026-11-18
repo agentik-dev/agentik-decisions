@@ -85,7 +85,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
-| `--version` | `agentik-decisions 0.23.9`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.23.10`, the version `doctor` compares with the one on PATH |
 
 Over a hand-kept `CLAUDE.md`, `init` and `render` say what its own lines load; `/decisions:audit-claude-md` audits them.
 
@@ -128,6 +128,8 @@ An optional **Report.** paragraph comes before the answer line.
 N is one more than the highest number in the ledger and in `OPEN-QUESTIONS.md`, so an answered question keeps its number as an entry.
 When `OPEN-QUESTIONS.md` is absent, `new` creates it with a `# Decisions for the owner` heading and an empty `## Decided without asking`.
 The read, the number and both writes run under `.new.lock` beside the ledger, so parallel runs take distinct numbers, and both files are written or neither is.
+
+A repo's working records can live outside its clone (hq design/28): when the clone's own git config sets `agentik.records`, commons' resolver, `plugin/lib/agentik_records.py`, names that folder, and `OPEN-QUESTIONS.md` with its `.new.lock`, `NICE_TO_HAVE.md`, `HANDOFF.md`, the done and overflow files and `rows`' default `history/rows` are read and written there, while the ledger stays in the repo. With no key they are where they always were. A tree that tracks the line `records: out` in `.hygiene-allow` and whose clone sets no key reads no record and refuses each write, naming the key; a key that does not resolve refuses every record read and write with its value and the reason. `analyze` then dates `NICE_TO_HAVE.md` by the holder's commits and says so once, and `rows` reads a cut row's charter from the records. An explicit `--ledger`, `--into`, `--root` or `--order` still wins. decisions commits nothing.
 An empty part, or a title the ledger's lint cannot take, exits 2 and writes nothing; a title may hold a single `*`, as in a backticked `*.md`, but not `**`.
 So does an option count outside 2 to 4, a label over five words or holding `(Recommended)`, a choice that does not end in `?`, or a sixth open question.
 The first label holds at most four words, since ` (Recommended)` follows it, and no label is `Other` in any case, since AskUserQuestion adds that option itself.
@@ -276,7 +278,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.23.9`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.23.10`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|
