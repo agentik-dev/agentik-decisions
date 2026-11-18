@@ -24,8 +24,10 @@ HEADER = "| id | level | area | finding | evidence | from |\n|---|---|---|---|--
 NOT_COMPUTED = ("not computed: tokens, account spend, work redone at a respawn, rows built "
                 "and never landed")
 STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-VERBS = {"rev-parse", "log", "rev-list", "show",
-         "config", "worktree", "cat-file"}  # rr4: the records resolver's reads
+VERBS = {"rev-parse", "log", "rev-list", "show"}
+# rr4 review 1 C5: the records resolver's reads, `git --no-replace-objects -C <folder> <verb>`,
+# admitted for its calls alone
+RESOLVER = {"rev-parse", "worktree", "config", "cat-file"}
 
 
 def lines(n, word="line"):
@@ -365,6 +367,9 @@ class Analyze(Hermetic):
                 self.assertEqual(code, 0, err)
         verbs = set()
         for call in self.calls(log):
+            if call[:2] == ["--no-replace-objects", "-C"] and len(call) > 3 \
+                    and call[3] in RESOLVER:
+                continue
             i = 0
             while i < len(call) and call[i].startswith("-"):
                 i += 2 if call[i] in ("-c", "-C") else 1

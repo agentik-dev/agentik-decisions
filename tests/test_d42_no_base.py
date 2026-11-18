@@ -19,6 +19,15 @@ NO_BASE = ("answer: question 9's block has no base line, or more than one, so an
 SKIP = ("ask: question %d has no base line, or more than one, so its lines cannot be told from "
         "typed ones; run agentik decisions answer %d --other for it first; not asked\n")
 WORDS = "%s %s" % (FOLLOW, TYPED)
+# rr4 review 1 C5: the records resolver's git verbs, `git --no-replace-objects -C <folder> <verb>`
+RESOLVER = ("rev-parse", "worktree", "config", "cat-file")
+REAL_GIT = shutil.which("git") or "/usr/bin/git"
+
+
+def resolver_call(line):
+    """True for a logged call that is the records resolver's: its form and one of its verbs."""
+    words = line.split(" ")
+    return len(words) > 3 and words[:2] == ["--no-replace-objects", "-C"] and words[3] in RESOLVER
 SHAPED = "<!-- decisions: base deadbeef -->"
 
 
@@ -153,9 +162,20 @@ class Never(NoBase):
                                  and os.path.exists(os.path.join(self.tmp, ".git")))
                 path = empty if scene == "git off PATH" else os.environ["PATH"]
                 with mock.patch.dict(os.environ, {"PATH": path}):
-                    self.no_base_pick()
-                    self.not_asked()
-                    self.kept_whole(WORDS)
+                    if scene == "git off PATH":
+                        # rr4 review 1 C2: in a checkout git cannot answer for, the records
+                        # are nowhere known, so each write refuses before the block is read
+                        for run in (lambda: self.answer(*PICK), lambda: self.ask("9")):
+                            before = sha(self.ledger), sha(self.questions)
+                            code, out, err = run()
+                            self.assertEqual(code, 2, out + err)
+                            self.assertIn("git cannot say where", err)
+                            self.assertEqual(len(err.strip().splitlines()), 1, err)
+                            self.assertEqual((sha(self.ledger), sha(self.questions)), before)
+                    else:
+                        self.no_base_pick()
+                        self.not_asked()
+                        self.kept_whole(WORDS)
 
 
 class Shaped(NoBase):
@@ -200,8 +220,12 @@ class NoGit(NoBase):
         bin_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, bin_dir)
         log = os.path.join(bin_dir, "calls")
-        self.write(os.path.join(bin_dir, "git"), "#!/bin/sh\necho \"$*\" >> '%s'\nexit 1\n"
-                   % log)
+        # rr4 review 1 C2: the records resolver's reads go to git, so it can answer; every
+        # other call fails, as at the pin
+        self.write(os.path.join(bin_dir, "git"),
+                   "#!/bin/sh\necho \"$*\" >> '%s'\n"
+                   "[ \"$1\" = --no-replace-objects ] && case \"$4\" in %s) exec %s \"$@\";; esac\n"
+                   "exit 1\n" % (log, "|".join(RESOLVER), REAL_GIT))
         os.chmod(os.path.join(bin_dir, "git"), 0o755)
         for scene in ("based", "none"):
             with self.subTest(scene=scene):
@@ -217,5 +241,4 @@ class NoGit(NoBase):
                 # rr4: the records resolver's reads (`git --no-replace-objects -C ...`) are the
                 # one git ask and answer start; their own code still calls none
                 calls = open(log).read().splitlines() if os.path.exists(log) else []
-                self.assertEqual([c for c in calls if not c.startswith("--no-replace-objects -C ")],
-                                 [], scene)
+                self.assertEqual([c for c in calls if not resolver_call(c)], [], scene)
