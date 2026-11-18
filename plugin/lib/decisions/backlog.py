@@ -26,7 +26,7 @@ import re
 import subprocess
 
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, git_top,
-                     read_text, records_of)
+                     read_text, records_of, records_repo)
 
 __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
@@ -447,11 +447,14 @@ def cmd_backlog(args, out, err):
     if not names:
         here = os.getcwd()
         names = [git_top(here) or here]
-    repos = []
+    repos, keys = [], {}
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("backlog: %s is not a directory" % name)
-        repos.append(os.path.realpath(name))
+        key, real = records_repo(name)  # review 1 C4: a repo whose records are out, read once
+        if key == real or key not in keys:
+            keys[key] = real
+            repos.append(real)
     ordered, order_file = None, getattr(args, "order", None)
     if order_file is not None:
         if not os.path.isfile(order_file):

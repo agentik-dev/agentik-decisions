@@ -20,7 +20,7 @@ import os
 import re
 
 from . import answer, ledger, questions
-from .common import Refusal, git_top, records_of
+from .common import Refusal, git_top, records_of, records_repo
 
 __all__ = ["cmd_questions", "read_repo", "SCHEMA"]
 
@@ -159,9 +159,13 @@ def as_text(view):
 
 def read_all(names):
     """(the repos' objects, the skipped ones), in the order named."""
-    repos, skipped = [], []
+    repos, skipped, keys = [], [], set()
     for name in names:
-        repo = os.path.realpath(name)
+        key, repo = records_repo(name)  # review 1 C4: a repo whose records are out, read once
+        if key != repo:
+            if key in keys:
+                continue
+            keys.add(key)
         view, why = read_repo(repo)
         if view is None:
             skipped.append({"repo": repo, "why": why})

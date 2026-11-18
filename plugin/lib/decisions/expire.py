@@ -48,7 +48,7 @@ import tempfile
 
 from . import backlog
 from .ask import LOCK, NEW_WAIT
-from .common import Refusal, file_mode, git_top, held, read_text, records_of
+from .common import Refusal, file_mode, git_top, held, read_text, records_of, records_repo
 from .render import head_holds
 
 __all__ = ["cmd_expire", "expiring", "extents", "moved_bytes", "byte_lines", "parsed"]
@@ -409,12 +409,13 @@ def cmd_expire(args, out, err):
     if not names:
         here = os.getcwd()
         names = [git_top(here) or here]
-    repos = []
+    repos, keys = [], set()
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("expire: %s is not a directory" % name)
-        real = os.path.realpath(name)
-        if real not in repos:
+        key, real = records_repo(name)  # review 1 C4: one repo, read once
+        if key not in keys:
+            keys.add(key)
             repos.append(real)
     ordered, order_file = None, getattr(args, "order", None)
     if order_file is not None:
