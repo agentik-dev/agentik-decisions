@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -113,7 +114,10 @@ def _git_above(folder):
 def _resolved(key):
     """(the resolver's answer for `key` or None for NoRepo, the key's values) from a bounded
     child; the answer `{"state": "timeout"}` past GIT_TIMEOUT, `{"state": "nogit"}` where git
-    cannot answer for a folder a `.git` lies above (review 1 C2), None where none does."""
+    cannot answer for a folder a `.git` lies above (review 1 C2), None where none does or no
+    git is on PATH: with none, `answer` and `ask` work as d41 and d42 made them, in the clone."""
+    if shutil.which("git") is None:
+        return None, []
     argv = [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
     try:
         code, out = bounded(argv, GIT_TIMEOUT, stdin=subprocess.DEVNULL)

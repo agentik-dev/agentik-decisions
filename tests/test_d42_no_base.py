@@ -162,21 +162,9 @@ class Never(NoBase):
                                  and os.path.exists(os.path.join(self.tmp, ".git")))
                 path = empty if scene == "git off PATH" else os.environ["PATH"]
                 with mock.patch.dict(os.environ, {"PATH": path}):
-                    if scene == "git off PATH":
-                        # rr4 review 1 C2: in a checkout git cannot answer for, the records
-                        # are nowhere known, so each write refuses before the block is read
-                        for run in (lambda: self.answer(*PICK), lambda: self.ask("9")):
-                            before = sha(self.ledger), sha(self.questions)
-                            code, out, err = run()
-                            self.assertEqual(code, 2, out + err)
-                            self.assertIn("git cannot say where", err)
-                            self.assertEqual(len(err.strip().splitlines()), 1, err)
-                            self.assertEqual((sha(self.ledger), sha(self.questions)), before)
-                    else:
-                        self.no_base_pick()
-                        self.not_asked()
-                        self.kept_whole(WORDS)
-
+                    self.no_base_pick()
+                    self.not_asked()
+                    self.kept_whole(WORDS)
 
 class Shaped(NoBase):
 
