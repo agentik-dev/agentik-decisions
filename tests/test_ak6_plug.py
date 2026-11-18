@@ -124,6 +124,13 @@ class Describe(Plug):
                           ("status", "rows", ["rows", "--json"]),
                           ("status", "questions", ["questions", "--json"])])
 
+    def test_the_rows_read_names_its_wall(self):
+        # `rows --json` measured 3.8 s for 38 rows; the suite's table gives it 6 s today.
+        reads = self.answer("describe", "--json")["reads"]
+        self.assertEqual({r["name"]: r["wall_s"] for r in reads if "wall_s" in r}, {"rows": 6})
+        self.assertEqual([sorted(r) for r in reads if r["name"] == "rows"],
+                         [["argv", "kind", "name", "wall_s"]])
+
     def test_describe_without_json_or_with_another_word_exits_2(self):
         for argv in (["describe"], ["describe", "nosuch", "--json"], ["describe", "config"]):
             with self.subTest(argv=argv):
