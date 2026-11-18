@@ -331,6 +331,8 @@ def records_backlog(top, head, start, end):
     empty = {"snapshots": [], "filed": None, "closed": None, "moved": None, "rising": None}
     if answer["state"] == "unset":
         return empty, "R4 (no records here: the key %s is not set)" % common.RECORDS_KEY, shown
+    if answer["state"] == "nogit":  # review 1 C2: git cannot answer, so no record is read
+        return empty, "R4 (no records here: git cannot read the key %s)" % common.RECORDS_KEY, shown
     holder = answer["holder"]
     if holder is None:
         return empty, ("R4 (the records at %s are in no git repository: no snapshot)"

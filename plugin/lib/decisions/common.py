@@ -3,15 +3,17 @@ all-or-nothing write and the lock."""
 
 import contextlib
 import fcntl
+import json
 import os
 import re
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
-           "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_reset",
+           "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_repo", "records_reset",
            "RECORDS_KEY", "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
@@ -82,17 +84,73 @@ def records_reset():
     _RESOLVED.clear()
 
 
+# review 1 C1: the resolver runs in a child of its own session, so GIT_TIMEOUT bounds the whole
+# resolve and its git children die with it; the synced module stays as synced.
+_CHILD = ("import json, sys\n"
+          "sys.path.insert(0, sys.argv[1])\n"
+          "import agentik_records as r\n"
+          "try:\n"
+          "    a = r.resolve(sys.argv[2])\n"
+          "except r.NoRepo:\n"
+          "    a = None\n"
+          "v = r.values(sys.argv[2]) if a and a['state'] == 'broken' else []\n"
+          "print(json.dumps({'answer': a, 'values': v}))\n")
+_LIB = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _git_above(folder):
+    """True where a `.git`, a folder or a file, lies in `folder` or above it."""
+    here = folder
+    while True:
+        if os.path.lexists(os.path.join(here, ".git")):
+            return True
+        up = os.path.dirname(here)
+        if up == here:
+            return False
+        here = up
+
+
+def _resolved(key):
+    """(the resolver's answer for `key` or None for NoRepo, the key's values) from a bounded
+    child; the answer `{"state": "timeout"}` past GIT_TIMEOUT, `{"state": "nogit"}` where git
+    cannot answer for a folder a `.git` lies above (review 1 C2), None where none does."""
+    argv = [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
+    try:
+        code, out = bounded(argv, GIT_TIMEOUT, stdin=subprocess.DEVNULL)
+        got = json.loads(out) if code == 0 else None
+    except subprocess.TimeoutExpired:
+        return {"state": "timeout", "repo": key}, []
+    except (OSError, ValueError):
+        got = None
+    answer = got.get("answer") if isinstance(got, dict) else None
+    if isinstance(answer, dict) and answer.get("state") in ("own", "out", "unset", "broken"):
+        return answer, list(got.get("values") or [])
+    if _git_above(key):
+        return {"state": "nogit", "repo": key, "records": None, "holder": None,
+                "prefix": None}, []
+    return None, []
+
+
 def records_answer(folder):
     """The resolver's `agentik.records/1` object for `folder`, or None where `folder` is in
-    no git checkout (read as `own`, today's behaviour); one resolve a folder a call."""
+    no git checkout (read as `own`, today's behaviour); one resolve a folder a call. Besides
+    the resolver's four states, `timeout` and `nogit` (see `_resolved`)."""
     key = os.path.realpath(folder)
     if key not in _RESOLVED:
-        import agentik_records
-        try:
-            _RESOLVED[key] = agentik_records.resolve(key)
-        except (agentik_records.NoRepo, OSError):
-            _RESOLVED[key] = None
-    return _RESOLVED[key]
+        _RESOLVED[key] = _resolved(key)
+    return _RESOLVED[key][0]
+
+
+def records_repo(folder):
+    """review 1 C4: (the key a REPO argument is read once by, the folder to read it as). A
+    repo whose records are out is keyed by its records folder and read at its git top, so a
+    subfolder or a link of it is that repo; any other folder is its own realpath, as today."""
+    real = os.path.realpath(folder)
+    answer = records_answer(real) if os.path.isdir(real) else None
+    if answer is None or answer["state"] != "out":
+        return real, real
+    top = git_top(real)
+    return os.path.realpath(answer["records"]), os.path.realpath(top) if top else real
 
 
 def _shown(value):
@@ -108,14 +166,22 @@ def records_of(folder, verb, write=False):
         return folder
     if answer["state"] == "out":
         return answer["records"]
+    if answer["state"] == "timeout":
+        raise Refusal("%s: git did not say within %d s where %s keeps its records (the key %s); "
+                      "no record read or written" % (verb, GIT_TIMEOUT, answer["repo"], RECORDS_KEY))
+    if answer["state"] == "nogit":
+        if not write:
+            return None
+        raise Refusal("%s: git cannot say where %s keeps its records (the key %s); nothing "
+                      "written" % (verb, answer["repo"], RECORDS_KEY))
     if answer["state"] == "unset":
         if not write:
             return None
         raise Refusal("%s: this repo keeps its records out of its tree and the key %s is not "
                       "set in its clone; set it with `git config %s <folder>`; nothing written"
                       % (verb, RECORDS_KEY, RECORDS_KEY))
-    import agentik_records
-    shown = ", ".join("'%s'" % _shown(v) for v in agentik_records.values(folder)) or "none"
+    values = _RESOLVED[os.path.realpath(folder)][1]
+    shown = ", ".join("'%s'" % _shown(v) for v in values) or "none"
     raise Refusal("%s: the key %s (%s) does not resolve: %s (%s); no record read or written"
                   % (verb, RECORDS_KEY, shown, WHY.get(answer["why"], answer["why"]),
                      answer["why"]))
