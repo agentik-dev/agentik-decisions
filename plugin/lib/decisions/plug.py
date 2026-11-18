@@ -38,7 +38,7 @@ NEEDS = [{"name": "git", "kind": "program", "why": "finds the repo's top and rea
 READS = [{"kind": "config", "name": "settings", "argv": ["describe", "config", "--json"]},
          {"kind": "doctor", "name": "doctor", "argv": ["doctor", "--json"]},
          {"kind": "status", "name": "backlog", "argv": ["backlog", "--json"]},
-         {"kind": "status", "name": "rows", "argv": ["rows", "--json"]},
+         {"kind": "status", "name": "rows", "argv": ["rows", "--json"], "wall_s": 6},
          {"kind": "status", "name": "questions", "argv": ["questions", "--json"]}]
 # R6: one sentence a setting, under 100 characters.
 SUMMARIES = {
