@@ -92,7 +92,7 @@ import types
 
 from . import ask, questions
 from .common import (Refusal, commit_texts, disk_text, held, keeps_crlf, on_disk, read_text,
-                     write_text)
+                     records_of, write_text)
 from .ledger import (DATE, EVERY_SESSION, IN_FORCE, IN_FORCE_CAP, LEGACY, PROPOSED, TITLED,
                      TREE_SESSION, bold_title, display, dropped, final_parenthetical, folded,
                      is_tree, load, parse, repeats, sentences, unclosed)
@@ -359,9 +359,10 @@ def cmd_answer(args, path, out, err):
     if is_ledger(target, path):
         raise Refusal("answer: the target %s is the ledger itself; nothing written"
                       % display(target))
-    path_q = os.path.join(os.path.dirname(path), ask.QUESTIONS)
+    home = records_of(os.path.dirname(path), "answer", write=True)  # rr4 D3
+    path_q = os.path.join(home, ask.QUESTIONS)
     date = ask.today()
-    with held(os.path.join(os.path.dirname(path), ask.LOCK), ask.NEW_WAIT, err):
+    with held(os.path.join(home, ask.LOCK), ask.NEW_WAIT, err):
         if not os.path.exists(path_q):
             raise Refusal("answer: no %s beside the ledger" % display(path_q))
         ledger_text, old_q = read_text(path), read_text(path_q)

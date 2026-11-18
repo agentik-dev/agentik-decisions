@@ -26,7 +26,7 @@ import datetime
 import os
 import re
 
-from .common import Refusal, commit_texts, held, read_text
+from .common import Refusal, commit_texts, held, read_text, records_of
 from .ledger import (LEGACY, PROPOSED, SUPERSEDED, bold_title, check_entry, display, parse,
                      section_of)
 from .questions import (ANSWERED, ANSWERED_LINE, DECIDED, LABELS, OPEN_CAP, OPTIONS_MAX,
@@ -215,8 +215,9 @@ def cmd_new(args, path, out, err):
     sentence = SENTENCE.match(parts["recommend"])
     sentence = sentence.group(1) if sentence else parts["recommend"]
     proposed_line(0, heading, sentence)
-    questions = os.path.join(os.path.dirname(path), QUESTIONS)
-    with held(os.path.join(os.path.dirname(path), LOCK), NEW_WAIT, err):
+    home = records_of(os.path.dirname(path), "new", write=True)  # rr4 D3
+    questions = os.path.join(home, QUESTIONS)
+    with held(os.path.join(home, LOCK), NEW_WAIT, err):
         ledger_text = read_text(path)
         old_questions = read_text(questions) if os.path.exists(questions) else FRESH
         if open_count(old_questions) >= OPEN_CAP:

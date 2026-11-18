@@ -22,7 +22,9 @@ The block is read from the commit's blob, so a CLAUDE.md that is a symlink reads
 as no block.
 
 It runs only `git rev-parse`, `log`, `rev-list` and `show`, each bounded at
-`common.GIT_TIMEOUT`; it writes no file, takes no lock and ignores `--ledger`.
+`common.GIT_TIMEOUT`, and the records resolver's `config` and `worktree list` (rr4: a
+repo whose records are out has its NICE_TO_HAVE.md snapshots from the holder's commits,
+said once on a `records` line, and none with no holder); it writes no file, takes no lock and ignores `--ledger`.
 Exit 0 whenever the view printed, a repo outside a work tree, with no commit or
 timed out included; 2 for usage, a bad window or an argument that is neither an
 analysis nor a directory.
@@ -32,6 +34,7 @@ import datetime
 import fnmatch
 import json
 import os
+import posixpath
 import re
 import statistics
 import subprocess
@@ -191,8 +194,9 @@ def overflow_ids(text):
             for line in text.splitlines() if line.lstrip().startswith("|")}
 
 
-def snapshots(top, head, start, end):
-    """R4's snapshots, oldest first, and the ids of each one in rows."""
+def snapshots(top, head, start, end, nice=NICE):
+    """R4's snapshots, oldest first, and the ids of each one in rows; `nice` is the wish
+    list's path in `top` (rr4: `<prefix>/NICE_TO_HAVE.md` in a holder)."""
     points, at = [], end
     while at >= start:
         points.append(at)
@@ -205,7 +209,7 @@ def snapshots(top, head, start, end):
         snap = {"at": at.strftime(STAMP), "commit": sha or None, "form": None, "items": None}
         found = None
         if sha:
-            code, text = git(top, "show", "%s:%s" % (sha, NICE))
+            code, text = git(top, "show", "%s:%s" % (sha, nice))
             if code == 0:
                 items = nice_items(text)
                 rows = all("id" in i for i in items)
@@ -216,9 +220,13 @@ def snapshots(top, head, start, end):
     return snaps, ids
 
 
-def backlog(top, head, start, end):
-    """R4: {snapshots, filed, closed, moved, rising} and its `not measured:` reason or None."""
-    snaps, ids = snapshots(top, head, start, end)
+def backlog(top, head, start, end, prefix=None):
+    """R4: {snapshots, filed, closed, moved, rising} and its `not measured:` reason or None;
+    rr4 D4: with `prefix`, `top` is the records' holder and each path lies under it."""
+    nice_path, over_path = ((NICE, OVERFLOW) if prefix is None else
+                            tuple(posixpath.normpath(posixpath.join(prefix, p))
+                                  for p in (NICE, OVERFLOW)))
+    snaps, ids = snapshots(top, head, start, end, nice_path)
     nice = {"snapshots": snaps, "filed": None, "closed": None, "moved": None, "rising": None}
     why = None
     for snap in (snaps[0], snaps[-1]):
@@ -231,7 +239,7 @@ def backlog(top, head, start, end):
     if why is None and len(snaps) < 2:
         why = "R4 filed and closed (one snapshot: the window is under 7 days)"
     if why is None:
-        code, text = git(top, "show", "%s:%s" % (snaps[-1]["commit"], OVERFLOW))
+        code, text = git(top, "show", "%s:%s" % (snaps[-1]["commit"], over_path))
         over = overflow_ids(text) if code == 0 else set()
         gone = ids[0] - ids[-1]
         nice["filed"] = len(ids[-1] - ids[0])
@@ -289,7 +297,7 @@ def measure(top, start, end):
     landings = int(out.strip()) if code == 0 and out.strip().isdigit() else 0
     touched_median, touched_max = median_max([c[0] for c in charters.values()])
     alone_median, alone_max = median_max([c[1] for c in charters.values()])
-    nice, why = backlog(top, head, start, end)
+    nice, why, records = records_backlog(top, head, start, end)
     record, build = sum(lines[c] for c in RECORD), sum(lines[c] for c in BUILD)
     not_measured = []
     if record + build == 0:
@@ -307,7 +315,33 @@ def measure(top, start, end):
                                    "max": alone_max}},
             "nice": nice, "block": {"start": block_at(top, head, start),
                                     "end": block_at(top, head, end)},
-            "not_measured": not_measured}
+            "not_measured": not_measured, **({"records": records} if records else {})}
+
+
+def records_backlog(top, head, start, end):
+    """rr4 D4: R4 as `backlog` gives it, and None, for a repo that keeps its records; for one
+    whose records are out, R4 over the holder's commits of `<prefix>/<path>`, or none with no
+    holder, and the answer the text names once; a broken key refuses."""
+    answer = common.records_answer(top)
+    if answer is None or answer["state"] == "own":
+        return backlog(top, head, start, end) + (None,)
+    common.records_of(top, "analyze")  # broken refuses here
+    shown = {"state": answer["state"], "records": answer["records"],
+             "holder": answer["holder"], "prefix": answer["prefix"]}
+    empty = {"snapshots": [], "filed": None, "closed": None, "moved": None, "rising": None}
+    if answer["state"] == "unset":
+        return empty, "R4 (no records here: the key %s is not set)" % common.RECORDS_KEY, shown
+    if answer["state"] == "nogit":  # review 1 C2: git cannot answer, so no record is read
+        return empty, "R4 (no records here: git cannot read the key %s)" % common.RECORDS_KEY, shown
+    holder = answer["holder"]
+    if holder is None:
+        return empty, ("R4 (the records at %s are in no git repository: no snapshot)"
+                       % answer["records"]), shown
+    code, out = git(holder, "rev-parse", "--verify", "-q", "HEAD")
+    if code != 0 or not out.strip():
+        return empty, "R4 (the records' holder %s has no commit)" % holder, shown
+    nice, why = backlog(holder, out.strip(), start, end, answer["prefix"])
+    return nice, why, shown
 
 
 def read_repo(path, start, end):
@@ -358,7 +392,7 @@ def counts_text(v):
 
 def nice_text(nice):
     tokens = ["-" if s["form"] is None else "%d%s" % (s["items"], "b" if s["form"] == "bullets"
-                                                       else "") for s in nice["snapshots"]]
+                                                       else "") for s in nice["snapshots"]] or ["-"]
     if nice["filed"] is not None:
         tokens.append("+%d -%d" % (nice["filed"], nice["closed"]))
         if nice["moved"]:
@@ -380,6 +414,12 @@ def churn_text(value, start, end):
               % (ch["count"], shown(ch["median"]), shown(ch["alone"]["median"]))
               if ch["count"] else "charters -")
         lines.append("== %s  %s  %s  %s" % (name, counts_text(r), r3, nice_text(r["nice"])))
+        rec = r.get("records")
+        if rec and rec["holder"]:
+            lines.append("records  out at %s: NICE dated by the holder's commits (%s), which "
+                         "lag the code they name" % (rec["records"], rec["holder"]))
+        elif rec and rec["state"] == "out":
+            lines.append("records  out at %s, in no git repository" % rec["records"])
         was, now = r["block"]["start"], r["block"]["end"]
         if was is not None or now is not None:
             lines.append("block  %s to %s%s" % tuple(
