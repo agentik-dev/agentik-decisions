@@ -484,6 +484,14 @@ class Review1(Rows):
         self.build("p1-ready", 2, "`%s`" % tip2[:7], stage="`phase 2` (main merged in)")
         self.assertEqual(self.view()["p1-ready"]["state"], "ready")
 
+    def test_n23_a_slice_after_a_repo_name(self):
+        tip, folder = self.ready("p1-ready")
+        span = "%s..%s" % (self.base("p1-ready")[:7], tip[:7])
+        self.review("p1-ready", 1, "pear %s, the whole branch" % span, ruling="closed")
+        self.assertEqual(self.view()["p1-ready"]["state"], "ready")
+        self.review("p1-ready", 1, "pear and more", ruling="closed")
+        self.assertEqual(self.view()["p1-ready"]["state"], "built")
+
     def test_f5_a_cell_is_the_second_cell(self):
         self.put(os.path.join(self.root, "p4-wide", "row.md"),
                  "# Row p4-wide\n\n| item | value | note |\n|---|---|---|\n"

@@ -21,6 +21,7 @@ import re
 
 from . import answer, ledger, questions
 from .common import Refusal, git_top, records_of, records_repo
+from .common import _shown as shown
 
 __all__ = ["cmd_questions", "read_repo", "SCHEMA"]
 
@@ -144,16 +145,16 @@ def as_text(view):
     if decided["newest"]:
         head += ", newest %s" % decided["newest"]
     lines = [head]
-    for q in view["questions"]:
-        line = "%d  %s  %s" % (q["n"], q["state"], q["title"])
+    for q in view["questions"]:  # n90: the file's words escaped, as `--json` escapes them
+        line = "%d  %s  %s" % (q["n"], q["state"], shown(q["title"]))
         if q["recommended"] is not None:
-            line += "  recommended: %s" % q["recommended"]
+            line += "  recommended: %s" % shown(q["recommended"])
         for extra in (("proposed %s" % q["proposed"]) if q["proposed"] else None, q["why"]):
             if extra:
-                line += "; %s" % extra
+                line += "; %s" % shown(extra)
         lines.append(line)
     for p in loose_problems(view):
-        lines.append("problem  %s:%d  %s" % (questions.NAME, p["line"], p["message"]))
+        lines.append("problem  %s:%d  %s" % (questions.NAME, p["line"], shown(p["message"])))
     return lines
 
 
