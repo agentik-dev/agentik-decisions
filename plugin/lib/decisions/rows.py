@@ -124,6 +124,13 @@ def first(value):
     return words[0].rstrip(",.;:") if words else ""
 
 
+def slice_of(value):
+    """hq n23: a slice cell's range, its opening word or, after a repo name
+    (`commons a..b`), its second; else the opening word as `first` reads it."""
+    words = [w.rstrip(",.;:") for w in value.split()[:2]]
+    return next((w for w in words if ".." in w), first(value))
+
+
 def sha_of(value):
     word = first(value)
     return word if SHA_WORD.match(word) else None
@@ -197,7 +204,7 @@ def records(folder):
                            "head": sha_of(t.get("head", "")), "gate": gate_of(t.get("gate", ""))})
         elif review and os.path.isfile(path):
             t = table(read_text(path))
-            span = first(t.get("slice", "")).split("..")
+            span = slice_of(t.get("slice", "")).split("..")
             ends = [e if SHA_WORD.match(e) else None for e in span] if len(span) == 2 else [None] * 2
             reviews.append({"n": int(review.group(1)), "file": name, "base": ends[0],
                             "end": ends[1], "blocks": t.get("blocks", ""),
