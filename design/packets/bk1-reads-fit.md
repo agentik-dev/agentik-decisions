@@ -49,3 +49,25 @@ A relay ledger, a reference snapshot, live state, the live home, the user's git 
 ## 6. Report
 
 The coordinator's record, one table of the acceptance lines, the gate's job.
+
+## 7. Fix of review 1
+
+An adversary's review of `7cdbc20..4129c58` found one blocking bug, B1: the prime started every child before it collected any, each holding two pipes in the parent, so past the descriptor limit `Popen` raised `OSError` and the prime cached `nogit` for that key for good. `backlog` then dropped repos that the pin reads, and exited 0 (twelve repos at `ulimit -n 24`: seven read; two hundred at 256: 123 `own`, 77 `nogit`). The fix round adds these rulings; R2 to R5 stand as built. The round may also touch `NICE_TO_HAVE.md` and `history/NICE-overflow.md`.
+
+- G1, a window. `records_prime` keeps at most `PRIME_WIDTH` (16) children uncollected, starting the next key only below it. Each child's wall is `GIT_TIMEOUT` from its own start, the wall an unprimed resolve gives it; this replaces R1's one wall from the first start. Six children still all run at once.
+- G2, a failed start. An `OSError` from a start caches nothing for that key, which the unprimed path then resolves as at the pin; the prime collects every running child before it tries another start. No answer is cached for a child that did not run.
+- G3, the cleanup. Every start sits inside the block whose `finally` kills and reaps the uncollected children, so an interrupt or an exception during the starts leaves no child behind.
+- G4, the NICE: rows for the review's leads L1, L2, L4, L5, and the mutations its tests still miss.
+- G5, the version stays 0.23.13 if `scripts/plugin-version-check` and `make check` hold with this round's commits after it; else the next patch alone in the last commit.
+
+| # | case, fix of review 1 |
+|---|---|
+| 8 | twelve repos, `backlog --json` in a child process at a descriptor limit of 24, reads twelve and equals the run at the default limit |
+| 9 | sixty repos at a limit of 64: the prime and the resolves after it answer `own` sixty times |
+| 10 | a spy on start and collect over forty keys: never more than `PRIME_WIDTH` children uncollected |
+| 11 | a start raising `OSError` for one key of six: that key is uncached after the prime, the five others are cached, and `records_answer` answers it as unprimed |
+| 12 | `KeyboardInterrupt` from the third start of six: the two children started are reaped and gone when the prime raises |
+| 13 | one hung child of six under a lowered `GIT_TIMEOUT` reads `timeout`, the five others as unprimed, in about one wall (case 2); and with a window of one, two children that each take most of a wall both answer, since each wall is its own |
+| 14 | by hand: two hundred repos at `ulimit -n 256`, the bytes of `backlog --json` at the pin and now; its time over eleven checkouts before and after this round |
+
+Baseline at `4129c58`: cases 8 to 12 fail (8 reads seven repos; 9 answers `nogit` past the limit; 10 sees forty uncollected; 11 caches `nogit`; 12 leaves two children), case 13's second half fails under the one wall.
