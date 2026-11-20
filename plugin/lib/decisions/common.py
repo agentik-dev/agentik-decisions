@@ -15,7 +15,7 @@ import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
            "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_repo", "records_reset",
-           "records_prime",
+           "records_prime", "git_memo", "read_only",
            "RECORDS_KEY", "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
@@ -35,8 +35,63 @@ def bounded(argv, timeout, **kwargs):
     """(returncode, stdout) of `argv`, killed as a process group past `timeout`.
 
     Its own session, so a grandchild holding the pipe dies with it; past the
-    bound `subprocess.TimeoutExpired` propagates, and OSError does too."""
-    return bounded_err(argv, timeout, **kwargs)[:2]
+    bound `subprocess.TimeoutExpired` propagates, and OSError does too. bk1 R3: inside
+    `git_memo`, a read-only git call (`read_only`) with no option but `cwd` runs once a
+    (argv, cwd) pair, its failure kept as itself."""
+    memo = _GIT_MEMO
+    if memo is None or set(kwargs) - {"cwd"} or not read_only(argv):
+        return bounded_err(argv, timeout, **kwargs)[:2]
+    key = (tuple(argv), kwargs.get("cwd"))
+    if key not in memo:
+        try:
+            memo[key] = (bounded_err(argv, timeout, **kwargs)[:2], None)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            memo[key] = (None, exc)
+    got, exc = memo[key]
+    if exc is not None:
+        raise exc
+    return got
+
+
+# bk1 R3: the git subcommands that cannot change a repo, and git's options before one that the
+# memo reads past; `status` only under --no-optional-locks (else it may refresh the index),
+# `worktree` only as `worktree list`.
+_GIT_MEMO = None
+READ_ONLY = ("diff", "diff-tree", "log", "merge-base", "rev-list", "rev-parse", "show")
+
+
+def read_only(argv):
+    """True where `argv` is a git call that reads and never writes."""
+    if not argv or argv[0] != "git":
+        return False
+    at, unlocked = 1, False
+    while at < len(argv) and argv[at].startswith("-"):
+        if argv[at] in ("-C", "-c"):
+            at += 2
+        elif argv[at] == "--no-optional-locks":
+            unlocked, at = True, at + 1
+        else:
+            return False
+    if at >= len(argv):
+        return False
+    verb, rest = argv[at], list(argv[at + 1:])
+    if verb in READ_ONLY:
+        return True
+    if verb == "status":
+        return unlocked
+    return verb == "worktree" and rest[:1] == ["list"]
+
+
+@contextlib.contextmanager
+def git_memo():
+    """bk1 R3: while open, `bounded` asks each read-only git (argv, cwd) pair once; empty
+    before and after, so no call outside it reads a memoized answer."""
+    global _GIT_MEMO
+    outer, _GIT_MEMO = _GIT_MEMO, {}
+    try:
+        yield
+    finally:
+        _GIT_MEMO = outer
 
 
 def bounded_err(argv, timeout, **kwargs):
