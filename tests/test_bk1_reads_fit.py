@@ -3,10 +3,14 @@ repo's resolver child at once through `common.records_prime`, and one `rows` rea
 read-only question once. Every repo is made here under the temp folder, with made-up names; git
 runs under the hermetic home, so no live config is read."""
 import contextlib
+import errno
 import io
 import json
 import os
+import resource
 import shutil
+import subprocess
+import sys
 import tempfile
 import time
 from unittest import mock
@@ -164,6 +168,139 @@ class Prime(Many):
         with mock.patch.object(common.shutil, "which", lambda name: None):
             common.records_prime(self.repos)
         self.assertEqual(common._RESOLVED, {})
+
+
+
+def width():
+    return getattr(common, "PRIME_WIDTH", 16)
+
+
+def limited(limit):
+    """A child's start that lowers its soft descriptor limit to `limit`."""
+    def lower():
+        hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        resource.setrlimit(resource.RLIMIT_NOFILE, (limit, hard))
+    return lower
+
+
+class Window(Hermetic):
+    """review 1 B1: the prime holds at most PRIME_WIDTH children, a failed start caches nothing,
+    and every start sits inside the cleanup. Plain made-up repos, each with a NICE_TO_HAVE.md."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="bk1w-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        common.records_reset()
+        self.addCleanup(common.records_reset)
+
+    def made(self, count, git_init=True):
+        repos = []
+        for n in range(count):
+            repo = os.path.join(self.tmp, "pear-%03d" % n)
+            os.makedirs(repo)
+            if git_init:
+                git(repo, "init", "-q", "-b", "main")
+                write(os.path.join(repo, "NICE_TO_HAVE.md"), NICE)
+            repos.append(repo)
+        return repos
+
+    def child(self, argv, limit=None, cwd=None):
+        env = dict(os.environ, PYTHONPATH=common._LIB)
+        return subprocess.run([sys.executable] + argv, cwd=cwd or self.tmp, env=env,
+                              capture_output=True, text=True, timeout=120,
+                              preexec_fn=limited(limit) if limit else None)
+
+    def test_backlog_reads_twelve_repos_at_a_limit_of_24(self):
+        repos = self.made(12)
+        argv = ["-m", "decisions", "backlog", "--json"] + repos
+        plain = self.child(argv, cwd=repos[0])
+        tight = self.child(argv, limit=24, cwd=repos[0])
+        self.assertEqual(plain.returncode, 0, plain.stderr)
+        self.assertEqual(len(json.loads(plain.stdout)["repos"]), 12)
+        self.assertEqual((tight.returncode, tight.stdout, tight.stderr),
+                         (plain.returncode, plain.stdout, plain.stderr))
+
+    def test_sixty_repos_answer_own_at_a_limit_of_64(self):
+        repos = self.made(60, git_init=False)
+        for repo in repos:
+            git(repo, "init", "-q", "-b", "main")
+        script = ("import json, sys\nfrom decisions import common\n"
+                  "common.records_prime(sys.argv[1:])\n"
+                  "print(json.dumps([(common.records_answer(r) or {}).get('state')"
+                  " for r in sys.argv[1:]]))\n")
+        got = self.child(["-c", script] + repos, limit=64)
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(json.loads(got.stdout), ["own"] * 60)
+
+    def test_never_more_than_the_width_uncollected(self):
+        folders = self.made(40, git_init=False)
+        log = []
+        with spied(log):
+            common.records_prime(folders)
+        live, most = set(), 0
+        for entry in log:
+            if entry[0] == "start":
+                live.add(entry[2])
+            else:
+                live.discard(entry[1])
+            most = max(most, len(live))
+        self.assertEqual(most, width(), log)
+        self.assertEqual(sorted(e[1] for e in log if e[0] == "start"), folders)
+        self.assertEqual(len([e for e in log if e[0] == "collect"]), 40)
+        self.assertEqual(sorted(common._RESOLVED), folders)
+
+    def test_a_failed_start_caches_nothing(self):
+        repos = self.made(6)
+        keys = [os.path.realpath(r) for r in repos]
+        want = {k: common._resolved(k) for k in keys}
+        common.records_reset()
+        real = common._start
+
+        def start(argv, **kwargs):
+            if argv[-1] == keys[3]:
+                raise OSError(errno.EMFILE, "Too many open files")
+            return real(argv, **kwargs)
+        with mock.patch.object(common, "_start", start):
+            common.records_prime(repos)
+        self.assertNotIn(keys[3], common._RESOLVED)
+        self.assertEqual({k: common._RESOLVED[k] for k in keys if k != keys[3]},
+                         {k: want[k] for k in keys if k != keys[3]})
+        self.assertEqual(common.records_answer(repos[3]), want[keys[3]][0])
+        self.assertEqual(common._RESOLVED[keys[3]], want[keys[3]])
+
+    def test_an_interrupt_in_the_starts_leaves_no_child(self):
+        repos = self.made(6, git_init=False)
+        real, children = common._start, []
+
+        def start(argv, **kwargs):
+            if len(children) == 2:
+                raise KeyboardInterrupt
+            child = real(argv, **kwargs)
+            children.append(child)
+            self.addCleanup(lambda: child.poll() is None and os.killpg(child.pid, 9))
+            return child
+        with mock.patch.object(common, "_CHILD", "import time\ntime.sleep(30)\n"), \
+                mock.patch.object(common, "_start", start):
+            with self.assertRaises(KeyboardInterrupt):
+                common.records_prime(repos)
+        self.assertEqual(len(children), 2)
+        for child in children:
+            self.assertIsNotNone(child.returncode)
+            with self.assertRaises(ProcessLookupError):
+                os.killpg(child.pid, 0)
+
+    def test_each_child_has_its_own_wall(self):
+        repos = self.made(2, git_init=False)
+        keys = [os.path.realpath(r) for r in repos]
+        want = {k: common._resolved(k) for k in keys}
+        common.records_reset()
+        slow = "import time\ntime.sleep(1.2)\n" + common._CHILD
+        with mock.patch.object(common, "_CHILD", slow), \
+                mock.patch.object(common, "GIT_TIMEOUT", 2), \
+                mock.patch.object(common, "PRIME_WIDTH", 1, create=True):
+            common.records_prime(repos)
+        self.assertEqual({k: common._RESOLVED[k] for k in keys}, want)
 
 
 def counted(log):

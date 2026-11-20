@@ -70,4 +70,4 @@ An adversary's review of `7cdbc20..4129c58` found one blocking bug, B1: the prim
 | 13 | one hung child of six under a lowered `GIT_TIMEOUT` reads `timeout`, the five others as unprimed, in about one wall (case 2); and with a window of one, two children that each take most of a wall both answer, since each wall is its own |
 | 14 | by hand: two hundred repos at `ulimit -n 256`, the bytes of `backlog --json` at the pin and now; its time over eleven checkouts before and after this round |
 
-Baseline at `4129c58`: cases 8 to 12 fail (8 reads seven repos; 9 answers `nogit` past the limit; 10 sees forty uncollected; 11 caches `nogit`; 12 leaves two children), case 13's second half fails under the one wall.
+Baseline at `4129c58`, measured: cases 8 to 12 fail (8's JSON skips repos the default run reads; 9 answers `nogit` from the 28th repo; 10 sees forty uncollected; 11 caches the failed key; 12 leaves its two children running); case 13 passes, since with no window both children start at once: its second half pins the own wall against a window kept under one wall.
