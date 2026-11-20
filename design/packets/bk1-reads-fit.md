@@ -59,6 +59,7 @@ An adversary's review of `7cdbc20..4129c58` found one blocking bug, B1: the prim
 - G3, the cleanup. Every start sits inside the block whose `finally` kills and reaps the uncollected children, so an interrupt or an exception during the starts leaves no child behind.
 - G4, the NICE: rows for the review's leads L1, L2, L4, L5, and the mutations its tests still miss.
 - G5, the version stays 0.23.13 if `scripts/plugin-version-check` and `make check` hold with this round's commits after it; else the next patch alone in the last commit.
+  Measured: `scripts/plugin-version-check` refused `common.py` changed after 0.23.13, so this round takes 0.23.14 in its last commit under `plugin/`, in the places R4 named.
 
 | # | case, fix of review 1 |
 |---|---|
