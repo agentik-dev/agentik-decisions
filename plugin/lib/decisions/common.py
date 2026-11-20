@@ -15,15 +15,19 @@ import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
            "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_repo", "records_reset",
+           "records_prime", "git_memo", "read_only",
            "RECORDS_KEY", "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
-VERSION = "0.23.12"
+VERSION = "0.23.14"
 
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
 GIT_TIMEOUT = 10
+# Review 1 B1: the most resolver children `records_prime` keeps uncollected at once, each
+# holding two pipes in this process, so a read stays far below a descriptor limit of 256.
+PRIME_WIDTH = 16
 
 
 class Refusal(Exception):
@@ -34,8 +38,63 @@ def bounded(argv, timeout, **kwargs):
     """(returncode, stdout) of `argv`, killed as a process group past `timeout`.
 
     Its own session, so a grandchild holding the pipe dies with it; past the
-    bound `subprocess.TimeoutExpired` propagates, and OSError does too."""
-    return bounded_err(argv, timeout, **kwargs)[:2]
+    bound `subprocess.TimeoutExpired` propagates, and OSError does too. bk1 R3: inside
+    `git_memo`, a read-only git call (`read_only`) with no option but `cwd` runs once a
+    (argv, cwd) pair, its failure kept as itself."""
+    memo = _GIT_MEMO
+    if memo is None or set(kwargs) - {"cwd"} or not read_only(argv):
+        return bounded_err(argv, timeout, **kwargs)[:2]
+    key = (tuple(argv), kwargs.get("cwd"))
+    if key not in memo:
+        try:
+            memo[key] = (bounded_err(argv, timeout, **kwargs)[:2], None)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            memo[key] = (None, exc)
+    got, exc = memo[key]
+    if exc is not None:
+        raise exc
+    return got
+
+
+# bk1 R3: the git subcommands that cannot change a repo, and git's options before one that the
+# memo reads past; `status` only under --no-optional-locks (else it may refresh the index),
+# `worktree` only as `worktree list`.
+_GIT_MEMO = None
+READ_ONLY = ("diff", "diff-tree", "log", "merge-base", "rev-list", "rev-parse", "show")
+
+
+def read_only(argv):
+    """True where `argv` is a git call that reads and never writes."""
+    if not argv or argv[0] != "git":
+        return False
+    at, unlocked = 1, False
+    while at < len(argv) and argv[at].startswith("-"):
+        if argv[at] in ("-C", "-c"):
+            at += 2
+        elif argv[at] == "--no-optional-locks":
+            unlocked, at = True, at + 1
+        else:
+            return False
+    if at >= len(argv):
+        return False
+    verb, rest = argv[at], list(argv[at + 1:])
+    if verb in READ_ONLY:
+        return True
+    if verb == "status":
+        return unlocked
+    return verb == "worktree" and rest[:1] == ["list"]
+
+
+@contextlib.contextmanager
+def git_memo():
+    """bk1 R3: while open, `bounded` asks each read-only git (argv, cwd) pair once; empty
+    before and after, so no call outside it reads a memoized answer."""
+    global _GIT_MEMO
+    outer, _GIT_MEMO = _GIT_MEMO, {}
+    try:
+        yield
+    finally:
+        _GIT_MEMO = outer
 
 
 def bounded_err(argv, timeout, **kwargs):
@@ -118,13 +177,24 @@ def _resolved(key):
     git is on PATH: with none, `answer` and `ask` work as d41 and d42 made them, in the clone."""
     if shutil.which("git") is None:
         return None, []
-    argv = [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
     try:
-        code, out = bounded(argv, GIT_TIMEOUT, stdin=subprocess.DEVNULL)
-        got = json.loads(out) if code == 0 else None
+        code, out = bounded(_child_argv(key), GIT_TIMEOUT, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         return {"state": "timeout", "repo": key}, []
-    except (OSError, ValueError):
+    except OSError:
+        code, out = None, None
+    return _answered(key, code, out)
+
+
+def _child_argv(key):
+    return [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
+
+
+def _answered(key, code, out):
+    """What `_resolved` answers for `key` from its child's exit and output (None: it never ran)."""
+    try:
+        got = json.loads(out) if code == 0 else None
+    except ValueError:
         got = None
     answer = got.get("answer") if isinstance(got, dict) else None
     if isinstance(answer, dict) and answer.get("state") in ("own", "out", "unset", "broken"):
@@ -143,6 +213,77 @@ def records_answer(folder):
     if key not in _RESOLVED:
         _RESOLVED[key] = _resolved(key)
     return _RESOLVED[key][0]
+
+
+def _start(argv, **kwargs):
+    """A child started as `bounded_err` starts one, in its own session."""
+    return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, encoding="utf-8", errors="replace",
+                            start_new_session=True, **kwargs)
+
+
+def _collect(child, timeout):
+    """(returncode, stdout) of a started child within `timeout`; past it the child is killed
+    with its group, reaped, and `subprocess.TimeoutExpired` propagates."""
+    try:
+        out, _ = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        child.communicate()
+        raise
+    return child.returncode, out
+
+
+def records_prime(folders):
+    """bk1 R1: resolve every folder not yet cached at once, caching exactly what `_resolved`
+    answers for each; a key never primed resolves as before. Review 1 B1: at most
+    PRIME_WIDTH children are uncollected at a time, each under GIT_TIMEOUT from its own
+    start (G1); a start that fails caches nothing, so the unprimed path resolves that key,
+    and every running child is collected before the next start (G2); every start is inside
+    the `finally` that kills and reaps what is left (G3)."""
+    if shutil.which("git") is None:
+        return
+    keys = []
+    for folder in folders:
+        key = os.path.realpath(folder)
+        if os.path.isdir(key) and key not in _RESOLVED and key not in keys:
+            keys.append(key)
+    started, drain = [], False
+    try:
+        while keys or started:
+            if keys and not drain and len(started) < PRIME_WIDTH:
+                key = keys.pop(0)
+                try:
+                    child = _start(_child_argv(key), stdin=subprocess.DEVNULL)
+                except OSError:
+                    drain = True  # left uncached: records_answer resolves it as unprimed
+                else:
+                    started.append((key, child, time.monotonic()))
+                continue
+            if not started:
+                drain = False
+                continue
+            key, child, begun = started[0]
+            left = max(GIT_TIMEOUT - (time.monotonic() - begun), 0)
+            if child.poll() is not None:
+                left = max(left, 1.0)  # done before the wall: read what it wrote
+            try:
+                code, out = _collect(child, left)
+            except subprocess.TimeoutExpired:
+                _RESOLVED[key] = ({"state": "timeout", "repo": key}, [])
+            else:
+                _RESOLVED[key] = _answered(key, code, out)
+            started.pop(0)
+    finally:
+        for _, child, _ in started:  # an interrupt leaves no child behind
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            child.communicate()
 
 
 def records_repo(folder):

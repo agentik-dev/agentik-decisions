@@ -27,7 +27,7 @@ from . import ask as ask_module
 from .backlog import (CELL_LEVEL, DATE_WORD, DONE_FILE, HANDOFF, HEADING, HOME_CELL, LEVEL,
                       NICE, ROW_CELL, SHA_WORD, Git, build_order, building_red, done_red,
                       gathered, most_urgent, nice_items, short_name)
-from .common import (RECORDS_KEY, Refusal, commit_texts, git_top, held, read_text,
+from .common import (RECORDS_KEY, Refusal, commit_texts, git_memo, git_top, held, read_text,
                      records_answer, records_of)
 from .speak import CONTROL, ESCAPE
 
@@ -737,7 +737,13 @@ def root_of(args, write=False):
 
 
 def read(args):
-    """The verb's whole read: (root, home, open rows, closed rows, skipped groups)."""
+    """The verb's whole read: (root, home, open rows, closed rows, skipped groups). bk1 R3:
+    under one memo of read-only git calls, opened and closed here."""
+    with git_memo():
+        return read_rows(args)
+
+
+def read_rows(args):
     words = list(getattr(args, "words", None) or [])
     check = bool(words) and words[0] == "check"
     if any(getattr(args, k, None) not in (None, False) for k in CLOSE_FLAGS):
