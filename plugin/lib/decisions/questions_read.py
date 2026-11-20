@@ -20,7 +20,7 @@ import os
 import re
 
 from . import answer, ledger, questions
-from .common import Refusal, git_top, records_of, records_repo
+from .common import Refusal, git_top, records_of, records_prime, records_repo
 from .common import _shown as shown
 
 __all__ = ["cmd_questions", "read_repo", "SCHEMA"]
@@ -161,6 +161,7 @@ def as_text(view):
 def read_all(names):
     """(the repos' objects, the skipped ones), in the order named."""
     repos, skipped, keys = [], [], set()
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
         key, repo = records_repo(name)  # review 1 C4: a repo whose records are out, read once
         if key != repo:

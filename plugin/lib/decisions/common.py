@@ -15,6 +15,7 @@ import time
 
 __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_text", "commit_texts", "held",
            "keeps_crlf", "disk_text", "on_disk", "records_of", "records_answer", "records_repo", "records_reset",
+           "records_prime",
            "RECORDS_KEY", "GIT_TIMEOUT", "VERSION"]
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
@@ -118,13 +119,24 @@ def _resolved(key):
     git is on PATH: with none, `answer` and `ask` work as d41 and d42 made them, in the clone."""
     if shutil.which("git") is None:
         return None, []
-    argv = [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
     try:
-        code, out = bounded(argv, GIT_TIMEOUT, stdin=subprocess.DEVNULL)
-        got = json.loads(out) if code == 0 else None
+        code, out = bounded(_child_argv(key), GIT_TIMEOUT, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         return {"state": "timeout", "repo": key}, []
-    except (OSError, ValueError):
+    except OSError:
+        code, out = None, None
+    return _answered(key, code, out)
+
+
+def _child_argv(key):
+    return [sys.executable or "/usr/bin/python3", "-I", "-S", "-c", _CHILD, _LIB, key]
+
+
+def _answered(key, code, out):
+    """What `_resolved` answers for `key` from its child's exit and output (None: it never ran)."""
+    try:
+        got = json.loads(out) if code == 0 else None
+    except ValueError:
         got = None
     answer = got.get("answer") if isinstance(got, dict) else None
     if isinstance(answer, dict) and answer.get("state") in ("own", "out", "unset", "broken"):
@@ -143,6 +155,67 @@ def records_answer(folder):
     if key not in _RESOLVED:
         _RESOLVED[key] = _resolved(key)
     return _RESOLVED[key][0]
+
+
+def _start(argv, **kwargs):
+    """A child started as `bounded_err` starts one, in its own session."""
+    return subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, encoding="utf-8", errors="replace",
+                            start_new_session=True, **kwargs)
+
+
+def _collect(child, timeout):
+    """(returncode, stdout) of a started child within `timeout`; past it the child is killed
+    with its group, reaped, and `subprocess.TimeoutExpired` propagates."""
+    try:
+        out, _ = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        child.communicate()
+        raise
+    return child.returncode, out
+
+
+def records_prime(folders):
+    """bk1 R1: resolve every folder not yet cached at once, one child a key started together
+    and collected under one GIT_TIMEOUT from the first start, caching exactly what
+    `_resolved` answers for each; a key never primed resolves as before."""
+    if shutil.which("git") is None:
+        return
+    keys = []
+    for folder in folders:
+        key = os.path.realpath(folder)
+        if os.path.isdir(key) and key not in _RESOLVED and key not in keys:
+            keys.append(key)
+    begun, started = time.monotonic(), []
+    for key in keys:
+        try:
+            started.append((key, _start(_child_argv(key), stdin=subprocess.DEVNULL)))
+        except OSError:
+            _RESOLVED[key] = _answered(key, None, None)
+    try:
+        while started:
+            key, child = started[0]
+            left = max(GIT_TIMEOUT - (time.monotonic() - begun), 0)
+            if child.poll() is not None:
+                left = max(left, 1.0)  # done before the wall: read what it wrote
+            try:
+                code, out = _collect(child, left)
+            except subprocess.TimeoutExpired:
+                _RESOLVED[key] = ({"state": "timeout", "repo": key}, [])
+            else:
+                _RESOLVED[key] = _answered(key, code, out)
+            started.pop(0)
+    finally:
+        for _, child in started:  # an interrupt leaves no child behind
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            child.communicate()
 
 
 def records_repo(folder):

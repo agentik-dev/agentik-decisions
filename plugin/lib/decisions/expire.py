@@ -48,7 +48,8 @@ import tempfile
 
 from . import backlog
 from .ask import LOCK, NEW_WAIT
-from .common import Refusal, file_mode, git_top, held, read_text, records_of, records_repo
+from .common import (Refusal, file_mode, git_top, held, read_text, records_of,
+                     records_prime, records_repo)
 from .render import head_holds
 
 __all__ = ["cmd_expire", "expiring", "extents", "moved_bytes", "byte_lines", "parsed"]
@@ -410,6 +411,7 @@ def cmd_expire(args, out, err):
         here = os.getcwd()
         names = [git_top(here) or here]
     repos, keys = [], set()
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("expire: %s is not a directory" % name)

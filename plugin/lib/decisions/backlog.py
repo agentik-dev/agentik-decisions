@@ -26,7 +26,7 @@ import re
 import subprocess
 
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, git_top,
-                     read_text, records_of, records_repo)
+                     read_text, records_of, records_prime, records_repo)
 
 __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
@@ -448,6 +448,7 @@ def cmd_backlog(args, out, err):
         here = os.getcwd()
         names = [git_top(here) or here]
     repos, keys = [], {}
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("backlog: %s is not a directory" % name)
