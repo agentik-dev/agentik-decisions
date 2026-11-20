@@ -25,6 +25,9 @@ VERSION = "0.23.13"
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
 GIT_TIMEOUT = 10
+# Review 1 B1: the most resolver children `records_prime` keeps uncollected at once, each
+# holding two pipes in this process, so a read stays far below a descriptor limit of 256.
+PRIME_WIDTH = 16
 
 
 class Refusal(Exception):
@@ -235,9 +238,12 @@ def _collect(child, timeout):
 
 
 def records_prime(folders):
-    """bk1 R1: resolve every folder not yet cached at once, one child a key started together
-    and collected under one GIT_TIMEOUT from the first start, caching exactly what
-    `_resolved` answers for each; a key never primed resolves as before."""
+    """bk1 R1: resolve every folder not yet cached at once, caching exactly what `_resolved`
+    answers for each; a key never primed resolves as before. Review 1 B1: at most
+    PRIME_WIDTH children are uncollected at a time, each under GIT_TIMEOUT from its own
+    start (G1); a start that fails caches nothing, so the unprimed path resolves that key,
+    and every running child is collected before the next start (G2); every start is inside
+    the `finally` that kills and reaps what is left (G3)."""
     if shutil.which("git") is None:
         return
     keys = []
@@ -245,15 +251,22 @@ def records_prime(folders):
         key = os.path.realpath(folder)
         if os.path.isdir(key) and key not in _RESOLVED and key not in keys:
             keys.append(key)
-    begun, started = time.monotonic(), []
-    for key in keys:
-        try:
-            started.append((key, _start(_child_argv(key), stdin=subprocess.DEVNULL)))
-        except OSError:
-            _RESOLVED[key] = _answered(key, None, None)
+    started, drain = [], False
     try:
-        while started:
-            key, child = started[0]
+        while keys or started:
+            if keys and not drain and len(started) < PRIME_WIDTH:
+                key = keys.pop(0)
+                try:
+                    child = _start(_child_argv(key), stdin=subprocess.DEVNULL)
+                except OSError:
+                    drain = True  # left uncached: records_answer resolves it as unprimed
+                else:
+                    started.append((key, child, time.monotonic()))
+                continue
+            if not started:
+                drain = False
+                continue
+            key, child, begun = started[0]
             left = max(GIT_TIMEOUT - (time.monotonic() - begun), 0)
             if child.poll() is not None:
                 left = max(left, 1.0)  # done before the wall: read what it wrote
@@ -265,7 +278,7 @@ def records_prime(folders):
                 _RESOLVED[key] = _answered(key, code, out)
             started.pop(0)
     finally:
-        for _, child in started:  # an interrupt leaves no child behind
+        for _, child, _ in started:  # an interrupt leaves no child behind
             try:
                 os.killpg(child.pid, signal.SIGKILL)
             except OSError:

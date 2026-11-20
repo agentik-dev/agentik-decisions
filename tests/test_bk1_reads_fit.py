@@ -255,14 +255,23 @@ class Window(Hermetic):
         keys = [os.path.realpath(r) for r in repos]
         want = {k: common._resolved(k) for k in keys}
         common.records_reset()
-        real = common._start
+        real, collect, log = common._start, common._collect, []
 
         def start(argv, **kwargs):
             if argv[-1] == keys[3]:
+                log.append("fail")
                 raise OSError(errno.EMFILE, "Too many open files")
+            log.append("start")
             return real(argv, **kwargs)
-        with mock.patch.object(common, "_start", start):
+
+        def collected(child, timeout):
+            log.append("collect")
+            return collect(child, timeout)
+        with mock.patch.object(common, "_start", start), \
+                mock.patch.object(common, "_collect", collected):
             common.records_prime(repos)
+        self.assertEqual(log, ["start"] * 3 + ["fail"] + ["collect"] * 3 + ["start"] * 2
+                         + ["collect"] * 2)
         self.assertNotIn(keys[3], common._RESOLVED)
         self.assertEqual({k: common._RESOLVED[k] for k in keys if k != keys[3]},
                          {k: want[k] for k in keys if k != keys[3]})
