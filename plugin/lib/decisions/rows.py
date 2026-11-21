@@ -29,6 +29,7 @@ from .backlog import (CELL_LEVEL, DATE_WORD, DONE_FILE, HANDOFF, HEADING, HOME_C
                       gathered, most_urgent, nice_items, short_name)
 from .common import (RECORDS_KEY, Refusal, commit_texts, git_memo, git_top, held, read_text,
                      records_answer, records_of)
+from .doctor import session_state
 from .speak import CONTROL, ESCAPE
 
 __all__ = ["cmd_rows", "table", "asked", "KEYS", "SCHEMA"]
@@ -151,6 +152,19 @@ def gate_of(value):
     if m and not value.startswith("none:"):
         return {"id": m.group(1), "exit": None}
     return None
+
+
+def gate_read(gate, env):
+    """rg1: a running cell's exit from its job's own result.json, an int `exit` else running."""
+    if not gate or gate["exit"] is not None:
+        return gate
+    path = os.path.join(session_state(env), "gate", gate["id"], "result.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            code = json.load(handle).get("exit")
+    except (OSError, ValueError, AttributeError):
+        return gate
+    return dict(gate, exit=code) if type(code) is int else gate
 
 
 def ruling_of(value):
@@ -760,6 +774,8 @@ def read_rows(args):
     for row in opened:
         git = repos.git(row["path"])
         rec = row["rec"]
+        if rec["builds"]:
+            rec["builds"][-1]["gate"] = gate_read(rec["builds"][-1]["gate"], os.environ)
         row["waits"] = [d for d in rec["depends_on"] if d in known and d not in landed]
         row["state"], text, command, row["record"] = word(row, git)
         row["next"] = (text, command)
