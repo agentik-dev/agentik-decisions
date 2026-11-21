@@ -85,7 +85,7 @@ Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, 
 | `analyze [churn] [REPO...] [--since Nd\|YYYY-MM-DD] [--until YYYY-MM-DD] [--json]` | churn from git, 14 days by default: the share of lines in charters, designs and the backlog, commits touching only those a landing, commits a charter, `NICE_TO_HAVE.md`'s rows filed and closed, the `CLAUDE.md` block's bytes; `not measured:` where it cannot; writes nothing |
 | `audit [REPO...] [--tree FILE] [--json]` | retire and rewrite candidates, every `Every session` entry first with its block bytes; writes nothing |
 | `audit --edits C [REPO]` | each commit after C that touches instruction text without an `instruct:` subject |
-| `--version` | `agentik-decisions 0.23.14`, the version `doctor` compares with the one on PATH |
+| `--version` | `agentik-decisions 0.23.15`, the version `doctor` compares with the one on PATH |
 
 Over a hand-kept `CLAUDE.md`, `init` and `render` say what its own lines load; `/decisions:audit-claude-md` audits them.
 
@@ -266,7 +266,7 @@ make check
 `scripts/{hygiene,bounded,agentik}` are agentik-commons' copies, pinned by `scripts/vendored.sha256`; `scripts/doclint` (charters, packets, links) is byte-identical across them, pinned in the Makefile.
 `scripts/hygiene` keeps only generic patterns; the private ones (a person, a private repo, a host, a domain) live outside it, in `$AGENTIK_HYGIENE_PRIVATE` or `~/.config/agentik/hygiene-private.tsv`, `group<TAB>regex` rows.
 Without it the scan warns once and runs the generic groups; `--require-private` exits 2.
-`scripts/bounded` holds `make check` to one run per tree, an 840 s wall, no start above a load of 4 per core.
+`scripts/bounded` holds `make check` to one run per tree, a 30 min wall, no start above a load of 4 per core.
 Each README is rendered from its source, and the sidecar `design/readme/rendered.sha256` holds the two hashes `make check` reads.
 
 | id | range | role |
@@ -276,7 +276,7 @@ Each README is rendered from its source, and the sidecar `design/readme/rendered
 
 ## Status
 
-Status: version `0.23.14`, rendered `2026-11-01`, `518` unittest cases.
+Status: version `0.23.15`, rendered `2026-11-01`, `518` unittest cases.
 
 | Surface | State |
 |---|---|

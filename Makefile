@@ -8,13 +8,14 @@ endif
 export PY
 
 # conventions section 5: `check` runs under scripts/bounded, one per tree by the
-# lock file .check.lock (a flock), an 840 s wall, held off above load 4 x cores; r6 edge 1: every
+# lock file .check.lock (a flock), an 1800 s wall (the coordinator's ruling of 2026-11-20,
+# as agentik-session has it), held off above load 4 x cores; r6 edge 1: every
 # `claude` start is bounded too, and a machine without claude reads unrun.
 
 .PHONY: check check-unlocked gates test lint doclint hygiene plugin-version-check validate decisions doctor install venv readme
 
 check:
-	@$(PY) scripts/bounded --lock .check.lock --wall 840 --load 4 -- $(MAKE) check-unlocked
+	@$(PY) scripts/bounded --lock .check.lock --wall 1800 --load 4 -- $(MAKE) check-unlocked
 
 check-unlocked: gates test lint doclint hygiene plugin-version-check validate decisions
 	@if [ ! -f design/readme/source.md ]; then echo "readme: refused, absent design/readme/source.md"; exit 2; \

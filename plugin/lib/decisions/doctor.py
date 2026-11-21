@@ -43,7 +43,7 @@ from .common import VERSION, Refusal, bounded, git_top
 from .ledger import lint, locate
 from .speak import respeak_source
 
-__all__ = ["cmd_doctor", "run_checks", "read_provider", "in_range", "first_path", "MARKETPLACE",
+__all__ = ["cmd_doctor", "run_checks", "read_provider", "session_state", "in_range", "first_path", "MARKETPLACE",
            "PLUGIN", "TOOL", "OLD_MARKETPLACE", "OLD_PLUGIN", "ALIAS", "SESSION_STATE",
            "PROVIDER_RANGE", "PATH_LINE", "remedy"]
 
@@ -274,16 +274,20 @@ def in_range(version, spec=PROVIDER_RANGE):
     return True
 
 
+def session_state(env):
+    """The session tool's state folder: its new name's under XDG_STATE_HOME, else its old one's."""
+    state = env.get("XDG_STATE_HOME") or os.path.join(_home(env), ".local", "state")
+    return first_path(*(os.path.join(state, name) for name in SESSION_STATE))
+
+
 def read_provider(env):
     """The session's resolved file: {status, version, profile, path, detail}."""
-    state = env.get("XDG_STATE_HOME") or os.path.join(_home(env), ".local", "state")
     session = env.get("CLAUDE_CODE_SESSION_ID")
     absent = {"status": "absent", "version": None, "profile": None, "path": None,
               "detail": "none (standalone)"}
     if not session:
         return absent
-    folder = first_path(*(os.path.join(state, name) for name in SESSION_STATE))
-    path = os.path.join(folder, "sessions", session, "resolved.json")
+    path = os.path.join(session_state(env), "sessions", session, "resolved.json")
     if not os.path.isfile(path):
         return dict(absent, path=path)
     try:

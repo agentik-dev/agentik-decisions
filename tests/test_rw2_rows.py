@@ -179,6 +179,27 @@ class Cells(Rows):
         self.build("p4-hand", 1, tip, gate="none: a records-only change")
         self.assertIsNone(self.view()["p4-hand"]["gate"])
 
+    def test_rg1_a_running_cell_reads_the_job_result(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        self.row("p4-crate")
+        job = os.path.join(os.environ["XDG_STATE_HOME"], "agentik-session", "gate", "X1")
+        result = os.path.join(job, "result.json")
+        for body, want in (('{"exit": 0}', 0), ('{"exit": 2}', 2), (None, None), ("", None),
+                           ('{"exit": "0"}', None), ('{"exit": true}', None), ("[0]", None)):
+            if body is None:
+                if os.path.exists(result):
+                    os.remove(result)
+            else:
+                self.put(result, body)
+            self.build("p4-crate", 1, tip, gate="X1 running (position 16)")
+            got = self.view()["p4-crate"]
+            self.assertEqual(got["gate"], {"id": "X1", "exit": want}, body)
+            line = [t for t in self.rows()[1].splitlines() if t.startswith("p4-crate ")][0]
+            self.assertIn("gate X1 running" if want is None else "gate X1 exit %d" % want, line)
+        self.put(result, '{"exit": 0}')
+        self.build("p4-crate", 1, tip, gate="X1 exit 1")
+        self.assertEqual(self.view()["p4-crate"]["gate"], {"id": "X1", "exit": 1})
+
     def test_past_and_dirty(self):
         tip = self.on_branch("p4-crate", "crate-1.txt")
         self.row("p4-crate")
