@@ -266,7 +266,7 @@ make check
 `scripts/{hygiene,bounded,agentik}` are agentik-commons' copies, pinned by `scripts/vendored.sha256`; `scripts/doclint` (charters, packets, links) is byte-identical across them, pinned in the Makefile.
 `scripts/hygiene` keeps only generic patterns; the private ones (a person, a private repo, a host, a domain) live outside it, in `$AGENTIK_HYGIENE_PRIVATE` or `~/.config/agentik/hygiene-private.tsv`, `group<TAB>regex` rows.
 Without it the scan warns once and runs the generic groups; `--require-private` exits 2.
-`scripts/bounded` holds `make check` to one run per tree, an 840 s wall, no start above a load of 4 per core.
+`scripts/bounded` holds `make check` to one run per tree, an 1800 s wall, no start above a load of 4 per core.
 Each README is rendered from its source, and the sidecar `design/readme/rendered.sha256` holds the two hashes `make check` reads.
 
 | id | range | role |

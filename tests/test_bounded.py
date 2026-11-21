@@ -188,8 +188,8 @@ class BoundedTest(unittest.TestCase):
 
     def test_makefile_gate_is_bounded(self):
         text = (ROOT / "Makefile").read_text()
-        # 840 s plus the grace fits inside the relay's 900 s timeout (ADV10-1)
-        assert ("scripts/bounded --lock .check.lock --wall 840 --load 4 -- $(MAKE) check-unlocked"
+        # 1800 s, the coordinator's ruling of 2026-11-20 (was 840 s inside the relay's 900, ADV10-1)
+        assert ("scripts/bounded --lock .check.lock --wall 1800 --load 4 -- $(MAKE) check-unlocked"
                 in text)
         # the README render spawns `claude -p`: walled like the gate (ADV10-6); this repo's
         # line, not the session's 600 s and --load 4 (d15: its 900 s waits for §5's next fold)
