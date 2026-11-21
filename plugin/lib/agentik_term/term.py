@@ -408,6 +408,12 @@ class Term:
             at = b
         stream.write(shown + text[at:])
 
+    def verbatim(self, text):
+        """Text on stdout as the caller made it, a line break after it: a shell script, or the
+        completion callback's `name<TAB>summary` lines, each part cleaned by the caller (row
+        ak12-polish R5)."""
+        self.out.write(text)
+
     def json(self, obj):
         self.out.write(json.dumps(_cleaned(obj), ensure_ascii=True, sort_keys=False))
 
