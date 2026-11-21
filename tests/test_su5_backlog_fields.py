@@ -117,8 +117,8 @@ class Fields(Orchard):
         self.assertEqual((got[6]["level"], got[6]["state"]["word"]), (None, "open"))
 
     def test_4_a_list_step_has_neither(self):
-        fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "fixtures", "backlog", "numbered")
+        fixture = self.fixture_outside(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                    "fixtures", "backlog", "numbered"))
         data = json.loads(self.run_cli(fixture, "--json"))
         steps = data["repos"][0]["steps"]
         self.assertTrue(steps)

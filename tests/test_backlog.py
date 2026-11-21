@@ -22,17 +22,30 @@ from unittest import mock
 
 import decisions
 from decisions import doctor, speak
-from tests.hermetic import REPO, Hermetic
+from tests.hermetic import REPO, Hermetic, outside
 
 FIXTURES = os.path.join(REPO, "tests", "fixtures", "backlog")
+# The module's copy of FIXTURES in no repository (`hermetic.outside`): a fixture inside
+# this clone would be read as the clone's own records.
+COPY = {}
 NICE = "NICE_TO_HAVE.md"
 # respeak's include file: under plugin/ so an install copies it, beside commands/ and
 # skills/ so no loader reads it as either.
 INCLUDE = "plugin/respeak-include.md"
 
 
+def setUpModule():
+    COPY["root"], COPY["fixtures"] = outside(FIXTURES)
+
+
+def tearDownModule():
+    shutil.rmtree(COPY.pop("root"), True)
+    COPY.clear()
+
+
 def fixture(name):
-    return os.path.join(FIXTURES, name)
+    """The fixture `name` in the module's copy, outside every repository."""
+    return os.path.join(COPY["fixtures"], name)
 
 
 def line_of(name, needle, file=NICE):
