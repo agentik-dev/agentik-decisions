@@ -5,7 +5,7 @@ audience: agent
 ---
 # agentik-decisions: agent contract
 
-A Claude Code plugin, `decisions@agentik`, and a stdlib Python tool, `agentik-decisions` (run as `agentik decisions`), that serve one sectioned DECISIONS.md per repo with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `init`, `doctor`, `backlog`, `expire`, `analyze` and `audit`. The current design is `design/d18-one-flow.md`; later packets are in `design/packets/`, older ones in `history/`.
+A Claude Code plugin, `decisions@agentik`, and a stdlib Python tool, `agentik-decisions` (run as `agentik decisions`), that serve one sectioned DECISIONS.md per repo with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `init`, `doctor`, `backlog`, `reply`, `expire`, `analyze` and `audit`; `reply` is the owner's at a terminal, never a sitting's. The current design is `design/d18-one-flow.md`; later packets are in `design/packets/`, older ones in `history/`.
 
 - **Read order:** `README.md`, then `design/d18-one-flow.md`, then the newest `history/sittings/*.md`.
 - **The ledger:** `## In force` (`### Every session` first, then `### <area>`), `## Proposed`, `## Superseded`. An entry in force is one line, `N. **Title.** paragraph (date; source)`. Numbers are unique and never reused. An hq's ledger may also hold `### Every session of the tree`, which `render --scope tree` writes into the folder's CLAUDE.md. `agentik decisions render --lint` checks the shape, the cap on entries in force and the OPEN-QUESTIONS.md beside the ledger; the line `<!-- decisions: legacy below -->` ends the parsed part of an older ledger.

@@ -1,5 +1,5 @@
 """agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus init, doctor,
-backlog, questions, expire, analyze and audit.
+backlog, questions, reply, expire, analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -82,6 +82,12 @@ Verbs
                                   date and its block as written, the Answered and
                                   Decided counts; a REPO with no file is skipped;
                                   no lock, no render; writes nothing
+    reply N (--pick L | --say T) [--dry-run] [--yes]
+                                  the owner's answer, at a terminal, typed onto
+                                  question N's own answer line under .new.lock:
+                                  an option's label or one line of text, and
+                                  nothing else in either file; asks once unless
+                                  --yes; `answer N` then enters it
     expire [REPO...] [--order FILE] [--days N] [--write] [--json]
                                   the closed NICE items and the S4 ones older
                                   than N days (14) on no open step; --write
@@ -131,7 +137,10 @@ Exit codes
        render`)
     1  `render`: a lint problem, with --check a stale block or an absent tree's
        file, or under --ceiling a file over its ceiling; `backlog --check`: a
-       stale state cell left; `rows check`: a stale row
+       stale state cell left; `rows check`: a stale row; `reply`: any refusal (no
+       block N, a filled answer line, no base line or two, a lint problem of block
+       N, an unknown or ambiguous label, a --say refused, a held lock, no terminal
+       without --yes, a declined question)
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
@@ -157,6 +166,7 @@ from .answer import cmd_answer
 from .audit import cmd_audit, cmd_edits
 from .backlog import cmd_backlog
 from .questions_read import cmd_questions
+from .reply import cmd_reply
 from .expire import cmd_expire
 from .ask import cmd_new
 from .selector import cmd_ask
@@ -304,6 +314,18 @@ def build_parser():
     questions.add_argument("repos", nargs="*", metavar="REPO",
                            help="a repo's directory; the default is the git top level")
     questions.add_argument("--json", action="store_true")
+
+    reply = subs.add_parser("reply", parents=[ledger],
+                            help="the owner's answer typed onto question N's own answer line, "
+                            "at a terminal; enters nothing")
+    reply.add_argument("number", type=int, metavar="N")
+    typed = reply.add_mutually_exclusive_group(required=True)
+    typed.add_argument("--pick", default=None, metavar="LABEL", help="an option's label")
+    typed.add_argument("--say", default=None, metavar="TEXT",
+                       help="the owner's own answer, one line")
+    reply.add_argument("--dry-run", action="store_true",
+                       help="every check, then the line before and after; writes nothing")
+    reply.add_argument("--yes", action="store_true", help="write without asking")
 
     expire = subs.add_parser("expire", parents=[ledger],
                              help="move closed and old S4 NICE items to history/NICE-overflow.md")
@@ -472,6 +494,7 @@ def cmd_install_cli(args, out, err):
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "init": cmd_init, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
+         "backlog": cmd_backlog, "questions": cmd_questions, "reply": cmd_reply,
+         "expire": cmd_expire,
          "analyze": cmd_analyze, "audit": cmd_audit,
          "rows": cmd_rows, "describe": cmd_describe, "install-cli": cmd_install_cli}

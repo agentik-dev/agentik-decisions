@@ -20,7 +20,7 @@ __all__ = ["Refusal", "bounded", "bounded_err", "git_top", "read_text", "write_t
 
 # This package's version, one with the three manifests; `agentik-decisions --version`
 # prints it and `doctor` compares the tool on PATH with it.
-VERSION = "0.23.16"
+VERSION = "0.23.17"
 
 # Every child this tool starts is bounded (ADV6-6): a hang is a Refusal or a
 # warn, never a wait. The tests lower it.
@@ -383,12 +383,15 @@ def on_disk(text, crlf):
     return len((re.sub(r"\r?\n", "\r\n", text) if crlf else text).encode())
 
 
-def commit_texts(texts):
+def commit_texts(texts, as_read=False):
     """Write every `(path, text)` or none (ADV6-9).
 
     A path that is a link is written through it: the file it names is replaced
     and the link stays (F5). A file whose first line ends in CRLF gets every
-    line end in CRLF; a new file, or one in LF, gets LF (F4). Every text goes
+    line end in CRLF; a new file, or one in LF, gets LF (F4). With `as_read`,
+    every text is written with its line ends as it holds them, none changed
+    (`reply`, in5a review 1 F2: a text read with `disk_text` keeps a file of
+    mixed line ends as it was). Every text goes
     to a temp file beside the file it replaces first; then the temps replace
     their files in order. On any failure the temps go, every file already
     replaced gets its original bytes back (a file that did not exist is
@@ -403,7 +406,7 @@ def commit_texts(texts):
             original = None
         except OSError as exc:
             raise Refusal("%s: unreadable: %s" % (path, exc))
-        if original is not None and line_end(original) == "\r\n":
+        if not as_read and original is not None and line_end(original) == "\r\n":
             text = re.sub(r"\r?\n", "\r\n", text)
         originals.append(original)
         targets.append((path, real, text))
