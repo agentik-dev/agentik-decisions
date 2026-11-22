@@ -71,13 +71,15 @@ def said(number, text):
 
 
 def picked(block, wanted):
-    """The option label `--pick` names, as the block spells it (R3), or a Refusal."""
+    """The option label `--pick` names, as the block spells it (R3), or a Refusal; the
+    refusal shows each label it could name once in backticks, its own at either end
+    dropped, never doubled (review 1)."""
     labels = [label for label, _marked, _effect in block.options]
     found = answer.named(block, wanted)
     if len(found) > 1:
         raise Refusal("reply: question %d: %r could name any of %s; pick one label as it "
                       "stands; nothing written"
-                      % (block.number, wanted, ", ".join("`%s`" % l for l in found)))
+                      % (block.number, wanted, ", ".join("`%s`" % l.strip("`") for l in found)))
     if not found:
         raise Refusal("reply: question %d has no option %r; its options are %s; nothing "
                       "written" % (block.number, wanted, ", ".join(labels)))
