@@ -335,3 +335,107 @@ class Line6Ask(Reply):
         self.assertEqual(code, 0, out + err)
         self.assertEqual(self.changed(q, self.read(self.file)), [(ANSWER, ANSWER + " north")])
         self.assertIn("your answer is on its line", out)
+
+
+class Fix1Blanks(Reply):
+    """Review 1 F1: a T of blanks other than the plain space, or of invisible characters
+    alone, is an empty --say: refused, exit 1, the file's bytes as they were."""
+
+    BLANK = (" ", " ", "　", "   ", "​", "﻿",
+             "​﻿", " ​　", "   ", " ", "\t")
+
+    def test_f1_blank_or_invisible_is_refused(self):
+        for text in self.BLANK:
+            with self.subTest(text=ascii(text)):
+                before = sha(self.file)
+                self.refused([self.n, "--say", text, "--yes"], "an empty --say")
+                self.assertEqual(sha(self.file), before)
+                self.assertEqual(self.typed(self.n)["state"], "open")
+
+    def test_f1_visible_text_in_blanks_is_written_stripped(self):
+        q = self.read(self.file)
+        code, out, err = self.reply(self.n, "--say", " 　 north gate  ",
+                                    "--yes")
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(self.changed(q, self.read(self.file)),
+                         [(ANSWER, ANSWER + " north gate")])
+        self.assertEqual(self.typed(self.n)["typed"], "north gate")
+
+    def test_f1_the_read_back_wants_an_answer(self):
+        args = mock.Mock(pick=None)
+        for text in (" ", "　"):
+            with self.subTest(text=ascii(text)):
+                with self.assertRaises(decisions.common.Refusal) as caught:
+                    decisions.reply.plan(self.file, self.n, args, text)
+                self.assertIn("read back", str(caught.exception))
+
+
+class Fix2LineEnds(Reply):
+    """Review 1 F2: reply writes the file's line ends as it read them; the answer line
+    alone differs, byte for byte, in a file of LF, CRLF, both mixed, or no final newline."""
+
+    def raw(self):
+        with open(self.file, "rb") as handle:
+            return handle.read()
+
+    def put(self, data):
+        with open(self.file, "wb") as handle:
+            handle.write(data)
+
+    def one_line(self, data, number):
+        self.put(data)
+        code, out, err = self.reply(number, "--say", "x", "--yes")
+        self.assertEqual((code, err), (0, ""))
+        old, new = data.split(b"\n"), self.raw().split(b"\n")
+        self.assertEqual(len(old), len(new))
+        at = [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
+        self.assertEqual(len(at), 1, at)
+        want = ANSWER.encode()
+        self.assertEqual(new[at[0]], old[at[0]].replace(want, want + b" x", 1))
+        self.assertEqual(self.typed(number)["typed"], "x")
+
+    def test_f2_lf(self):
+        data = self.raw()
+        self.assertNotIn(b"\r", data)
+        self.one_line(data, self.n)
+
+    def test_f2_crlf(self):
+        self.one_line(self.raw().replace(b"\n", b"\r\n"), self.n)
+
+    def test_f2_mixed_crlf_first(self):
+        first, rest = self.raw().split(b"\n", 1)
+        self.one_line(first + b"\r\n" + rest, self.n)
+
+    def test_f2_mixed_lf_first(self):
+        data = self.raw().replace(b"At dawn, or at dusk?\n", b"At dawn, or at dusk?\r\n", 1)
+        self.assertIn(b"\r\n", data)
+        self.one_line(data, self.n)
+
+    def test_f2_mixed_the_answer_line_crlf(self):
+        data = self.raw()
+        at = data.index(ANSWER.encode() + b"\n", data.index(b"Which gate stays red"))
+        data = data[:at] + ANSWER.encode() + b"\r\n" + data[at + len(ANSWER) + 1:]
+        self.one_line(data, self.n)
+
+    def test_f2_no_final_newline_lf(self):
+        self.one_line(self.raw().rstrip(b"\n"), self.numbers[2])
+
+    def test_f2_no_final_newline_crlf(self):
+        self.one_line(self.raw().replace(b"\n", b"\r\n").rstrip(b"\r\n"), self.numbers[2])
+
+
+class Fix3Label(Reply):
+    """Review 1, riding: the message for a label that could name several options shows each
+    label once in backticks, never doubled."""
+
+    def test_f3_each_label_once_in_backticks(self):
+        text = self.read(self.file)
+        text = text.replace("- **South gate.** Faces the pond.",
+                            "- **`North gate`.** Faces the pond.", 1)
+        self.write(self.file, text.replace("- **Neither.** Paint both.",
+                                           "- **North gate*.** Paint both.", 1))
+        labels = [o[0] for o in self.block(self.read(self.file), self.n).options]
+        self.assertEqual(labels, ["North gate", "`North gate`", "North gate*"])
+        err = self.refused([self.n, "--pick", "north gate.", "--yes"],
+                           "could name any of `North gate`, `North gate`, `North gate*`;")
+        self.assertNotIn("``", err)

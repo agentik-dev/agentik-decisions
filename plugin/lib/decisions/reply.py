@@ -7,8 +7,9 @@ beside the ledger, one space between, and nothing else in either file: no entry,
 Proposed line moved, no Answered line, the base line as it was, every other block as it
 was. `--pick L` names one option as `answer` matches the owner's typed text (case,
 ` (Recommended)`, a period and `*` or backticks at either end dropped) and writes its label
-as the block spells it; `--say T` writes T, its spaces at either end cut, one line of at
-most 2,000 bytes with no control character. The read, the checks and the write run under
+as the block spells it; `--say T` writes T, its blanks at either end cut, one line of at
+most 2,000 bytes with no control character; T is empty when it holds no character outside
+the spaces, controls and format characters. The read, the checks and the write run under
 `.new.lock`, as `new` takes it; the write is one rename beside the file, and no git runs.
 
 Refused, exit 1, nothing written: no questions file, no block N, a block whose answer
@@ -43,11 +44,18 @@ def breaks(char):
     return len(("a%sb" % char).splitlines()) > 1
 
 
+def unseen(char):
+    """True for a space, a line or paragraph separator, a control or a format character:
+    one that shows nothing on the answer line (review 1 F1)."""
+    return unicodedata.category(char) in ("Zs", "Zl", "Zp", "Cc", "Cf")
+
+
 def said(number, text):
-    """`--say`'s T, its spaces at either end cut, or a Refusal (R4)."""
-    text = text.strip(" ")
+    """`--say`'s T, its blanks at either end cut (`str.strip`), or a Refusal (R4); a T
+    with no character outside the spaces, controls and format characters is empty."""
+    text = text.strip()
     where = "reply: question %d:" % number
-    if not text:
+    if all(unseen(c) for c in text):
         raise Refusal("%s an empty --say; nothing written" % where)
     if any(breaks(c) for c in text):
         raise Refusal("%s --say holds a newline; the answer is one line; nothing written"
@@ -113,7 +121,8 @@ def plan(path_q, number, args, say):
     lines[at] = after + lines[at][len(before):]
     new = "".join(lines)
     again = [b for b in questions.parse(new).blocks if b.number == number]
-    if len(again) != 1 or again[0].answer != " ".join(text.split()):
+    if (len(again) != 1 or not again[0].answer
+            or again[0].answer != " ".join(text.split())):
         raise Refusal("reply: question %d: the line would not read back as typed; nothing "
                       "written" % number)
     return old, new, at, before, after
