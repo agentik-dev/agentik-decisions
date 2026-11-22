@@ -507,8 +507,19 @@ def covers(git, review, build):
     return bool(build["head"] and end and ancestor(git, build["head"], end))
 
 
+def unchecked(build):
+    """nw1b R2: what holds `ready` back on `build`'s gate cell, None at exit 0."""
+    gate = build["gate"]
+    if gate is None:
+        return "%s names no check" % build["file"]
+    if gate["exit"] is None:
+        return "check %s still runs" % gate["id"]
+    return "check %s exit %d, not green" % (gate["id"], gate["exit"]) if gate["exit"] else None
+
+
 def judged(row, git, build):
-    """R5's table from `ruling` down, on `build`: (word, text, command, record file)."""
+    """R5's table from `ruling` down, on `build`: (word, text, command, record file). nw1b R1:
+    `ready` also asks the newest build record's gate at exit 0, else `reviewed` names it."""
     reviews = row["rec"]["reviews"]
     review = next((r for r in reversed(reviews) if covers(git, r, build)), None)
     if review is None:
@@ -526,6 +537,10 @@ def judged(row, git, build):
     # dc5 R1: where main's Makefile has a `stamp` target the landing readies the branch, so
     # the merge base no longer holds `ready` back (design/16 section 4 item 3)
     if (current or row["stamp"]) and row["rec"]["merge"]:
+        newest = row["rec"]["builds"][-1]
+        held_back = unchecked(newest)
+        if held_back:
+            return "reviewed", held_back, None, newest["file"]
         # review 1 F2: each part quoted for a POSIX shell, so a pasted line is four words
         command = "agentik session gate land " + " ".join(
             shlex.quote(part) for part in (row["path"], row["branch"], row["tip"], merge))
