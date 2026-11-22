@@ -10,7 +10,8 @@ was. `--pick L` names one option as `answer` matches the owner's typed text (cas
 as the block spells it; `--say T` writes T, its blanks at either end cut, one line of at
 most 2,000 bytes with no control character; T is empty when it holds no character outside
 the spaces, controls and format characters. The read, the checks and the write run under
-`.new.lock`, as `new` takes it; the write is one rename beside the file, and no git runs.
+`.new.lock`, as `new` takes it; the write is one rename beside the file, every line end as
+it was read, and no git runs.
 
 Refused, exit 1, nothing written: no questions file, no block N, a block whose answer
 line holds text or that holds a non-blank line under it (`answer N` is the sitting's next
@@ -166,7 +167,7 @@ def run(args, path, out, err):
                 shown(out, path_q, number, at, before, after)
                 out.write("reply: dry run, nothing written\n")
                 return 0
-            commit_texts([(path_q, new)])
+            commit_texts([(path_q, new)], as_read=True)
             out.write(DONE % (number, number))
             return 0
     stdin = sys.stdin
@@ -183,7 +184,7 @@ def run(args, path, out, err):
         if now[0] != old:
             raise Refusal("reply: question %d: %s changed while you were asked; nothing "
                           "written" % (number, display(path_q)))
-        commit_texts([(path_q, now[1])])
+        commit_texts([(path_q, now[1])], as_read=True)
     out.write(DONE % (number, number))
     return 0
 
