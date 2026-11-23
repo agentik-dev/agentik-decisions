@@ -179,6 +179,27 @@ class Cells(Rows):
         self.build("p4-hand", 1, tip, gate="none: a records-only change")
         self.assertIsNone(self.view()["p4-hand"]["gate"])
 
+    def test_rg1_a_running_cell_reads_the_job_result(self):
+        tip = self.on_branch("p4-crate", "crate-1.txt")
+        self.row("p4-crate")
+        job = os.path.join(os.environ["XDG_STATE_HOME"], "agentik-session", "gate", "X1")
+        result = os.path.join(job, "result.json")
+        for body, want in (('{"exit": 0}', 0), ('{"exit": 2}', 2), (None, None), ("", None),
+                           ('{"exit": "0"}', None), ('{"exit": true}', None), ("[0]", None)):
+            if body is None:
+                if os.path.exists(result):
+                    os.remove(result)
+            else:
+                self.put(result, body)
+            self.build("p4-crate", 1, tip, gate="X1 running (position 16)")
+            got = self.view()["p4-crate"]
+            self.assertEqual(got["gate"], {"id": "X1", "exit": want}, body)
+            line = [t for t in self.rows()[1].splitlines() if t.startswith("p4-crate ")][0]
+            self.assertIn("gate X1 running" if want is None else "gate X1 exit %d" % want, line)
+        self.put(result, '{"exit": 0}')
+        self.build("p4-crate", 1, tip, gate="X1 exit 1")
+        self.assertEqual(self.view()["p4-crate"]["gate"], {"id": "X1", "exit": 1})
+
     def test_past_and_dirty(self):
         tip = self.on_branch("p4-crate", "crate-1.txt")
         self.row("p4-crate")
@@ -200,7 +221,7 @@ class Text(Rows):
     def test_a_row_holds_exactly_the_keys(self):
         self.row("p3-basket")
         self.assertEqual(tuple(self.view()["p3-basket"]), KEYS)
-        self.assertEqual(len(KEYS), 19)
+        self.assertEqual(len(KEYS), 20)
 
     def test_the_text_view(self):
         tip = self.on_branch("p4-crate", "crate-1.txt")
@@ -483,6 +504,14 @@ class Review1(Rows):
         tip2 = git(self.pear, "rev-parse", "p1-ready")
         self.build("p1-ready", 2, "`%s`" % tip2[:7], stage="`phase 2` (main merged in)")
         self.assertEqual(self.view()["p1-ready"]["state"], "ready")
+
+    def test_n23_a_slice_after_a_repo_name(self):
+        tip, folder = self.ready("p1-ready")
+        span = "%s..%s" % (self.base("p1-ready")[:7], tip[:7])
+        self.review("p1-ready", 1, "pear %s, the whole branch" % span, ruling="closed")
+        self.assertEqual(self.view()["p1-ready"]["state"], "ready")
+        self.review("p1-ready", 1, "pear and more", ruling="closed")
+        self.assertEqual(self.view()["p1-ready"]["state"], "built")
 
     def test_f5_a_cell_is_the_second_cell(self):
         self.put(os.path.join(self.root, "p4-wide", "row.md"),

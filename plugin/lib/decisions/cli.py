@@ -1,5 +1,5 @@
 """agentik decisions - six verbs over one sectioned DECISIONS.md per repo, plus init, doctor,
-backlog, questions, expire, analyze and audit.
+backlog, questions, reply, expire, analyze and audit.
 
 Verbs
     show <n>... | --area NAME     entries verbatim under their heading, or a whole
@@ -44,17 +44,28 @@ Verbs
     rows [check] [--json] [--root DIR] [REPO...]
                                   each build row's stage, read from its folder
                                   under DIR (history/rows at the git top) and
-                                  from git, with its next act; `check` walks
-                                  open and closed rows for contradictions;
-                                  writes nothing
+                                  from git, with its next act and what a cut
+                                  builder's charter left; `check` walks open
+                                  and closed rows for contradictions; both
+                                  write nothing
+    rows close ROW [--withdrawn WHY] [--root DIR] [--repo DIR] [--dry-run] [-y]
+                                  a pushed row that owes nothing: its `done`
+                                  cell and its line in history/handoff-done.md,
+                                  both or neither; --withdrawn gives any open
+                                  row up, its cell alone; it asks first at a
+                                  terminal, and -y writes without asking
     describe --json | describe config --json [KEY]
                                   this tool as one JSON object for the suite: its
                                   verbs, needs and reads; `config` each setting it
                                   reads here (no settings file): its value, where
                                   it comes from and what changes it; writes nothing
-    install-cli [--prefix P]      freeze this plugin's lib/ and write the launcher,
+    install-cli [--prefix P] [--force]
+                                  freeze this plugin's lib/ and write the launcher,
                                   its `decisions` link and the `agentik` door
-                                  under P (default ~/.local): 0, or 1 it could not
+                                  under P (default ~/.local): 0, or 1 it could not;
+                                  a newer command install-cli placed is left, one
+                                  line says so and exits 0; --force places this
+                                  one over it
     backlog [REPO...] [--order FILE] [--json]
                                   each repo's NICE_TO_HAVE.md placed against its
                                   HANDOFF.md build order, or FILE's steps for that
@@ -71,6 +82,12 @@ Verbs
                                   date and its block as written, the Answered and
                                   Decided counts; a REPO with no file is skipped;
                                   no lock, no render; writes nothing
+    reply N (--pick L | --say T) [--dry-run] [--yes]
+                                  the owner's answer, at a terminal, typed onto
+                                  question N's own answer line under .new.lock:
+                                  an option's label or one line of text, and
+                                  nothing else in either file; asks once unless
+                                  --yes; `answer N` then enters it
     expire [REPO...] [--order FILE] [--days N] [--write] [--json]
                                   the closed NICE items and the S4 ones older
                                   than N days (14) on no open step; --write
@@ -99,6 +116,11 @@ Verbs
 The ledger is `--ledger PATH`, else DECISIONS.md at the git top level of the
 working directory; `backlog`, `expire`, `analyze`, `rows` and `describe` read no ledger and
 ignore it, and `questions` ignores it, reading the DECISIONS.md beside each REPO's file.
+A repo's records (OPEN-QUESTIONS.md and its .new.lock, NICE_TO_HAVE.md, HANDOFF.md, the
+done and overflow files under history/, and history/rows) are at its git top, or under the
+folder its clone's git config key `agentik.records` names; a clone whose tree says its
+records are out and that sets no key reads none and writes none, and a key that does not
+resolve refuses. --ledger, --into, --root and --order still name their own paths.
 `--version` prints the version, which `doctor` compares with the tool on PATH.
 
 The tool is `agentik-decisions`, run as `agentik decisions`; the old name
@@ -115,7 +137,10 @@ Exit codes
        render`)
     1  `render`: a lint problem, with --check a stale block or an absent tree's
        file, or under --ceiling a file over its ceiling; `backlog --check`: a
-       stale state cell left; `rows check`: a stale row
+       stale state cell left; `rows check`: a stale row; `reply`: any refusal (no
+       block N, a filled answer line, no base line or two, a lint problem of block
+       N, an unknown or ambiguous label, a --say refused, a held lock, no terminal
+       without --yes, a declined question)
     2  usage, an unknown verb, entry or area, an unreadable ledger, a `new` or
        `answer` refusal, an `ask` for an unknown N or under a held lock, a `render`
        target that is the ledger itself, a failed `doctor` check (a `warn` never
@@ -127,7 +152,8 @@ Exit codes
        not hold, whose files changed under it, or that failed, or an `audit`
        REPO that is not a directory or `--tree` FILE it cannot read, or an
        `--edits` commit name git cannot resolve, or a `describe` without --json or
-       with a word other than `config`
+       with a word other than `config`, or a `rows close` refused, declined, or
+       with neither -y nor --dry-run where it cannot ask
 """
 
 import argparse
@@ -140,10 +166,11 @@ from .answer import cmd_answer
 from .audit import cmd_audit, cmd_edits
 from .backlog import cmd_backlog
 from .questions_read import cmd_questions
+from .reply import cmd_reply
 from .expire import cmd_expire
 from .ask import cmd_new
 from .selector import cmd_ask
-from .common import VERSION, Refusal
+from .common import VERSION, Refusal, records_reset
 from .doctor import cmd_doctor
 from .init import cmd_init
 from .ledger import locate
@@ -237,13 +264,18 @@ def build_parser():
                         "render would change and its bytes beside the ceiling; write nothing")
 
     render = subs.add_parser("render", parents=[ledger],
-                             help="the lint, then the generated block in a CLAUDE.md")
+                             help="the lint, then the generated block rewritten in a CLAUDE.md "
+                             "that holds one; `init` adds it")
     render.add_argument("--into", default=None,
                         help="the target; the default is the CLAUDE.md beside the ledger, "
                         "or under --scope tree the folder's")
     render.add_argument("--scope", choices=("repo", "tree"), default="repo",
                         help="tree: the ledger's `Every session of the tree` alone, the whole "
                         "file, into the CLAUDE.md of the folder that holds the repo")
+    render.add_argument("--draft", default=None, metavar="DRAFT",
+                        help="with --lint: also what the target would load with DRAFT's "
+                        "text in its place, its own block and its folder's imports; "
+                        "writes nothing")
     render.add_argument("--ceiling", action="store_true",
                         help="with --check or --lint: exit 1 when the file loads more than "
                         "its ceiling")
@@ -255,7 +287,8 @@ def build_parser():
                       help="rewrite each tail in force in form T2, then the block")
 
     subs.add_parser("init", parents=[ledger],
-                    help="an empty ledger and its block in the CLAUDE.md beside it")
+                    help="an empty ledger and its block in the CLAUDE.md beside it; "
+                    "where a ledger is, its block alone")
 
     doctor = subs.add_parser("doctor", parents=[ledger],
                              help="check this machine and this repo")
@@ -281,6 +314,18 @@ def build_parser():
     questions.add_argument("repos", nargs="*", metavar="REPO",
                            help="a repo's directory; the default is the git top level")
     questions.add_argument("--json", action="store_true")
+
+    reply = subs.add_parser("reply", parents=[ledger],
+                            help="the owner's answer typed onto question N's own answer line, "
+                            "at a terminal; enters nothing")
+    reply.add_argument("number", type=int, metavar="N")
+    typed = reply.add_mutually_exclusive_group(required=True)
+    typed.add_argument("--pick", default=None, metavar="LABEL", help="an option's label")
+    typed.add_argument("--say", default=None, metavar="TEXT",
+                       help="the owner's own answer, one line")
+    reply.add_argument("--dry-run", action="store_true",
+                       help="every check, then the line before and after; writes nothing")
+    reply.add_argument("--yes", action="store_true", help="write without asking")
 
     expire = subs.add_parser("expire", parents=[ledger],
                              help="move closed and old S4 NICE items to history/NICE-overflow.md")
@@ -319,14 +364,28 @@ def build_parser():
     audit.add_argument("--json", action="store_true")
 
     rows = subs.add_parser("rows", parents=[ledger],
-                           help="each build row's stage from its records and git; writes nothing")
-    rows.add_argument("words", nargs="*", metavar="[check] REPO",
+                           help="each build row's stage from its records and git; the read "
+                                "and `check` write nothing, `close` writes a row's done cell "
+                                "and its done line")
+    rows.add_argument("words", nargs="*", metavar="[check] REPO | close ROW",
                       help="`check` first walks open and closed rows for contradictions; "
-                           "then each repo's directory a row's repo cell may name")
+                           "then each repo's directory a row's repo cell may name; `close` "
+                           "first writes ROW's done cell and its line in "
+                           "history/handoff-done.md, both or neither")
     rows.add_argument("--root", default=None, metavar="DIR",
                       help="the folder of row folders; the default is history/rows at the "
-                           "working directory's git top, whose git top is the home")
+                           "working directory's git top, whose git top is the home, or under "
+                           "the folder its clone's agentik.records names")
     rows.add_argument("--json", action="store_true")
+    rows.add_argument("--withdrawn", default=None, metavar="WHY",
+                      help="close: give the open row up, `withdrawn <today>: WHY`, one line "
+                           "with no |; no done line")
+    rows.add_argument("--repo", default=None, metavar="DIR",
+                      help="close: the row's checkout, whatever its name")
+    rows.add_argument("--dry-run", action="store_true",
+                      help="close: print what would be written and write nothing")
+    rows.add_argument("-y", "--yes", action="store_true",
+                      help="close: write without asking")
 
     describe = subs.add_parser("describe", parents=[ledger],
                                help="this tool and its settings here, as JSON for the suite; "
@@ -340,6 +399,8 @@ def build_parser():
                               help="put this plugin's launcher on the terminal's PATH (GUIDE section 10)")
     install.add_argument("--prefix", default=None,
                          help="where bin/ and share/ go; the default is ~/.local")
+    install.add_argument("--force", action="store_true",
+                         help="place this plugin's command over a newer one install-cli placed")
     return parser
 
 
@@ -361,6 +422,7 @@ def main(argv=None, out=None, err=None):
         alias_note(sys.argv[0], err)
         argv = sys.argv[1:]
     argv = list(argv)
+    records_reset()  # rr4: each call resolves a repo's records afresh
     try:
         # argparse prints --help and its usage errors itself: into `out` and `err`.
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -427,11 +489,12 @@ def cmd_install_cli(args, out, err):
     """The canonical install-cli (agentik_install, beside the package in lib/): 0 or 1."""
     import agentik_install
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        return agentik_install.install_cli(args.prefix)
+        return agentik_install.install_cli(args.prefix, force=args.force, takes_force=True)
 
 
 VERBS = {"show": cmd_show, "find": cmd_find, "new": cmd_new, "ask": cmd_ask,
          "answer": cmd_answer, "render": cmd_render, "init": cmd_init, "doctor": cmd_doctor,
-         "backlog": cmd_backlog, "questions": cmd_questions, "expire": cmd_expire,
+         "backlog": cmd_backlog, "questions": cmd_questions, "reply": cmd_reply,
+         "expire": cmd_expire,
          "analyze": cmd_analyze, "audit": cmd_audit,
          "rows": cmd_rows, "describe": cmd_describe, "install-cli": cmd_install_cli}

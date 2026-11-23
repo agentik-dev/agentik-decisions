@@ -26,7 +26,7 @@ import re
 import subprocess
 
 from .common import (GIT_TIMEOUT, Refusal, bounded, commit_texts, disk_text, git_top,
-                     read_text)
+                     read_text, records_of, records_prime, records_repo)
 
 __all__ = ["cmd_backlog", "nice_items", "build_order", "placement"]
 
@@ -358,7 +358,10 @@ def for_repo(steps, repo):
 def view(repo, ordered=None):
     """The view of one repo, or None when it holds no NICE_TO_HAVE.md; `ordered`,
     (path, order, steps) of an `--order` FILE, stands for the repo's HANDOFF.md."""
-    nice, handoff = os.path.join(repo, NICE), os.path.join(repo, HANDOFF)
+    home = records_of(repo, "backlog")  # rr4 D3: the repo's records, None where it keeps none
+    if home is None:
+        return None
+    nice, handoff = os.path.join(home, NICE), os.path.join(home, HANDOFF)
     if not os.path.lexists(nice):
         return None
     items, closed = scanned(read_text(nice))
@@ -444,11 +447,15 @@ def cmd_backlog(args, out, err):
     if not names:
         here = os.getcwd()
         names = [git_top(here) or here]
-    repos = []
+    repos, keys = [], {}
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("backlog: %s is not a directory" % name)
-        repos.append(os.path.realpath(name))
+        key, real = records_repo(name)  # review 1 C4: a repo whose records are out, read once
+        if key == real or key not in keys:
+            keys[key] = real
+            repos.append(real)
     ordered, order_file = None, getattr(args, "order", None)
     if order_file is not None:
         if not os.path.isfile(order_file):

@@ -281,6 +281,18 @@ class Text(Read):
             "== quince  0 open, 0 answered, 0 decided without asking",
             "skipped (not a directory): nowhere, gone\nskipped (no OPEN-QUESTIONS.md): bare\n"])
 
+    def test_n90_escapes_shown_not_sent(self):
+        """n90: a title's or a label's terminal escapes print as `\\x..`, never raw;
+        `--json` still carries them as they are."""
+        self.swap(TITLE, "Where \x1b[31mthe hay\x1b]0;t\x07 goes")
+        self.swap("**Barn", "**B\x1b[31marn")
+        out = self.questions(self.pear)
+        self.assertFalse(any(c in out for c in "\x1b\x07"), repr(out))
+        self.assertIn("  Where \\x1b[31mthe hay\\x1b]0;t\\x07 goes  recommended: "
+                      "B\\x1b[31marn; proposed %s" % DAY, out)
+        _repo, got = self.one()
+        self.assertEqual(got["title"], "Where \x1b[31mthe hay\x1b]0;t\x07 goes")
+
 
 class Help(Read):
 

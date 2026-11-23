@@ -87,6 +87,7 @@ class BareMachine(unittest.TestCase):
         self.ok(self.tool("answer", number, "--pick", "A (Recommended)", "--source", "the bare test",
                           "--text", "Bare holds.", "--area", "build"))
         self.assertIn("Bare holds.", self.ok(self.tool("show", number)).stdout)
+        self.ok(self.tool("init"))  # dc2 R7: init adds the block, render rewrites it
         self.ok(self.tool("render"))
         self.ok(self.tool("render", "--check"))
         self.assertIn("bare item", self.ok(self.tool("backlog")).stdout)
@@ -98,6 +99,11 @@ class BareMachine(unittest.TestCase):
         bindir = os.path.join(self.t, ".local", "bin")
         launcher = os.path.join(bindir, "agentik-decisions")
         alias = os.path.join(bindir, "decisions")
+        # ak10-sync: the synced module writes the old-name link only where a link of that name
+        # stands (GUIDE §10, the aliases), so a bare home gets none; one standing is refreshed.
+        self.assertFalse(os.path.lexists(alias))
+        os.symlink("elsewhere", alias)
+        self.ok(self.tool("install-cli"))
         self.assertTrue(os.path.islink(alias))
         self.assertEqual(os.path.realpath(alias), os.path.realpath(launcher))
         with open(launcher, encoding="utf-8") as handle:

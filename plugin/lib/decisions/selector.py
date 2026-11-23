@@ -28,7 +28,7 @@ import os
 import re
 
 from . import answer, ask, questions, speak
-from .common import Refusal, commit_texts, held, read_text
+from .common import Refusal, commit_texts, held, read_text, records_of
 from .ledger import PROPOSED, TITLED, display, final_parenthetical, parse
 
 __all__ = ["cmd_ask", "payload", "question_of", "kept", "PER_CALL"]
@@ -142,7 +142,7 @@ def write_back(path, path_q, asked, rendered, err):
     is unchanged since it was read (d41 ruling 6; d42 ruling 5: each asked block has
     one)."""
     fresh = {b.number: b for b in questions.parse(rendered).blocks} if rendered else {}
-    with held(os.path.join(os.path.dirname(path), ask.LOCK), ask.NEW_WAIT, err):
+    with held(os.path.join(os.path.dirname(path_q), ask.LOCK), ask.NEW_WAIT, err):
         q_text, l_text = read_text(path_q), read_text(path)
         changed = rewrote = False
         for old in asked:
@@ -225,7 +225,8 @@ def render(asked, path_q):
 
 
 def cmd_ask(args, path, out, err):
-    path_q = os.path.join(os.path.dirname(path), ask.QUESTIONS)
+    path_q = os.path.join(records_of(os.path.dirname(path), "ask", write=True),  # rr4 D3
+                          ask.QUESTIONS)
     text = read_text(path_q) if os.path.exists(path_q) else ""
     parsed = questions.parse(text)
     unknown = sorted(set(args.numbers) - {b.number for b in parsed.blocks})

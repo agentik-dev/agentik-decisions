@@ -30,6 +30,7 @@ class RenderLists(Base):
         self.user = os.path.join(os.environ["HOME"], ".claude", GATES)
 
     def test_render_into_twice_lists_its_target_once(self):
+        self.marked()
         for _ in range(2):
             code, _, err = self.run_cli("--into", self.target)
             self.assertEqual(code, 0, err)
@@ -37,6 +38,7 @@ class RenderLists(Base):
         self.assertFalse(os.path.exists(self.user))
 
     def test_the_default_target_and_a_sibling_are_listed(self):
+        self.marked(self.target, os.path.join(self.tmp, "AGENTS.md"))
         self.assertEqual(self.run_cli()[0], 0)
         self.assertEqual(self.run_cli("--into", os.path.join(self.tmp, "AGENTS.md"))[0], 0)
         self.assertEqual(lines(self.gates), ["CLAUDE.md", "AGENTS.md"])
@@ -45,6 +47,7 @@ class RenderLists(Base):
         for folder in (("tests", "fixtures"), ("testdata",), ("fixtures", "deep")):
             into = os.path.join(self.tmp, *folder, "CLAUDE.md")
             os.makedirs(os.path.dirname(into))
+            self.marked(into)
             code, _, err = self.run_cli("--into", into)
             self.assertEqual(code, 0, err)
             self.assertTrue(os.path.exists(into))
@@ -61,6 +64,7 @@ class RenderLists(Base):
         os.makedirs(os.path.dirname(self.gates))
         with open(self.gates, "w", encoding="utf-8") as handle:
             handle.write("# the owner's\nAGENTS.md")
+        self.marked()
         self.assertEqual(self.run_cli()[0], 0)
         with open(self.gates, encoding="utf-8") as handle:
             self.assertEqual(handle.read(), "# the owner's\nAGENTS.md\nCLAUDE.md\n")
@@ -73,6 +77,7 @@ class UserList(Base):
         home = os.environ["HOME"]
         target = os.path.join(home, ".claude", "CLAUDE.md")
         os.makedirs(os.path.dirname(target), exist_ok=True)
+        self.marked(target)
         with mock.patch.dict(os.environ, env or {}):
             code, _, err = self.run_cli("--into", target)
         self.assertEqual(code, 0, err)
@@ -90,6 +95,7 @@ class UserList(Base):
         self.assertFalse(os.path.exists(os.path.join(home, ".claude", GATES)))
 
     def test_a_tree_folders_file_outside_home_is_absolute(self):
+        self.marked()
         code, _, err = self.run_cli()
         self.assertEqual(code, 0, err)
         self.assertEqual(lines(os.path.join(os.environ["HOME"], ".claude", GATES)),
@@ -104,7 +110,8 @@ class AnswerLists(Repo, NewBase):
         shutil.copy(SAMPLE_QUESTIONS, self.questions)
         self.claude = os.path.join(self.tmp, "CLAUDE.md")
         self.write(self.claude, "# Notes\n")
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=io.StringIO(),
+        # dc2 R7: init adds the block; render rewrites one that is there
+        self.assertEqual(decisions.main(["init", "--ledger", self.ledger], out=io.StringIO(),
                                         err=io.StringIO()), 0)
         argv = list(PARTS)
         argv[argv.index("--title") + 1] = "Pin the interpreter"

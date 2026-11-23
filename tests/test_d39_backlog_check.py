@@ -14,6 +14,7 @@ import decisions
 from decisions.render import GATES
 from tests.hermetic import Hermetic
 from tests.test_d38_gate_layers import Home, lines
+from tests.test_render import MARKED
 
 GIT = shutil.which("git") or "/usr/bin/git"
 DATE = "2026-11-10"
@@ -326,7 +327,7 @@ class OwnerLink(Home):
         dots = os.path.join(self.home, "work", "dots")
         os.makedirs(os.path.join(dots, ".git"))
         with open(os.path.join(dots, "CLAUDE.md"), "w", encoding="utf-8") as handle:
-            handle.write("# Mine\n")
+            handle.write("# Mine\n" + MARKED)  # dc2 R7: render rewrites a block that is there
         target = os.path.join(self.home, ".claude", "CLAUDE.md")
         os.makedirs(os.path.dirname(target))
         os.symlink(os.path.join(dots, "CLAUDE.md"), target)

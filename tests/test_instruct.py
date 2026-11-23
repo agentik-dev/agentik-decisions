@@ -89,7 +89,8 @@ class Lane(Repo, NewBase):
         self.assertEqual(code, 0, err)
         self.q = re.search(r"new: (\d+)", out).group(1)
         out = io.StringIO()
-        self.assertEqual(decisions.main(["render", "--ledger", self.ledger], out=out,
+        # dc2 R7: init adds the block; render rewrites one that is there
+        self.assertEqual(decisions.main(["init", "--ledger", self.ledger], out=out,
                                         err=io.StringIO()), 0, out.getvalue())
         self.commit(root=self.root)
 
@@ -274,6 +275,20 @@ class TreePreview(Lane):
         os.makedirs(os.path.join(self.tmp, "orchard", "grove", "apple", ".git"))
         out = self.refused_as_render_refuses()
         self.assertIn("another tree's", out)
+
+    def test_a_folder_of_the_trees_own_worktrees_shows_the_diff(self):
+        """dc4 R2: the preview reaches `other_tree` through `cmd_tree`; a sibling folder of
+        orchard-hq's own worktrees is the tree's, so the folder's file gets its diff."""
+        git(self.root, "worktree", "add", "-q",
+            os.path.join(self.tmp, "orchard", "orchard-hq-wt", "row"), "-b", "row")
+        before = tree_hashes(self.tmp)
+        code, out, err = self.answer(self.q, *(self.ARGV + ("--preview",)))
+        self.assertEqual(tree_hashes(self.tmp), before)
+        self.assertEqual(code, 0, out + err)
+        self.assertNotIn("another tree's", out)
+        self.assertIn("orchard/CLAUDE.md (after the answer)", out)
+        self.assertEqual({v[3] for v in self.loads(out).values()},
+                         {"an hq's file", "a tree's file"}, out)
 
     def test_a_tree_file_of_another_ledger_gets_no_diff(self):
         elsewhere = os.path.join(self.tmp, "elsewhere", "DECISIONS.md")

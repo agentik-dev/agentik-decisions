@@ -22,17 +22,30 @@ from unittest import mock
 
 import decisions
 from decisions import doctor, speak
-from tests.hermetic import REPO, Hermetic
+from tests.hermetic import REPO, Hermetic, outside
 
 FIXTURES = os.path.join(REPO, "tests", "fixtures", "backlog")
+# The module's copy of FIXTURES in no repository (`hermetic.outside`): a fixture inside
+# this clone would be read as the clone's own records.
+COPY = {}
 NICE = "NICE_TO_HAVE.md"
 # respeak's include file: under plugin/ so an install copies it, beside commands/ and
 # skills/ so no loader reads it as either.
 INCLUDE = "plugin/respeak-include.md"
 
 
+def setUpModule():
+    COPY["root"], COPY["fixtures"] = outside(FIXTURES)
+
+
+def tearDownModule():
+    shutil.rmtree(COPY.pop("root"), True)
+    COPY.clear()
+
+
 def fixture(name):
-    return os.path.join(FIXTURES, name)
+    """The fixture `name` in the module's copy, outside every repository."""
+    return os.path.join(COPY["fixtures"], name)
 
 
 def line_of(name, needle, file=NICE):
@@ -482,24 +495,25 @@ class Backlog(Hermetic):
                              cwd=REPO, env=env, capture_output=True, text=True, timeout=300)
         self.assertEqual(run.returncode, 0, run.stderr[-2000:])
 
-    def test_doctor_respeak_warn_absent(self):
+    def test_doctor_respeak_note_absent(self):
+        # id1 R2: an absent respeak, which is optional, is a note
         home = self.empty_dir("home")
         status, detail = doctor.check_respeak({"HOME": home})
-        self.assertEqual(status, "warn")
+        self.assertEqual(status, "note")
         self.assertIn("respeak", detail)
         root = os.path.join(self.tmp, "respeak")
         os.makedirs(os.path.join(root, "scripts"))
         open(os.path.join(root, speak.RENDER), "w").close()
         self.assertEqual(doctor.check_respeak({"HOME": home, "RESPEAK_ROOT": root}),
                          ("ok", "%s (RESPEAK_ROOT gave it)" % root))
-        # a warn never changes the exit
+        # a note never changes the exit
         ok = mock.Mock(return_value=("ok", "fine"))
         with mock.patch.multiple(doctor, check_python=ok, check_tool=ok, check_marketplace=ok,
                                  check_plugin=ok, check_provider=ok, check_ledger=ok), \
                 mock.patch.dict(os.environ, {"HOME": home}):
             out = io.StringIO()
             self.assertEqual(decisions.main(["doctor"], out=out, err=io.StringIO()), 0)
-        self.assertIn("warn respeak: ", out.getvalue())
+        self.assertIn("note respeak: ", out.getvalue())
 
     # d26: design/05 section 2's NICE rows (the fixture `rows`)
 

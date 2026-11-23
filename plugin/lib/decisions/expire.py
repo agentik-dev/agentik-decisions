@@ -48,7 +48,8 @@ import tempfile
 
 from . import backlog
 from .ask import LOCK, NEW_WAIT
-from .common import Refusal, file_mode, git_top, held, read_text
+from .common import (Refusal, file_mode, git_top, held, read_text, records_of,
+                     records_prime, records_repo)
 from .render import head_holds
 
 __all__ = ["cmd_expire", "expiring", "extents", "moved_bytes", "byte_lines", "parsed"]
@@ -134,11 +135,11 @@ def described(lines, n, end, payload):
     return None, title_of(value), first_date(joined[2:])
 
 
-def view_of(repo, ordered, text):
+def view_of(repo, ordered, text, home=None):
     """`backlog.view` of `text`, the bytes already read, so that nothing reads the file
-    a second time."""
+    a second time; `home` holds the repo's records (rr4), the repo by default."""
     items, closed = backlog.scanned(text)
-    handoff = os.path.join(repo, backlog.HANDOFF)
+    handoff = os.path.join(repo if home is None else home, backlog.HANDOFF)
     if ordered is None:
         has_handoff = os.path.lexists(handoff)
         steps = backlog.build_order(read_text(handoff))[1] if has_handoff else []
@@ -156,10 +157,13 @@ def disk_bytes(path):
         raise Refusal("%s: unreadable: %s" % (path, exc))
 
 
-def expiring(repo, ordered, days, today):
+def expiring(repo, ordered, days, today, write=False):
     """The view of one repo, or None without NICE_TO_HAVE.md; its bytes are read once,
-    kept as `data`, and parsed."""
-    nice = os.path.join(repo, backlog.NICE)
+    kept as `data`, and parsed. rr4 D3: the files are under the repo's records."""
+    home = records_of(repo, "expire", write=write)
+    if home is None:
+        return None
+    nice = os.path.join(home, backlog.NICE)
     if not os.path.lexists(nice):
         return None
     data = disk_bytes(nice)
@@ -167,7 +171,7 @@ def expiring(repo, ordered, days, today):
         text, breaks = parsed(data)
     except UnicodeDecodeError as exc:
         raise Refusal("%s: unreadable: %s" % (nice, exc))
-    rows, closed = view_of(repo, ordered, text)
+    rows, closed = view_of(repo, ordered, text, home)
     lines = text.splitlines()
     found = list(backlog.blocks(text))
     payloads = {n: (k, p) for n, k, p in found}
@@ -213,7 +217,7 @@ def expiring(repo, ordered, days, today):
                               item["after_step"]))
     for found_list in (out, kept, lazy):
         found_list.sort(key=lambda e: e["line"])
-    return {"repo": repo, "nice": nice, "archive": os.path.join(repo, ARCHIVE),
+    return {"repo": repo, "home": home, "nice": nice, "archive": os.path.join(home, ARCHIVE),
             "data": data, "breaks": breaks, "expired": out, "kept": kept, "lazy": lazy,
             "undated": sorted(undated), "moved": False, "bytes": None, "head": None}
 
@@ -321,7 +325,7 @@ def checked(v):
         raise Refusal("expire: HEAD does not hold %s as it stands; commit it first; "
                       "nothing written" % v["nice"])
     archive_bytes(v["archive"])
-    real, top = os.path.realpath(v["archive"]), os.path.realpath(v["repo"])
+    real, top = os.path.realpath(v["archive"]), os.path.realpath(v["home"])
     if os.path.commonpath([real, top]) != top:
         raise Refusal("expire: %s: its real path %s lies outside %s; nothing written"
                       % (v["archive"], real, top))
@@ -330,7 +334,7 @@ def checked(v):
 def moved(v, days, today, err):
     """The move of one checked repo, under its lock: NICE_TO_HAVE.md read once there,
     the archive first, then NICE_TO_HAVE.md, each replaced whole; no rollback."""
-    with held(os.path.join(v["repo"], LOCK), NEW_WAIT, err):
+    with held(os.path.join(v["home"], LOCK), NEW_WAIT, err):
         data = disk_bytes(v["nice"])
         if data != v["data"]:
             raise Refusal("expire: %s changed under the run" % v["nice"])
@@ -406,12 +410,14 @@ def cmd_expire(args, out, err):
     if not names:
         here = os.getcwd()
         names = [git_top(here) or here]
-    repos = []
+    repos, keys = [], set()
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
         if not os.path.isdir(name):
             raise Refusal("expire: %s is not a directory" % name)
-        real = os.path.realpath(name)
-        if real not in repos:
+        key, real = records_repo(name)  # review 1 C4: one repo, read once
+        if key not in keys:
+            keys.add(key)
             repos.append(real)
     ordered, order_file = None, getattr(args, "order", None)
     if order_file is not None:
@@ -425,7 +431,7 @@ def cmd_expire(args, out, err):
     today = datetime.date.today()
     views, skipped = [], []
     for repo in repos:
-        v = expiring(repo, ordered, days, today)
+        v = expiring(repo, ordered, days, today, write)
         (skipped if v is None else views).append(repo if v is None else v)
     if write:
         for v in views:

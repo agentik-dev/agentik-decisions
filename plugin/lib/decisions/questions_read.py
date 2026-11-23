@@ -20,7 +20,8 @@ import os
 import re
 
 from . import answer, ledger, questions
-from .common import Refusal, git_top
+from .common import Refusal, git_top, records_of, records_prime, records_repo
+from .common import _shown as shown
 
 __all__ = ["cmd_questions", "read_repo", "SCHEMA"]
 
@@ -106,8 +107,9 @@ def read_repo(repo):
     """(the repo's object, None) or (None, why it is skipped)."""
     if not os.path.isdir(repo):
         return None, NO_DIR
-    path = os.path.join(repo, questions.NAME)
-    if not os.path.isfile(path):
+    home = records_of(repo, "questions")  # rr4 D3: the repo's records, the ledger its own
+    path = os.path.join(home, questions.NAME) if home is not None else None
+    if path is None or not os.path.isfile(path):
         return None, NO_FILE
     try:
         with open(path, encoding="utf-8") as handle:
@@ -143,24 +145,29 @@ def as_text(view):
     if decided["newest"]:
         head += ", newest %s" % decided["newest"]
     lines = [head]
-    for q in view["questions"]:
-        line = "%d  %s  %s" % (q["n"], q["state"], q["title"])
+    for q in view["questions"]:  # n90: the file's words escaped, as `--json` escapes them
+        line = "%d  %s  %s" % (q["n"], q["state"], shown(q["title"]))
         if q["recommended"] is not None:
-            line += "  recommended: %s" % q["recommended"]
+            line += "  recommended: %s" % shown(q["recommended"])
         for extra in (("proposed %s" % q["proposed"]) if q["proposed"] else None, q["why"]):
             if extra:
-                line += "; %s" % extra
+                line += "; %s" % shown(extra)
         lines.append(line)
     for p in loose_problems(view):
-        lines.append("problem  %s:%d  %s" % (questions.NAME, p["line"], p["message"]))
+        lines.append("problem  %s:%d  %s" % (questions.NAME, p["line"], shown(p["message"])))
     return lines
 
 
 def read_all(names):
     """(the repos' objects, the skipped ones), in the order named."""
-    repos, skipped = [], []
+    repos, skipped, keys = [], [], set()
+    records_prime(names)  # bk1 R2: every REPO's resolver child at once
     for name in names:
-        repo = os.path.realpath(name)
+        key, repo = records_repo(name)  # review 1 C4: a repo whose records are out, read once
+        if key != repo:
+            if key in keys:
+                continue
+            keys.add(key)
         view, why = read_repo(repo)
         if view is None:
             skipped.append({"repo": repo, "why": why})

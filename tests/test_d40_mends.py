@@ -18,7 +18,7 @@ from tests import gates
 from tests.hermetic import Hermetic
 from tests.test_d38_gate_layers import Home
 from tests.test_expire import Fixture, git, repo_at
-from tests.test_render import FIXTURE
+from tests.test_render import FIXTURE, MARKED
 
 
 def other_repo(case):
@@ -42,6 +42,8 @@ class GitVariables(Hermetic):
         git(self.tmp, "init", "-q")
         git(self.tmp, "add", "DECISIONS.md")
         git(self.tmp, "commit", "-q", "-m", "the ledger")
+        with open(os.path.join(self.tmp, "CLAUDE.md"), "w", encoding="utf-8") as handle:
+            handle.write(MARKED)  # dc2 R7: render rewrites a block that is there
         self.elsewhere = other_repo(self)
 
     def test_head_holds_reads_the_files_own_repository(self):

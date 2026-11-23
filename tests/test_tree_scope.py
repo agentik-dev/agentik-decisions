@@ -17,6 +17,8 @@ from tests.hermetic import SAMPLE, Hermetic
 from tests.test_answer_head import Repo, git
 from tests.test_new import PARTS, SAMPLE_QUESTIONS
 from tests.test_new import Base as NewBase
+# dc2 R7: a hand file holds the two marker lines, so render has a block to rewrite
+from tests.test_render import MARKED, mark_target
 
 TREE_LEDGER = """# orchard-hq: what is settled
 
@@ -109,6 +111,7 @@ class Tree(Hermetic):
         return code, out.getvalue(), err.getvalue()
 
     def render(self, *argv, ledger=None):
+        mark_target(argv, ledger or self.ledger)  # dc2 R7: a block there to rewrite
         return self.run_cli("render", *argv, ledger=ledger)
 
     def read(self, path):
@@ -268,7 +271,7 @@ class Refusals(Tree):
     def test_into_a_block_from_another_ledger_is_refused(self):
         other = self.other_ledger()
         shared = os.path.join(self.home, "work", "shared.md")
-        self.write(shared, "# Shared\n")
+        self.write(shared, "# Shared\n\n" + MARKED)
         self.assertEqual(self.render("--into", shared, ledger=other)[0], 0)
         before = self.read(shared)
         for mode in ([], ["--check"]):
@@ -339,7 +342,7 @@ class Warnings(Tree):
         target = os.path.join(self.repo, "CLAUDE.md")
         self.write(target, "# orchard-hq\n\nAlways run the gate first.\nRead the README.\n"
                    "<!-- a comment may say never or must -->\n```\nnever inside a fence\n```\n"
-                   "A tool that only reads.\nNevertheless, mustard.\n")
+                   "A tool that only reads.\nNevertheless, mustard.\n\n" + MARKED)
         self.assertEqual(self.render()[0], 0)
         code, out, err = self.render("--lint")
         self.assertEqual(code, 0)
@@ -373,7 +376,7 @@ class Ceilings(Tree):
         plain = os.path.join(self.home, "work", "plain", "DECISIONS.md")
         self.write(plain, self.read(SAMPLE))
         claude = os.path.join(os.path.dirname(plain), "CLAUDE.md")
-        self.write(claude, "# plain\n")
+        self.write(claude, "# plain\n\n" + MARKED)
         self.assertEqual(self.render(ledger=plain)[0], 0)
         code, out, _ = self.render("--check", "--ceiling", ledger=plain)
         self.assertEqual(code, 0, out)
@@ -383,7 +386,7 @@ class Ceilings(Tree):
 
     def test_an_hqs_file(self):
         claude = os.path.join(self.repo, "CLAUDE.md")
-        self.write(claude, "# orchard-hq\n")
+        self.write(claude, "# orchard-hq\n\n" + MARKED)
         self.assertEqual(self.render()[0], 0)
         code, out, _ = self.render("--check", "--ceiling")
         self.assertEqual(code, 0, out)
@@ -395,15 +398,40 @@ class Ceilings(Tree):
         self.render("--scope", "tree")
         code, out, _ = self.render("--scope", "tree", "--check", "--ceiling")
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.loads(out)["a tree's file"], (loaded(TREE_FILE), 1536, False))
-        self.write(self.ledger, TREE_LEDGER.replace("### Build", entry(6, "Helpers", 300)
+        self.assertEqual(self.loads(out)["a tree's file"], (loaded(TREE_FILE), 2048, False))
+        self.write(self.ledger, TREE_LEDGER.replace("### Build", entry(6, "Helpers", 400)
                                                     + "\n### Build"))
         self.render("--scope", "tree")
-        self.check_both("a tree's file", 1536, ["--scope", "tree"])
+        self.check_both("a tree's file", 2048, ["--scope", "tree"])
+
+    def tree_file_of(self, size):
+        """The tree's file rendered at `size` loaded bytes, padded by one entry's last word;
+        the `--check --ceiling` run's exit and its loaded-bytes line."""
+        def at(pad):
+            self.write(self.ledger, TREE_LEDGER.replace(
+                "### Build", "6. **Helpers.** Helpers read %s. (2026-11-14; the fixture)\n"
+                "\n### Build" % ("x" * pad)))
+            self.assertEqual(self.render("--scope", "tree")[0], 0)
+            code, out, _ = self.render("--scope", "tree", "--check", "--ceiling")
+            return code, out, self.loads(out)["a tree's file"]
+        pad = 10 + size - at(10)[2][0]
+        code, out, line = at(pad)
+        self.assertEqual(line[0], size, out)
+        return code, out
+
+    def test_a_trees_file_at_2000_and_2049_bytes(self):
+        """dc4 R1: the tree's ceiling is 2,048 B; 2,000 B is under it, 2,049 B over by 1."""
+        code, out = self.tree_file_of(2000)
+        self.assertEqual(code, 0, out)
+        self.assertIn("loads 2,000 B, comments aside and imports included; the ceiling for "
+                      "a tree's file is 2,048 B\n", out)
+        code, out = self.tree_file_of(2049)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the ceiling for a tree's file is 2,048 B; over by 1 B\n", out)
 
     def test_the_macs_global_file(self):
         mac = os.path.join(self.home, ".claude", "CLAUDE.md")
-        self.write(mac, "# This Mac\n")
+        self.write(mac, "# This Mac\n\n" + MARKED)
         args = ["--into", mac]
         self.assertEqual(self.render(*args)[0], 0)
         code, out, _ = self.render(*(args + ["--check", "--ceiling"]))
@@ -421,7 +449,7 @@ class Ceilings(Tree):
         self.write(deeper, "Deeper.\n")
         hand = "\n".join(["# orchard-hq", "<!-- a comment that never loads -->", "@notes.md",
                           "`@absent.md` in a code span, and @missing.md, load nothing.", ""])
-        self.write(claude, hand)
+        self.write(claude, hand + "\n" + MARKED)
         self.assertEqual(self.render()[0], 0)
         whole = self.read(claude)
         code, out, _ = self.render("--check")
@@ -538,7 +566,7 @@ class FixRound(Tree):
         for name in (os.path.join(".claude", "CLAUDE.md"), os.path.join("work", "notes.md")):
             with self.subTest(target=name):
                 target = os.path.join(self.home, name)
-                self.write(target, "# Hand\n")
+                self.write(target, "# Hand\n\n" + MARKED)
                 ledger = os.path.join(self.home, "work", "old%d" % len(name), "r", "DECISIONS.md")
                 self.write(ledger, TREE_LEDGER)
                 self.assertEqual(self.render("--into", target, ledger=ledger)[0], 0)
@@ -558,7 +586,7 @@ class FixRound(Tree):
         other = os.path.join(self.home, "work", "pear", "pear-hq", "DECISIONS.md")
         self.write(other, TREE_LEDGER.replace("orchard-hq", "pear-hq"))
         claude = os.path.join(self.repo, "CLAUDE.md")
-        self.write(claude, "# orchard-hq\n")
+        self.write(claude, "# orchard-hq\n\n" + MARKED)
         self.assertEqual(self.render("--into", claude, ledger=other)[0], 0)
         code, out, err = self.render()
         self.assertEqual(code, 0, err)
@@ -608,3 +636,50 @@ class FixRound(Tree):
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn("is a tree's file", err)
                 self.assertEqual(self.read(self.target), TREE_FILE)
+
+
+class TreeWorktrees(Tree):
+    """dc4 R2: a sibling folder that holds only worktrees of a checkout in the tree's folder
+    is the tree's own, not another tree; anything else is refused as at the pin."""
+
+    def setUp(self):
+        super().setUp()
+        git(self.repo, "init", "-q", "--template=")
+        git(self.repo, "add", "DECISIONS.md")
+        git(self.repo, "commit", "-q", "-m", "the ledger")
+        self.sibling = os.path.join(self.folder, "orchard-hq-wt")
+        git(self.repo, "worktree", "add", "-q", os.path.join(self.sibling, "row"), "-b", "row")
+
+    def refused(self):
+        for mode in ([], ["--check"]):
+            with self.subTest(mode=mode):
+                code, out, err = self.render("--scope", "tree", *mode)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("~/work/orchard holds ~/work/orchard/orchard-hq-wt, a folder of "
+                              "checkouts that is another tree's", err)
+                self.assertFalse(os.path.exists(self.target))
+
+    def test_a_folder_of_the_trees_own_worktrees_passes(self):
+        code, out, err = self.render("--scope", "tree")
+        self.assertEqual(code, 0, out + err)
+        self.assertEqual(self.read(self.target), TREE_FILE)
+        code, out, err = self.render("--scope", "tree", "--check")
+        self.assertEqual(code, 0, out + err)
+
+    def test_the_same_folder_with_a_checkout_of_its_own_is_refused(self):
+        os.makedirs(os.path.join(self.sibling, "pear", ".git"))
+        self.refused()
+
+    def test_the_same_folder_with_a_worktree_of_a_repo_elsewhere_is_refused(self):
+        plum = os.path.join(self.home, "work", "elsewhere", "plum")
+        os.makedirs(plum)
+        self.write(os.path.join(plum, "README.md"), "# plum\n")
+        git(plum, "init", "-q", "--template=")
+        git(plum, "add", "README.md")
+        git(plum, "commit", "-q", "-m", "plum")
+        git(plum, "worktree", "add", "-q", os.path.join(self.sibling, "plum-row"), "-b", "row")
+        self.refused()
+
+    def test_a_worktree_file_that_cannot_be_read_is_refused(self):
+        self.write(os.path.join(self.sibling, "odd", ".git"), "not a gitdir line\n")
+        self.refused()

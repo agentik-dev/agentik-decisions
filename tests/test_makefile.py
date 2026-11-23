@@ -51,7 +51,8 @@ class Install(unittest.TestCase):
         run = self.make()
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         bindir = os.path.join(self.home, ".local", "bin")
-        self.assertTrue(os.path.islink(os.path.join(bindir, "decisions")))
+        # ak10-sync: the synced module writes the old-name link only where one stands (GUIDE §10)
+        self.assertFalse(os.path.lexists(os.path.join(bindir, "decisions")))
         self.assertTrue(os.access(os.path.join(bindir, "agentik"), os.X_OK))
         self.assertTrue(self.version(os.path.join(bindir, "agentik-decisions")).startswith(
             "agentik-decisions "))
@@ -227,7 +228,8 @@ class DecisionsStep(Gate):
 
     def test_fresh_then_stale(self):
         shutil.copy(SAMPLE, os.path.join(self.root, "DECISIONS.md"))
-        render = subprocess.run([sys.executable, "src/decisions.py", "render", "--ledger",
+        # dc2 R7: init adds the block; render rewrites one that is there
+        render = subprocess.run([sys.executable, "src/decisions.py", "init", "--ledger",
                                  "DECISIONS.md"], cwd=self.root, capture_output=True, text=True,
                                 timeout=60)
         self.assertEqual(render.returncode, 0, render.stderr)

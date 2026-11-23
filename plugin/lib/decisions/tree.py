@@ -27,7 +27,7 @@ __all__ = ["CEILINGS", "ceiling_for", "loaded_bytes", "strip_comments", "checkou
 
 # d36 ruling 6: the one place the figures live; no text a model loads repeats them.
 CEILINGS = {"global": (6144, "the Mac's global file"),
-            "tree": (1536, "a tree's file"),
+            "tree": (2048, "a tree's file"),
             "hq": (4096, "an hq's file"),
             "repo": (3072, "a repo's file")}
 IMPORT_DEPTH = 4
