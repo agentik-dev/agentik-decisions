@@ -2,15 +2,23 @@
 
 <img src="assets/icon.svg" alt="" width="56" align="left">
 
-agentik-decisions is a Claude Code plugin, `decisions@agentik`, plus a stdlib Python tool, `agentik-decisions`, for the decisions a repository has settled.
-A repository keeps them in one sectioned `DECISIONS.md` at its root, and the tool serves that ledger with six verbs: `show`, `find`, `new`, `ask`, `answer` and `render`, plus `doctor`, `backlog`, `expire`, `analyze` and `audit`.
+agentik-decisions is a Claude Code plugin that keeps what a repository has settled in one short `DECISIONS.md`, and copies the few rules every session must follow into `CLAUDE.md`.
+Use it when sessions keep deciding again what you already ruled.
+
+Install it in a terminal, then type the second line in a new Claude Code session, in your repository:
+
+```
+claude plugin marketplace add agentik-dev/agentik-commons; claude plugin install decisions@agentik
+/decisions:init
+```
+
+It needs Claude Code and the system's Python at 3.9 or newer, and it works alone. From then on a session changes those two files through `/decisions:instruct`, never by its own edit.
+Part of [agentik](https://github.com/agentik-dev): the other tools, and how to leave.
 
 ## Why it exists
 
 One owner runs several Claude Code plugins in unattended relay runs, where one session hands its work to the next.
-The decisions that shape that work must reach every session, and no session should read a long file whole to find them.
-So the ledger groups its entries by area and caps its size, and `render` copies the few entries every session needs into a generated block in `CLAUDE.md`.
-An agent reads the rest by number or by area, and a packet carries the entries it touches verbatim.
+An agent reads the ledger by number or by area, and a packet carries the entries it touches verbatim.
 Agents draft questions; only the owner moves an entry into force.
 
 ## The ledger
@@ -54,16 +62,11 @@ The tool and the `agentik` front door, from a checkout:
 make install
 ```
 
-The plugin, from the `agentik` marketplace:
-
-```
-claude plugin marketplace add agentik-dev/agentik-commons
-claude plugin install decisions@agentik
-```
-
 Development runs under the pyenv virtualenv `agentik-decisions` on Python 3.12, the first line of `.python-version`; `make venv` creates it, and `make doctor` checks the machine and the repository.
 
 ## The tool
+
+`decisions@agentik` runs `agentik-decisions`, stdlib Python.
 
 `agentik decisions [--ledger PATH] <verb>` (`decisions` is an alias until 2026-12-31); the ledger is `--ledger PATH`, before or after the verb, else `DECISIONS.md` at the git top level of the working directory.
 
