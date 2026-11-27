@@ -324,7 +324,7 @@ class Line6Ask(Reply):
         q = self.read(self.file)
         code, out, err = self.pty(b"n\n")
         self.assertEqual(code, 1, out + err)
-        self.assertIn("+ %s north\n" % ANSWER, out)
+        self.assertIn("+ %s north\n" % ANSWER, err)
         self.assertIn("[y/N]", err)
         self.assertIn("declined", err)
         self.assertEqual(self.read(self.file), q)

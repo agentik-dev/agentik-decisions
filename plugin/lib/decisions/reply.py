@@ -176,8 +176,8 @@ def run(args, path, out, err):
     if not is_tty(stdin):
         raise Refusal("reply: question %d: stdin is no terminal, so reply cannot ask; run it "
                       "again with --yes; nothing written" % number)
-    shown(out, path_q, number, at, before, after)
-    out.flush()
+    # in5d: the lines asked about go on `err`, the stream `asked` writes its question to
+    shown(err, path_q, number, at, before, after)
     if not asked(number, stdin, err):
         raise Refusal("reply: question %d: declined; nothing written" % number)
     # the lock is not held while the owner reads: under it again, the file must be as shown
